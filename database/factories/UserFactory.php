@@ -29,11 +29,36 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            'google_id' => null,
+            'avatar' => null,
+            'subscription_status' => 'free',
             'remember_token' => Str::random(10),
             'two_factor_secret' => null,
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
         ];
+    }
+
+    /**
+     * Indicate that the user is on the Pro Tier.
+     */
+    public function pro(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'subscription_status' => 'pro',
+        ]);
+    }
+
+    /**
+     * Indicate that the user registered via Google OAuth.
+     */
+    public function google(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'google_id' => fake()->numerify('10#############'),
+            'avatar' => fake()->imageUrl(),
+            'password' => null,
+        ]);
     }
 
     /**

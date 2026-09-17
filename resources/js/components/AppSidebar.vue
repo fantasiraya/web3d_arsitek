@@ -19,7 +19,7 @@ import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'Dashboard',
+        title: 'Dashboard Kolaborasi',
         href: dashboard(),
         icon: LayoutGrid,
     },
