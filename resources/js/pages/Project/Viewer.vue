@@ -199,12 +199,14 @@
                         v-if="activeCommentId === item.id"
                         :cx="item.screenX"
                         :cy="item.screenY"
-                        r="10"
+                        r="5"
                         fill="none"
                         stroke="#f43f5e"
                         stroke-width="1.5"
-                        class="animate-ping"
-                    />
+                    >
+                        <animate attributeName="r" from="5" to="16" dur="1.5s" repeatCount="indefinite" />
+                        <animate attributeName="opacity" from="0.9" to="0" dur="1.5s" repeatCount="indefinite" />
+                    </circle>
 
                     <!-- Connected Leader Line (Pin Point -> Knee Corner -> Comment Box Anchor) -->
                     <path
@@ -240,12 +242,14 @@
                     <circle
                         :cx="pendingPin.screenX"
                         :cy="pendingPin.screenY"
-                        r="12"
+                        r="6"
                         fill="none"
                         stroke="#3b82f6"
                         stroke-width="2"
-                        class="animate-ping"
-                    />
+                    >
+                        <animate attributeName="r" from="6" to="18" dur="1.5s" repeatCount="indefinite" />
+                        <animate attributeName="opacity" from="0.9" to="0" dur="1.5s" repeatCount="indefinite" />
+                    </circle>
                     <path
                         :d="getLeaderLinePath(pendingPin.screenX, pendingPin.screenY, pendingPin.anchorX, pendingPin.anchorY, pendingPin.isRightSide)"
                         fill="none"
@@ -719,14 +723,11 @@ const submitCommentError = ref('');
 
 function focusNewCommentInput() {
     nextTick(() => {
-        newCommentInputRef.value?.focus();
+        newCommentInputRef.value?.focus({ preventScroll: true });
     });
     setTimeout(() => {
-        newCommentInputRef.value?.focus();
-    }, 60);
-    setTimeout(() => {
-        newCommentInputRef.value?.focus();
-    }, 150);
+        newCommentInputRef.value?.focus({ preventScroll: true });
+    }, 50);
 }
 
 // Check if current user can edit a comment
@@ -1130,36 +1131,17 @@ function createPendingPin(
     focusNewCommentInput();
 }
 
-async function handleTambahPinButton(): Promise<void> {
-    setInteractionMode('pin');
-
-    if (pendingPin.value) {
-        focusNewCommentInput();
-        return;
-    }
-
+function handleTambahPinButton(): void {
     const maxLimit = project.value.max_revisions_allowed || 3;
     if (comments.value.length >= maxLimit) {
         limitWarning.value = `Batas revisi maksimal (${maxLimit} pin) telah tercapai. Hapus atau unpin komentar yang ada jika ingin menambahkan revisi baru.`;
         return;
     }
 
-    if (viewerContainer.value && camera && scene) {
-        const rect = viewerContainer.value.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
+    setInteractionMode('pin');
 
-        const fakeEvent = {
-            target: viewerContainer.value,
-            clientX: centerX,
-            clientY: centerY,
-        } as unknown as MouseEvent;
-
-        const hit = await useRaycast(fakeEvent, camera, scene);
-        if (hit) {
-            createPendingPin(hit, rect.width / 2, rect.height / 2, rect);
-            return;
-        }
+    if (pendingPin.value) {
+        focusNewCommentInput();
     }
 }
 
