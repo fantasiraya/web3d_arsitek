@@ -596,7 +596,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import {
     AlertTriangle,
@@ -656,6 +656,12 @@ interface ProjectedComment {
     isVisible: boolean;
 }
 
+interface ViewerPreferences {
+    drawerOpen: boolean;
+    showAnnotations: boolean;
+    boxOffsets: Record<string, { dx: number; dy: number }>;
+}
+
 const page = usePage();
 const project = computed(() => (page.props.project ?? {}) as {
     id: string;
@@ -694,6 +700,63 @@ const unpinError = ref('');
 // Draggable box offsets
 const userBoxOffsets = ref<Record<string, { dx: number; dy: number }>>({});
 const pendingPinOffset = ref<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+
+function viewerPreferencesKey(): string {
+    return `project-viewer:${project.value.id}:preferences`;
+}
+
+function isValidBoxOffset(value: unknown): value is { dx: number; dy: number } {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const offset = value as { dx?: unknown; dy?: unknown };
+
+    return Number.isFinite(offset.dx) && Number.isFinite(offset.dy);
+}
+
+function restoreViewerPreferences(): void {
+    try {
+        const storedPreferences = window.localStorage.getItem(viewerPreferencesKey());
+        if (!storedPreferences) {
+            return;
+        }
+
+        const preferences = JSON.parse(storedPreferences) as Partial<ViewerPreferences>;
+
+        if (typeof preferences.drawerOpen === 'boolean') {
+            isDrawerOpen.value = preferences.drawerOpen;
+        }
+
+        if (typeof preferences.showAnnotations === 'boolean') {
+            showAnnotations.value = preferences.showAnnotations;
+        }
+
+        if (typeof preferences.boxOffsets === 'object' && preferences.boxOffsets !== null) {
+            userBoxOffsets.value = Object.fromEntries(
+                Object.entries(preferences.boxOffsets).filter(([, offset]) => isValidBoxOffset(offset))
+            );
+        }
+    } catch {
+        // Ignore unavailable or malformed browser storage.
+    }
+}
+
+function persistViewerPreferences(): void {
+    try {
+        const preferences: ViewerPreferences = {
+            drawerOpen: isDrawerOpen.value,
+            showAnnotations: showAnnotations.value,
+            boxOffsets: userBoxOffsets.value,
+        };
+
+        window.localStorage.setItem(viewerPreferencesKey(), JSON.stringify(preferences));
+    } catch {
+        // Ignore unavailable browser storage, such as private browsing restrictions.
+    }
+}
+
+watch([isDrawerOpen, showAnnotations, userBoxOffsets], persistViewerPreferences, { deep: true });
 
 let isDraggingBox = false;
 let dragTargetId: string | null = null;
@@ -1523,6 +1586,7 @@ function initializeViewer(): void {
 }
 
 onMounted(async () => {
+    restoreViewerPreferences();
     initializeViewer();
     const proj = project.value;
     if (Array.isArray(proj?.comments) && proj.comments.length > 0) {
