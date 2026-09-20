@@ -10,7 +10,7 @@ class ViewerController extends Controller
 {
     public function show(string $projectId)
     {
-        $project = Project::with('versions')->findOrFail($projectId);
+        $project = Project::with(['versions', 'comments.user'])->findOrFail($projectId);
 
         return Inertia::render('Project/Viewer', [
             'project' => $project,

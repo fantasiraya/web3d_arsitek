@@ -48,16 +48,16 @@
 | Custom Client Revision Setting | Backend / Dashboard | 🟢 Completed | Arsitek bisa set batas revisi khusus per project saat buat proyek (2026-09-17) |
 | Revision Limit Enforcement Middleware | Backend DDD | 🟢 Completed | `RevisionLimitEnforcementMiddleware` (2026-09-17) |
 
-### 4. 3D Viewer & Annotation Domain (`Domains/Comment`)
+#### 4. 3D Viewer & Annotation Domain (`Domains/Comment`)
 | Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
 | :--- | :--- | :---: | :--- |
-| WebGL 3D Viewport Rendering | Frontend (TresJS) | 🔴 Pending | Orbit controls |
-| Raycaster Intersect & Coordinates | Frontend Vue 3 | 🔴 Pending | Vector X, Y, Z & Normal |
+| WebGL 3D Viewport Rendering | Frontend (Three.js/Vue 3) | 🟢 Completed | Orbit controls & Screen-space Panning dinamis (2026-09-20) |
+| Raycaster Intersect & Coordinates | Frontend Vue 3 | 🟢 Completed | Vector X, Y, Z & Normal surface hit detection (2026-09-20) |
 | Database Migration `comments` | Database | 🟢 Completed | Spatial vector fields X, Y, Z & Normal (2026-09-17) |
-| Pin Comment Marker Overlay | Frontend | 🔴 Pending | Marker di koordinat 3D |
+| Pin Comment Marker Overlay | Frontend | 🟢 Completed | Marker koordinat 3D, form input pin, dan SVG leader lines tersambung (2026-09-20) |
 | Auth Wall + Invitation Wall for Commenting | Frontend / Auth | 🔴 Pending | v2.4: bukan cuma auth wall — juga wajib lolos `project_clients` accepted |
 | Revision Counter Increment Logic | Backend DDD | 🔴 Pending | Increment `projects.current_revision_count` saat pin root baru dibuat client |
-| Revision Counter & Status Badge UI | Frontend Viewer | 🔴 Pending | Menampilkan counter revisi (cth: "Revisi 2 dari 3") & badge peringatan jika kuota habis |
+| Revision Counter & Status Badge UI | Frontend Viewer |  Completed | Menampilkan counter revisi (cth: "Revisi 2/3") & badge kuota di toolbar viewer (2026-09-20) |
 
 ### 5. Chat & Communication Domain (`Domains/Chat`) 🆕 [v2.4]
 | Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
@@ -92,7 +92,7 @@
 ### 8. Automated Testing & Quality Assurance (Post-MVP)
 | Test Suite | Target Coverage | Status | Catatan & Tgl Selesai |
 | :--- | :--- | :---: | :--- |
-| Auth Domain Unit & Feature Tests | `Domains/Auth` | � Completed | Test Login, Register, Google OAuth, Invitation Email Matching (2026-09-17) |
+| Auth Domain Unit & Feature Tests | `Domains/Auth` | 🟢 Completed | Test Login, Register, Google OAuth, Invitation Email Matching (2026-09-17) |
 | SystemConfig Unit Tests | `Domains/SystemConfig` | 🟢 Completed | Test Quota Retrieval & Redis Cache (2026-09-17) |
 | Project Domain Unit Tests | `Domains/Project` | 🟢 Completed | Test Upload, Quota Exceeded, Draco Job (2026-09-17) |
 | Client Invitation & Access Control Tests 🆕 | `Domains/Project` & `Domains/Auth` | 🟢 Completed | v2.4: test undang email, test 403 saat email tidak match, test revoke (2026-09-17) |
@@ -119,3 +119,13 @@
 - **2026-09-16:** Sinkronisasi dokumen v2.3 — menambahkan kolom `max_revisions_allowed` & `current_revision_count` ke `projects`, menambahkan tabel `subscriptions`, memperbaiki referensi domain `Domains/Admin` → `Domains/SystemConfig` di PRD, memperbaiki bug tabel ganda di section 8, dan menstandarkan seluruh file guide ke format `.md`.
 - **2026-09-17:** Sinkronisasi dokumen v2.4 — (1) Landing page diubah ke **Scrollytelling Experience** dengan sample 3D showcase publik; (2) Ditambahkan **Domain baru `Domains/Chat`** untuk real-time messaging Arsitek↔Klien via Laravel Reverb; (3) Model akses dirombak total dari share-link publik read-only menjadi **Client Invitation by Email** (tabel baru `project_clients`, middleware `ProjectClientAccessMiddleware`); (4) Diklarifikasi **Role & Account Model**: tidak ada pilihan role saat registrasi, Arsitek adalah kapabilitas default, Klien adalah status per-project turunan dari `project_clients`, dan satu akun dapat merangkap Arsitek + Klien sekaligus (dual-capacity). Diperbarui: `PRD.md`, `DATABASE_SCHEMA.md`, `FOLDER_STRUCTURE.md`, `AI_INSTRUCTIONS.md` (Section H/I/J baru), `RTCF.md`, `RISE.md`.
 - **2026-09-17:** Pengerjaan Fondasi Arsitektur DDD & Database Migrations (v2.4) — instalasi package (`socialite`, `reverb`, `spatie/laravel-permission`, `midtrans`, `predis`), pembuatan dan eksekusi seluruh migrasi database tabel UUID (`users`, `system_settings`, `projects`, `project_versions`, `project_clients`, `comments`, `chat_messages`, `transactions`, `subscriptions`), pembuatan Eloquent Domain Models di `app/Domains/`, Factories dengan dukungan UUID, dan seeder `SystemSettingSeeder` dengan verifikasi 47 Pest tests lulus 100%.
+- **2026-09-20:** Pengerjaan Fitur 3D Viewer, Spatial Annotation Pin & Draggable Comments:
+  - Implementasi Three.js WebGL viewport dengan OrbitControls dinamis dan dukungan mode Pan (geser kiri/kanan/atas/bawah via screen-space panning) serta mode Orbit (putar dinamis 360°).
+  - Raycaster hit detection presisi pada geometri 3D model dengan mengabaikan marker helper dan mendeteksi drag threshold agar tidak memicu pin saat rotasi/geser kamera.
+  - Interactive Pin Comment popover: memunculkan form komentar langsung saat pin baru diletakkan di permukaan model 3D, menjamin inputan pertama selalu bersih/kosong (`''`), dan menyimpan via API endpoint `POST /projects/{project}/comments`.
+  - Draggable Comment Cards & Continuous Leader Lines: kotak komentar dan form pending pin kini dapat digeser secara bebas ke segala arah (`drag-and-drop`) dengan handle grab khusus, sementara garis SVG tersambung (leader line) secara dinamis tetap terhubung ke titik tancapan pin 3D di permukaan model.
+  - Fitur Edit Komentar (Inline Editing): author atau arsitek dapat mengedit teks komentar langsung pada kartu komentar 3D maupun drawer bawah, terintegrasi dengan endpoint `PATCH /projects/{project}/comments/{comment}` dengan otorisasi ketat.
+  - Mobile Touch Navigation & Drag Fix: Konfigurasi `controls.touches` terpisah antara mode Putar (`THREE.TOUCH.ROTATE`) dan mode Geser (`THREE.TOUCH.PAN`) pada layar sentuh ponsel; penambahan dukungan gesture dragging berbasis `touch-none`, Pointer Capture, dan fallback `TouchEvent` khusus perangkat mobile agar kotak komentar dapat digeser dengan mulus tanpa terinterupsi scroll browser.
+  - Kompilasi frontend lulus (`npm run build`), format PHP Pint bersih, dan 73 Pest tests lulus 100%.
+
+

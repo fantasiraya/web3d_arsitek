@@ -24,6 +24,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 require __DIR__.'/settings.php';
 
 Route::middleware(['auth', 'project.access', 'project.revision_limit'])->post('/projects/{project}/comments', [PinCommentController::class, 'store'])->name('projects.comments.store');
+Route::middleware(['auth', 'project.access'])->patch('/projects/{project}/comments/{comment}', [PinCommentController::class, 'update'])->name('projects.comments.update');
 
 Route::middleware(['auth', 'project.access'])->get('/projects/{project}/viewer', [ViewerController::class, 'show'])->name('projects.viewer');
 

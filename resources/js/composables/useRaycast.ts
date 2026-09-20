@@ -12,8 +12,18 @@ export async function useRaycast(event: MouseEvent, camera?: any, scene?: any) {
         raycaster.setFromCamera(mouse, camera);
 
         const intersects = raycaster.intersectObjects(scene.children, true);
-        if (intersects.length > 0) {
-            const hit = intersects[0];
+        
+        // Find first hit that is not a marker helper
+        const hit = intersects.find((i: any) => {
+            let obj = i.object;
+            while (obj) {
+                if (obj.userData?.isMarker) return false;
+                obj = obj.parent;
+            }
+            return true;
+        });
+
+        if (hit) {
             return {
                 x: Number(hit.point.x.toFixed(4)),
                 y: Number(hit.point.y.toFixed(4)),
@@ -25,14 +35,11 @@ export async function useRaycast(event: MouseEvent, camera?: any, scene?: any) {
                 },
             };
         }
+
+        return null;
     }
 
-    return {
-        x: Number(ndcX.toFixed(4)),
-        y: Number(ndcY.toFixed(4)),
-        z: 0,
-        normal: { x: 0, y: 1, z: 0 },
-    };
+    return null;
 }
 
 export default useRaycast;
