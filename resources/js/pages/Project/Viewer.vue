@@ -636,7 +636,7 @@ interface ProjectedComment {
 }
 
 const page = usePage();
-const project = page.props.project as {
+const project = computed(() => (page.props.project ?? {}) as {
     id: string;
     user_id?: string;
     title: string;
@@ -644,7 +644,7 @@ const project = page.props.project as {
     current_revision_count: number;
     max_revisions_allowed: number;
     comments?: Comment[];
-};
+});
 
 const viewerContainer = ref<HTMLDivElement | null>(null);
 const comments = ref<Comment[]>([]);
@@ -706,7 +706,7 @@ function canEditComment(comment: { user_id?: string; user?: { id?: string } }): 
     return (
         comment.user_id === currentUserId ||
         comment.user?.id === currentUserId ||
-        project.user_id === currentUserId
+        project.value.user_id === currentUserId
     );
 }
 
@@ -869,7 +869,7 @@ function saveEditing(commentId: string) {
     editCommentError.value = '';
 
     router.patch(
-        `/projects/${project.id}/comments/${commentId}`,
+        `/projects/${project.value.id}/comments/${commentId}`,
         {
             content: editCommentText.value.trim(),
         },
@@ -925,15 +925,14 @@ function executeUnpin(commentId: string) {
     isUnpinning.value = true;
     unpinError.value = '';
 
-    router.delete(`/projects/${project.id}/comments/${commentId}`, {
+    router.delete(`/projects/${project.value.id}/comments/${commentId}`, {
         preserveState: true,
         preserveScroll: true,
         onSuccess: () => {
             comments.value = comments.value.filter((c) => c.id !== commentId);
-            project.current_revision_count = comments.value.length;
             delete userBoxOffsets.value[commentId];
 
-            if (comments.value.length < (project.max_revisions_allowed || 3)) {
+            if (comments.value.length < (project.value.max_revisions_allowed || 3)) {
                 limitWarning.value = '';
             }
 
@@ -1013,7 +1012,7 @@ async function onPointerUp(e: MouseEvent) {
 
 function setInteractionMode(mode: 'rotate' | 'pan' | 'pin') {
     if (mode === 'pin') {
-        const maxLimit = project.max_revisions_allowed || 3;
+        const maxLimit = project.value.max_revisions_allowed || 3;
         if (comments.value.length >= maxLimit) {
             limitWarning.value = `Batas revisi maksimal (${maxLimit} pin) telah tercapai. Hapus atau unpin komentar yang ada jika ingin menambahkan revisi baru.`;
             return;
@@ -1063,7 +1062,7 @@ function setInteractionMode(mode: 'rotate' | 'pan' | 'pin') {
 async function handlePinClick(event: MouseEvent): Promise<void> {
     if (!camera || !scene || !viewerContainer.value) return;
 
-    const maxLimit = project.max_revisions_allowed || 3;
+    const maxLimit = project.value.max_revisions_allowed || 3;
     if (comments.value.length >= maxLimit) {
         limitWarning.value = `Batas revisi maksimal (${maxLimit} pin) telah tercapai. Hapus atau unpin komentar yang ada jika ingin menambahkan revisi baru.`;
         return;
@@ -1122,7 +1121,7 @@ function cancelPendingPin() {
 async function submitComment(): Promise<void> {
     if (!pendingPin.value || !newCommentText.value.trim()) return;
 
-    const maxLimit = project.max_revisions_allowed || 3;
+    const maxLimit = project.value.max_revisions_allowed || 3;
     if (comments.value.length >= maxLimit) {
         submitCommentError.value = `Batas revisi maksimal (${maxLimit} pin) telah tercapai. Hapus atau unpin komentar yang ada jika ingin menambahkan revisi baru.`;
         return;
@@ -1141,19 +1140,32 @@ async function submitComment(): Promise<void> {
         normal_z: pendingPin.value.normal?.z ?? 0,
     };
 
-    router.post(storeComment.url(project.id), payload, {
+    router.post(storeComment.url(project.value.id), payload, {
         preserveState: true,
         preserveScroll: true,
-        onSuccess: async () => {
+        onSuccess: async (pageData: any) => {
             pendingPin.value = null;
             pendingPinOffset.value = { dx: 0, dy: 0 };
             newCommentText.value = '';
-            await loadComments();
-            project.current_revision_count = comments.value.length;
-            // Switch back to rotate mode after placing a pin
+
+            // 1. Immediately apply fresh comments from Inertia's back() response if present
+            const freshComments = pageData?.props?.project?.comments;
+            if (Array.isArray(freshComments) && freshComments.length > 0) {
+                comments.value = [...freshComments];
+                renderCommentMarkers();
+                updateProjections();
+            }
+
+            // 2. Always force fetch to guarantee sync with database
+            await loadComments(true);
+
+            // 3. Switch back to rotate mode after placing a pin
             if (interactionMode.value === 'pin') {
                 setInteractionMode('rotate');
             }
+
+            // 4. Ensure drawer is open so the user immediately sees the newly pinned note
+            isDrawerOpen.value = true;
         },
         onError: (errs) => {
             submitCommentError.value = errs.content || 'Gagal menyimpan komentar pin.';
@@ -1276,18 +1288,36 @@ function focusComment(comment: Comment) {
     controls.update();
 }
 
-async function loadComments(): Promise<void> {
-    if (project.comments && comments.value.length === 0) {
-        comments.value = project.comments;
+async function loadComments(forceFetch = false): Promise<void> {
+    const proj = project.value;
+    if (!proj || !proj.id) return;
+
+    if (!forceFetch && Array.isArray(proj.comments) && proj.comments.length > 0 && comments.value.length === 0) {
+        comments.value = [...proj.comments];
     } else {
-        const response = await fetch(commentIndex.url(project.id));
-        if (response.ok) {
-            const data = await response.json();
-            comments.value = data.data ?? [];
+        try {
+            const response = await fetch(commentIndex.url(proj.id), {
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            if (response.ok) {
+                const data = await response.json();
+                comments.value = Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
+            } else if (Array.isArray(proj.comments)) {
+                comments.value = [...proj.comments];
+            }
+        } catch (err) {
+            console.error('Failed to load comments:', err);
+            if (Array.isArray(proj.comments)) {
+                comments.value = [...proj.comments];
+            }
         }
     }
 
     renderCommentMarkers();
+    updateProjections();
 }
 
 function renderCommentMarkers(): void {
@@ -1304,9 +1334,9 @@ function renderCommentMarkers(): void {
             })
         );
         marker.position.set(
-            comment.position_x,
-            comment.position_y,
-            comment.position_z
+            Number(comment.position_x),
+            Number(comment.position_y),
+            Number(comment.position_z)
         );
         marker.userData = { isMarker: true, commentId: comment.id };
         markerGroup.add(marker);
@@ -1337,14 +1367,15 @@ function frameModel(): void {
 }
 
 function loadModel(): void {
-    if (scene === null || typeof project.file_path !== 'string') {
+    const proj = project.value;
+    if (scene === null || typeof proj?.file_path !== 'string') {
         modelError.value = 'Path file model 3D tidak tersedia.';
         isLoading.value = false;
         return;
     }
 
     const loader = new GLTFLoader();
-    const modelUrl = `/storage/${project.file_path}`;
+    const modelUrl = `/storage/${proj.file_path}`;
 
     loader.load(
         modelUrl,
@@ -1438,7 +1469,14 @@ function initializeViewer(): void {
 
 onMounted(async () => {
     initializeViewer();
-    await loadComments();
+    const proj = project.value;
+    if (Array.isArray(proj?.comments) && proj.comments.length > 0) {
+        comments.value = [...proj.comments];
+        renderCommentMarkers();
+        updateProjections();
+    } else {
+        await loadComments(true);
+    }
 });
 
 onBeforeUnmount(() => {

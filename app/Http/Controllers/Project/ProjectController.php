@@ -84,9 +84,39 @@ class ProjectController extends Controller
             'title' => ['sometimes', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'max_revisions_allowed' => ['sometimes', 'integer', 'min:1', 'max:50'],
+            'file' => ['nullable', 'file', 'max:102400'], // max 100MB
         ]);
 
-        $project->update($validated);
+        $updateData = [];
+
+        if (isset($validated['title'])) {
+            $updateData['title'] = $validated['title'];
+        }
+
+        if (array_key_exists('description', $validated)) {
+            $updateData['description'] = $validated['description'];
+        }
+
+        if (isset($validated['max_revisions_allowed'])) {
+            $updateData['max_revisions_allowed'] = $validated['max_revisions_allowed'];
+        }
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $path = $file->store('projects/models', 'public');
+            $fileSizeBytes = $file->getSize() ?: 0;
+
+            $updateData['file_path'] = $path;
+            $updateData['file_size_bytes'] = $fileSizeBytes;
+            $updateData['is_draco_compressed'] = false;
+
+            // Upload new version record & queue draco compression
+            $this->uploadProjectFileAction->execute($project, $request->user(), $file);
+        }
+
+        if (! empty($updateData)) {
+            $project->update($updateData);
+        }
 
         if ($request->wantsJson() && ! $request->header('X-Inertia')) {
             return response()->json([
@@ -95,7 +125,7 @@ class ProjectController extends Controller
             ]);
         }
 
-        return back()->with('success', 'Pengaturan proyek berhasil diperbarui.');
+        return back()->with('success', 'Data proyek berhasil diperbarui.');
     }
 
     /**
@@ -131,6 +161,7 @@ class ProjectController extends Controller
         }
 
         $this->revokeClientAccessAction->execute($client);
+        $client->delete();
 
         return back()->with('success', 'Akses klien berhasil dicabut.');
     }
