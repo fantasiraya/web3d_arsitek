@@ -56,8 +56,8 @@
 | Database Migration `comments` | Database | 🟢 Completed | Spatial vector fields X, Y, Z & Normal (2026-09-17) |
 | Pin Comment Marker Overlay | Frontend | 🟢 Completed | Marker koordinat 3D, form input pin, dan SVG leader lines tersambung (2026-09-20) |
 | Auth Wall + Invitation Wall for Commenting | Frontend / Auth | 🔴 Pending | v2.4: bukan cuma auth wall — juga wajib lolos `project_clients` accepted |
-| Revision Counter Increment Logic | Backend DDD | 🔴 Pending | Increment `projects.current_revision_count` saat pin root baru dibuat client |
-| Revision Counter & Status Badge UI | Frontend Viewer |  Completed | Menampilkan counter revisi (cth: "Revisi 2/3") & badge kuota di toolbar viewer (2026-09-20) |
+| Revision Counter Increment Logic | Backend DDD | 🟢 Completed | Sinkronisasi `projects.current_revision_count` otomatis sesuai jumlah pin komentar aktif (tambah saat buat pin, berkurang saat unpin) (2026-09-20) |
+| Revision Counter & Status Badge UI | Frontend Viewer | 🟢 Completed | Menampilkan counter revisi reaktif (cth: "Revisi 1 dari 3"), badge kuota status, dan alert limit jika batas tercapai (2026-09-20) |
 
 ### 5. Chat & Communication Domain (`Domains/Chat`) 🆕 [v2.4]
 | Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
@@ -126,6 +126,8 @@
   - Draggable Comment Cards & Continuous Leader Lines: kotak komentar dan form pending pin kini dapat digeser secara bebas ke segala arah (`drag-and-drop`) dengan handle grab khusus, sementara garis SVG tersambung (leader line) secara dinamis tetap terhubung ke titik tancapan pin 3D di permukaan model.
   - Fitur Edit Komentar (Inline Editing): author atau arsitek dapat mengedit teks komentar langsung pada kartu komentar 3D maupun drawer bawah, terintegrasi dengan endpoint `PATCH /projects/{project}/comments/{comment}` dengan otorisasi ketat.
   - Mobile Touch Navigation & Drag Fix: Konfigurasi `controls.touches` terpisah antara mode Putar (`THREE.TOUCH.ROTATE`) dan mode Geser (`THREE.TOUCH.PAN`) pada layar sentuh ponsel; penambahan dukungan gesture dragging berbasis `touch-none`, Pointer Capture, dan fallback `TouchEvent` khusus perangkat mobile agar kotak komentar dapat digeser dengan mulus tanpa terinterupsi scroll browser.
-  - Kompilasi frontend lulus (`npm run build`), format PHP Pint bersih, dan 73 Pest tests lulus 100%.
+  - Fitur Unpin & Hapus Komentar dari Database: Penambahan tombol Unpin pada kartu komentar 3D dan drawer bawah dengan konfirmasi aksi. Pelepasan pin secara instan menghapus marker bola 3D, leader lines, dan menghapus record komentar secara permanen dari database via endpoint `DELETE /projects/{project}/comments/{comment}` dengan proteksi otorisasi pemilik komentar atau arsitek.
+  - Kompilasi frontend lulus (`npm run build`), format PHP Pint bersih, dan 75 Pest tests lulus 100%.
+
 
 

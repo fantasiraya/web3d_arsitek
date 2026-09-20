@@ -63,4 +63,37 @@ class PinCommentController extends Controller
 
         return back()->with('success', 'Komentar berhasil diperbarui.');
     }
+
+    /**
+     * Unpin (delete) a comment from the 3D model and database.
+     */
+    public function destroy(Request $request, string $projectId, string $commentId): JsonResponse|RedirectResponse
+    {
+        $project = Project::findOrFail($projectId);
+        $comment = Comment::where('project_id', $project->id)->findOrFail($commentId);
+
+        $currentUser = $request->user();
+        if ($currentUser->id !== $comment->user_id && $currentUser->id !== $project->user_id) {
+            abort(403, 'Anda tidak memiliki hak akses untuk menghapus pin komentar ini.');
+        }
+
+        // Delete children replies if any
+        $comment->replies()->delete();
+        $comment->delete();
+
+        // Synchronize current_revision_count with remaining root comments
+        $actualRootCommentsCount = Comment::where('project_id', $project->id)
+            ->whereNull('parent_id')
+            ->count();
+        $project->update(['current_revision_count' => $actualRootCommentsCount]);
+
+        if ($request->wantsJson() && ! $request->header('X-Inertia')) {
+            return response()->json([
+                'message' => 'Pin komentar berhasil dilepas dan dihapus dari database.',
+                'id' => $commentId,
+            ]);
+        }
+
+        return back()->with('success', 'Pin komentar berhasil dilepas.');
+    }
 }

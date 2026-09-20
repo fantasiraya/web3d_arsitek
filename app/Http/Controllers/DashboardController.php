@@ -33,9 +33,15 @@ class DashboardController extends Controller
                 'versions' => fn ($q) => $q->orderBy('version_number', 'desc'),
                 'invitedClients',
             ])
+            ->withCount(['comments as actual_revisions_count' => fn ($q) => $q->whereNull('parent_id')])
             ->latest()
             ->get()
             ->map(function (Project $project) {
+                $actualCount = (int) $project->actual_revisions_count;
+                if ($project->current_revision_count !== $actualCount) {
+                    $project->update(['current_revision_count' => $actualCount]);
+                }
+
                 return [
                     'id' => $project->id,
                     'title' => $project->title,
@@ -45,8 +51,8 @@ class DashboardController extends Controller
                     'file_size_bytes' => $project->file_size_bytes,
                     'is_draco_compressed' => $project->is_draco_compressed,
                     'max_revisions_allowed' => $project->max_revisions_allowed,
-                    'current_revision_count' => $project->current_revision_count,
-                    'has_reached_revision_limit' => $project->hasReachedRevisionLimit(),
+                    'current_revision_count' => $actualCount,
+                    'has_reached_revision_limit' => $actualCount >= $project->max_revisions_allowed,
                     'created_at' => $project->created_at?->diffForHumans(),
                     'versions_count' => $project->versions->count(),
                     'invited_clients' => $project->invitedClients->map(fn (ProjectClient $client) => [
@@ -65,12 +71,20 @@ class DashboardController extends Controller
                 ->orWhere('email', $user->email);
         })
             ->where('status', '!=', ProjectClient::STATUS_REVOKED)
-            ->with(['project.user', 'project.versions'])
+            ->with([
+                'project.user',
+                'project.versions',
+                'project' => fn ($q) => $q->withCount(['comments as actual_revisions_count' => fn ($c) => $c->whereNull('parent_id')]),
+            ])
             ->latest('invited_at')
             ->get()
             ->filter(fn (ProjectClient $pc) => $pc->project !== null)
             ->map(function (ProjectClient $client) {
                 $project = $client->project;
+                $actualCount = (int) ($project->actual_revisions_count ?? $project->current_revision_count);
+                if ($project->current_revision_count !== $actualCount) {
+                    $project->update(['current_revision_count' => $actualCount]);
+                }
 
                 return [
                     'invitation_id' => $client->id,
@@ -83,8 +97,8 @@ class DashboardController extends Controller
                     'architect_name' => $project->user?->name ?? 'Arsitek',
                     'architect_email' => $project->user?->email ?? '',
                     'max_revisions_allowed' => $project->max_revisions_allowed,
-                    'current_revision_count' => $project->current_revision_count,
-                    'has_reached_revision_limit' => $project->hasReachedRevisionLimit(),
+                    'current_revision_count' => $actualCount,
+                    'has_reached_revision_limit' => $actualCount >= $project->max_revisions_allowed,
                     'created_at' => $project->created_at?->diffForHumans(),
                 ];
             })

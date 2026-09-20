@@ -72,6 +72,33 @@ class ProjectController extends Controller
     }
 
     /**
+     * Update project details or revision limit.
+     */
+    public function update(Request $request, Project $project): JsonResponse|RedirectResponse
+    {
+        if ($project->user_id !== $request->user()->id) {
+            abort(403, 'Hanya arsitek pemilik proyek yang dapat mengubah pengaturan proyek.');
+        }
+
+        $validated = $request->validate([
+            'title' => ['sometimes', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'max_revisions_allowed' => ['sometimes', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        $project->update($validated);
+
+        if ($request->wantsJson() && ! $request->header('X-Inertia')) {
+            return response()->json([
+                'message' => 'Proyek berhasil diperbarui.',
+                'data' => $project,
+            ]);
+        }
+
+        return back()->with('success', 'Pengaturan proyek berhasil diperbarui.');
+    }
+
+    /**
      * Invite a client by email to review the project.
      */
     public function inviteClient(Request $request, Project $project): RedirectResponse

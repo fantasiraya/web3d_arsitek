@@ -15,6 +15,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Project management
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
+    Route::patch('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
     Route::post('/projects/{project}/invite', [ProjectController::class, 'inviteClient'])->name('projects.invite');
     Route::delete('/projects/{project}/clients/{client}', [ProjectController::class, 'revokeClient'])->name('projects.clients.revoke');
@@ -25,6 +26,7 @@ require __DIR__.'/settings.php';
 
 Route::middleware(['auth', 'project.access', 'project.revision_limit'])->post('/projects/{project}/comments', [PinCommentController::class, 'store'])->name('projects.comments.store');
 Route::middleware(['auth', 'project.access'])->patch('/projects/{project}/comments/{comment}', [PinCommentController::class, 'update'])->name('projects.comments.update');
+Route::middleware(['auth', 'project.access'])->delete('/projects/{project}/comments/{comment}', [PinCommentController::class, 'destroy'])->name('projects.comments.destroy');
 
 Route::middleware(['auth', 'project.access'])->get('/projects/{project}/viewer', [ViewerController::class, 'show'])->name('projects.viewer');
 

@@ -28,8 +28,11 @@ class PinCommentAction
             'status' => Comment::STATUS_OPEN,
         ]);
 
-        // Increment revision counter on the project atomically
-        $project->increment('current_revision_count');
+        // Synchronize revision counter on the project with actual root comments in DB
+        $actualRootCommentsCount = Comment::where('project_id', $project->id)
+            ->whereNull('parent_id')
+            ->count();
+        $project->update(['current_revision_count' => $actualRootCommentsCount]);
 
         return $comment;
     }

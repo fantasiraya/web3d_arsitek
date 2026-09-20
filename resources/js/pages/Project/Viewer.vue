@@ -19,8 +19,8 @@
             </div>
 
             <div class="flex items-center gap-3">
-                <!-- Revision Badge -->
-                <RevisionBadge :project="project" />
+                <!-- Revision Badge (Reactive with comments.length) -->
+                <RevisionBadge :project="project" :current-count="comments.length" />
 
                 <!-- Comment count indicator -->
                 <button
@@ -140,6 +140,21 @@
                     title="Pusatkan kembali model 3D di layar"
                 >
                     <Maximize2 class="h-3.5 w-3.5" />
+                </button>
+            </div>
+
+            <!-- Revision Limit Alert Banner -->
+            <div
+                v-if="limitWarning"
+                class="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-xl border border-rose-500/60 bg-slate-900/95 px-4 py-2 text-xs text-rose-200 shadow-2xl backdrop-blur-md"
+            >
+                <AlertTriangle class="h-4 w-4 text-rose-400 shrink-0 animate-bounce" />
+                <span>{{ limitWarning }}</span>
+                <button
+                    @click="limitWarning = ''"
+                    class="ml-2 rounded p-0.5 hover:bg-slate-800 text-rose-300"
+                >
+                    <X class="h-3.5 w-3.5" />
                 </button>
             </div>
 
@@ -288,14 +303,24 @@
                                 </span>
                             </div>
 
-                            <div class="flex items-center gap-1.5 shrink-0" @pointerdown.stop @touchstart.stop>
+                            <div class="flex items-center gap-1 shrink-0" @pointerdown.stop @touchstart.stop>
+                                <!-- Edit Button -->
                                 <button
-                                    v-if="canEditComment(item) && editingCommentId !== item.id"
+                                    v-if="canEditComment(item) && editingCommentId !== item.id && unpinningCommentId !== item.id"
                                     @click.stop="startEditing(item, $event)"
                                     class="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition"
                                     title="Edit teks komentar ini"
                                 >
                                     <Pencil class="h-3 w-3" />
+                                </button>
+                                <!-- Unpin Button -->
+                                <button
+                                    v-if="canEditComment(item) && unpinningCommentId !== item.id"
+                                    @click.stop="promptUnpin(item.id, $event)"
+                                    class="rounded p-1 text-slate-400 hover:bg-rose-950/60 hover:text-rose-400 transition"
+                                    title="Lepas pin & hapus komentar dari database"
+                                >
+                                    <PinOff class="h-3 w-3" />
                                 </button>
                                 <span class="text-[10px] text-slate-400">
                                     Pin 3D
@@ -303,8 +328,45 @@
                             </div>
                         </div>
 
+                        <!-- Unpin Confirmation Mode -->
+                        <div
+                            v-if="unpinningCommentId === item.id"
+                            class="rounded-lg bg-rose-950/50 border border-rose-500/40 p-2.5 text-xs space-y-2 touch-auto"
+                            @pointerdown.stop
+                            @touchstart.stop
+                        >
+                            <div class="flex items-center gap-1.5 text-rose-200 font-semibold">
+                                <PinOff class="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                                <span>Lepas pin & hapus komentar?</span>
+                            </div>
+                            <p class="text-[11px] text-rose-200/75 leading-relaxed">
+                                Pin ini dan data komentarnya akan dihapus permanen dari database.
+                            </p>
+                            <p v-if="unpinError" class="text-[11px] font-medium text-rose-400">
+                                {{ unpinError }}
+                            </p>
+                            <div class="flex items-center justify-end gap-1.5 pt-1">
+                                <button
+                                    type="button"
+                                    @click.stop="cancelUnpin($event)"
+                                    class="rounded-md px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="button"
+                                    @click.stop="executeUnpin(item.id)"
+                                    :disabled="isUnpinning"
+                                    class="flex items-center gap-1 rounded-md bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-rose-500 disabled:opacity-50 transition"
+                                >
+                                    <Trash2 class="h-3 w-3" />
+                                    <span>{{ isUnpinning ? 'Menghapus...' : 'Ya, Unpin' }}</span>
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Read Mode -->
-                        <div v-if="editingCommentId !== item.id">
+                        <div v-else-if="editingCommentId !== item.id">
                             <p class="text-xs text-slate-200 leading-relaxed break-words line-clamp-4">
                                 {{ item.content }}
                             </p>
@@ -463,10 +525,44 @@
                                 >
                                     <Pencil class="h-3 w-3" />
                                 </button>
-                                <span class="text-[10px] text-rose-400">#{{ comments.length - index }}</span>
+                                <button
+                                    v-if="canEditComment(comment)"
+                                    @click.stop="promptUnpinFromDrawer(comment)"
+                                    class="rounded p-0.5 text-slate-400 hover:text-rose-400 transition"
+                                    title="Lepas pin & hapus komentar dari database"
+                                >
+                                    <PinOff class="h-3 w-3" />
+                                </button>
+                                <span class="text-[10px] text-rose-400 font-semibold">#{{ comments.length - index }}</span>
                             </div>
                         </div>
                         <p class="mt-1 text-slate-300 line-clamp-2">{{ comment.content }}</p>
+
+                        <!-- Drawer inline unpin confirmation -->
+                        <div
+                            v-if="unpinningCommentId === comment.id"
+                            class="mt-2 rounded-md bg-rose-950/60 p-2 border border-rose-500/40 text-[11px] space-y-1.5"
+                            @click.stop
+                        >
+                            <p class="text-rose-200 font-medium">Hapus permanen komentar pin ini?</p>
+                            <div class="flex items-center justify-end gap-1.5">
+                                <button
+                                    type="button"
+                                    @click.stop="cancelUnpin($event)"
+                                    class="rounded px-2 py-0.5 text-slate-300 hover:text-white transition"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="button"
+                                    @click.stop="executeUnpin(comment.id)"
+                                    :disabled="isUnpinning"
+                                    class="rounded bg-rose-600 px-2 py-0.5 font-medium text-white hover:bg-rose-500 disabled:opacity-50 transition"
+                                >
+                                    {{ isUnpinning ? 'Menghapus...' : 'Ya, Hapus' }}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     <div class="mt-2 flex items-center justify-between text-[10px] text-slate-500">
                         <span>({{ comment.position_x.toFixed(2) }}, {{ comment.position_y.toFixed(2) }}, {{ comment.position_z.toFixed(2) }})</span>
@@ -482,6 +578,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import {
+    AlertTriangle,
     ArrowLeft,
     Check,
     Eye,
@@ -492,8 +589,10 @@ import {
     Maximize2,
     MessageSquare,
     Pencil,
+    PinOff,
     RotateCw,
     Send,
+    Trash2,
     X,
 } from '@lucide/vue';
 import * as THREE from 'three';
@@ -557,12 +656,19 @@ const interactionMode = ref<'rotate' | 'pan' | 'pin'>('rotate');
 const showAnnotations = ref(true);
 const isDrawerOpen = ref(true);
 const activeCommentId = ref<string | null>(null);
+const limitWarning = ref('');
 
 // Edit comment states
 const editingCommentId = ref<string | null>(null);
 const editCommentText = ref('');
 const isSavingEdit = ref(false);
 const editCommentError = ref('');
+
+// Unpin / Delete comment states
+const unpinningCommentId = ref<string | null>(null);
+const isUnpinning = ref(false);
+const unpinError = ref('');
+
 
 // Draggable box offsets
 const userBoxOffsets = ref<Record<string, { dx: number; dy: number }>>({});
@@ -795,6 +901,69 @@ function focusAndEdit(comment: Comment) {
     startEditing(comment);
 }
 
+// Unpin comment actions
+function promptUnpin(commentId: string, event?: Event) {
+    if (event) {
+        event.stopPropagation();
+    }
+    unpinningCommentId.value = commentId;
+    unpinError.value = '';
+    activeCommentId.value = commentId;
+}
+
+function cancelUnpin(event?: Event) {
+    if (event) {
+        event.stopPropagation();
+    }
+    unpinningCommentId.value = null;
+    unpinError.value = '';
+}
+
+function executeUnpin(commentId: string) {
+    if (isUnpinning.value) return;
+
+    isUnpinning.value = true;
+    unpinError.value = '';
+
+    router.delete(`/projects/${project.id}/comments/${commentId}`, {
+        preserveState: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            comments.value = comments.value.filter((c) => c.id !== commentId);
+            project.current_revision_count = comments.value.length;
+            delete userBoxOffsets.value[commentId];
+
+            if (comments.value.length < (project.max_revisions_allowed || 3)) {
+                limitWarning.value = '';
+            }
+
+            if (activeCommentId.value === commentId) {
+                activeCommentId.value = null;
+            }
+            if (editingCommentId.value === commentId) {
+                editingCommentId.value = null;
+            }
+            unpinningCommentId.value = null;
+
+            renderCommentMarkers();
+            updateProjections();
+        },
+        onError: (errs) => {
+            unpinError.value =
+                errs?.message || 'Gagal melepas pin dan menghapus komentar.';
+        },
+        onFinish: () => {
+            isUnpinning.value = false;
+        },
+    });
+}
+
+function promptUnpinFromDrawer(comment: Comment) {
+    focusComment(comment);
+    promptUnpin(comment.id);
+}
+
+
 
 // Three.js variables
 let renderer: THREE.WebGLRenderer | null = null;
@@ -843,7 +1012,15 @@ async function onPointerUp(e: MouseEvent) {
 }
 
 function setInteractionMode(mode: 'rotate' | 'pan' | 'pin') {
+    if (mode === 'pin') {
+        const maxLimit = project.max_revisions_allowed || 3;
+        if (comments.value.length >= maxLimit) {
+            limitWarning.value = `Batas revisi maksimal (${maxLimit} pin) telah tercapai. Hapus atau unpin komentar yang ada jika ingin menambahkan revisi baru.`;
+            return;
+        }
+    }
     interactionMode.value = mode;
+    limitWarning.value = '';
     if (!controls) return;
 
     if (mode === 'pan') {
@@ -885,6 +1062,12 @@ function setInteractionMode(mode: 'rotate' | 'pan' | 'pin') {
 
 async function handlePinClick(event: MouseEvent): Promise<void> {
     if (!camera || !scene || !viewerContainer.value) return;
+
+    const maxLimit = project.max_revisions_allowed || 3;
+    if (comments.value.length >= maxLimit) {
+        limitWarning.value = `Batas revisi maksimal (${maxLimit} pin) telah tercapai. Hapus atau unpin komentar yang ada jika ingin menambahkan revisi baru.`;
+        return;
+    }
 
     const hit = await useRaycast(event, camera, scene);
     if (!hit) {
@@ -939,6 +1122,12 @@ function cancelPendingPin() {
 async function submitComment(): Promise<void> {
     if (!pendingPin.value || !newCommentText.value.trim()) return;
 
+    const maxLimit = project.max_revisions_allowed || 3;
+    if (comments.value.length >= maxLimit) {
+        submitCommentError.value = `Batas revisi maksimal (${maxLimit} pin) telah tercapai. Hapus atau unpin komentar yang ada jika ingin menambahkan revisi baru.`;
+        return;
+    }
+
     isSubmittingComment.value = true;
     submitCommentError.value = '';
 
@@ -960,6 +1149,7 @@ async function submitComment(): Promise<void> {
             pendingPinOffset.value = { dx: 0, dy: 0 };
             newCommentText.value = '';
             await loadComments();
+            project.current_revision_count = comments.value.length;
             // Switch back to rotate mode after placing a pin
             if (interactionMode.value === 'pin') {
                 setInteractionMode('rotate');
