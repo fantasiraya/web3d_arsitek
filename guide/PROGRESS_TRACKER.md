@@ -41,12 +41,13 @@
 | Database Migration `project_clients` | Database | 🟢 Completed | v2.4: unique `(project_id, email)`, status, invited_by (2026-09-17) |
 | Client Invitation Action (`InviteClientAction`) | Backend DDD | 🟢 Completed | v2.4: assign email Klien + trigger notification (2026-09-17) |
 | Client Access Validation Middleware | Backend DDD | 🟢 Completed | v2.4: `ProjectClientAccessMiddleware` (2026-09-17) |
-| Revoke Client Access Action | Backend DDD | 🟢 Completed | v2.4: Arsitek cabut akses Klien kapan saja (2026-09-17) |
+| Revoke Client Access Action | Backend DDD & UI | 🟢 Completed | v2.4: Arsitek cabut akses Klien & hapus record dari daftar klien kapan saja (2026-09-20) |
 | Invitation Email Notification (Mailable) | Backend | 🟢 Completed | v2.4: `ClientInvitationNotification` (2026-09-17) |
 | Client Access List UI (Dashboard) | Frontend Dashboard | 🟢 Completed | v2.4: lihat status pending/accepted per Klien, modal kelola & tombol revoke (2026-09-17) |
 | Project Versioning Migration (`project_versions`) | Database | 🟢 Completed | Support multi-revisi .glb & history log (2026-09-17) |
 | Custom Client Revision Setting | Backend / Dashboard | 🟢 Completed | Arsitek bisa set batas revisi khusus per project saat buat proyek (2026-09-17) |
 | Revision Limit Enforcement Middleware | Backend DDD | 🟢 Completed | `RevisionLimitEnforcementMiddleware` (2026-09-17) |
+| Edit Project Data & Model Re-upload | Backend & Frontend | 🟢 Completed | Arsitek dapat mengedit judul, deskripsi, batas revisi, serta opsional mengganti file 3D .glb baru dari modal Dashboard (2026-09-20) |
 
 #### 4. 3D Viewer & Annotation Domain (`Domains/Comment`)
 | Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
@@ -98,6 +99,7 @@
 | Client Invitation & Access Control Tests 🆕 | `Domains/Project` & `Domains/Auth` | 🟢 Completed | v2.4: test undang email, test 403 saat email tidak match, test revoke (2026-09-17) |
 | Revision Limit & Gatekeeper Tests | `Domains/Project` & `Domains/Comment` | 🟢 Completed | Test pemblokiran revisi ke-N jika kuota habis, test increment counter (2026-09-17) |
 | Comment Spatial Pin Unit Tests | `Domains/Comment` | 🔴 Pending | Test Vector Coordinates & Raycaster |
+| Project Update & File Upload Feature Tests | `Domains/Project` | 🟢 Completed | Test update metadata, test replace file 3D, test otorisasi arsitek (2026-09-20) |
 | Chat Domain Feature Tests 🆕 | `Domains/Chat` | 🔴 Pending | v2.4: test broadcasting, channel authorization, test non-invited user ditolak |
 | Billing & Webhook Feature Tests | `Domains/Billing` | 🔴 Pending | Test Midtrans Signature, Status Updates & sinkronisasi `subscriptions` |
 
@@ -128,6 +130,13 @@
   - Mobile Touch Navigation & Drag Fix: Konfigurasi `controls.touches` terpisah antara mode Putar (`THREE.TOUCH.ROTATE`) dan mode Geser (`THREE.TOUCH.PAN`) pada layar sentuh ponsel; penambahan dukungan gesture dragging berbasis `touch-none`, Pointer Capture, dan fallback `TouchEvent` khusus perangkat mobile agar kotak komentar dapat digeser dengan mulus tanpa terinterupsi scroll browser.
   - Fitur Unpin & Hapus Komentar dari Database: Penambahan tombol Unpin pada kartu komentar 3D dan drawer bawah dengan konfirmasi aksi. Pelepasan pin secara instan menghapus marker bola 3D, leader lines, dan menghapus record komentar secara permanen dari database via endpoint `DELETE /projects/{project}/comments/{comment}` dengan proteksi otorisasi pemilik komentar atau arsitek.
   - Kompilasi frontend lulus (`npm run build`), format PHP Pint bersih, dan 75 Pest tests lulus 100%.
+- **2026-09-20 (Update):** Pengerjaan Fitur Edit Data Proyek & Pengelolaan Klien Dashboard:
+  - Implementasi Fitur Edit Proyek di Dashboard (`Dashboard.vue` & `ProjectController@update`): Arsitek dapat mengedit judul proyek, deskripsi, batas revisi klien, serta opsional mengunggah pengganti file 3D model (`.glb` / `.gltf`) baru secara langsung dari modal dialog.
+  - Integrasi Upload Model Baru pada Edit: Jika file baru diunggah saat edit proyek, sistem secara otomatis menyimpan file baru, memperbarui ukuran file, mencatat entri baru pada `ProjectVersion`, serta menjadwalkan ulang Draco Compression (`DracoCompressionJob`). Jika tidak memilih file, file model 3D lama tetap dipertahankan.
+  - UI Tombol Edit Kartu Proyek: Tombol edit (`Pencil`) disematkan di sudut kanan atas thumbnail kartu proyek dan pada barisan tombol aksi footer kartu.
+  - Penyempurnaan Cabut Akses Klien (Revoke Client): Aksi cabut akses kini secara otomatis menghapus record relasi klien dari database (`$client->delete()`), sehingga klien yang dicabut tidak lagi tampil di daftar undangan aktif proyek.
+  - Automated Testing: Penambahan suite pengujian Pest `tests/Feature/ProjectUpdateTest.php` (test update metadata, test upload file 3D baru, dan test otorisasi 403 non-pemilik) dengan total 81 Pest tests lulus 100%.
+
 
 
 
