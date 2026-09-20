@@ -12,6 +12,7 @@ import {
     FolderGit2,
     FolderOpen,
     Layers,
+    Pencil,
     Plus,
     Send,
     ShieldCheck,
@@ -183,6 +184,88 @@ function submitCreateProject() {
             selectedFileName.value = '';
             selectedFileSize.value = '';
             fileError.value = '';
+        },
+    });
+}
+
+// Modal: Edit Project
+const isEditModalOpen = ref(false);
+const editingProject = ref<OwnedProject | null>(null);
+const editForm = useForm({
+    title: '',
+    description: '',
+    max_revisions_allowed: 3,
+    file: null as File | null,
+});
+
+const editFileInputRef = ref<HTMLInputElement | null>(null);
+const editSelectedFileName = ref('');
+const editSelectedFileSize = ref('');
+const editFileError = ref('');
+
+function openEditModal(project: OwnedProject) {
+    editingProject.value = project;
+    editForm.title = project.title;
+    editForm.description = project.description || '';
+    editForm.max_revisions_allowed = project.max_revisions_allowed;
+    editForm.file = null;
+    editSelectedFileName.value = '';
+    editSelectedFileSize.value = '';
+    editFileError.value = '';
+    editForm.clearErrors();
+    isEditModalOpen.value = true;
+}
+
+function onEditFileSelected(e: Event) {
+    editFileError.value = '';
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files[0]) {
+        const file = target.files[0];
+        const sizeMb = file.size / (1024 * 1024);
+        editSelectedFileName.value = file.name;
+        editSelectedFileSize.value = sizeMb.toFixed(2) + ' MB';
+
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (ext !== 'glb' && ext !== 'gltf') {
+            editFileError.value = 'Format file tidak didukung! Mohon pilih file 3D (.glb atau .gltf).';
+            editForm.file = null;
+            return;
+        }
+
+        if (sizeMb > 100) {
+            editFileError.value = `Ukuran file (${sizeMb.toFixed(1)} MB) terlalu besar! Maksimal 100 MB.`;
+            editForm.file = null;
+            return;
+        }
+
+        editForm.file = file;
+    }
+}
+
+function submitEditProject() {
+    if (!editingProject.value || editFileError.value) return;
+
+    editForm.transform((data) => {
+        const payload: any = {
+            title: data.title,
+            description: data.description,
+            max_revisions_allowed: data.max_revisions_allowed,
+            _method: 'PATCH',
+        };
+        if (data.file) {
+            payload.file = data.file;
+        }
+        return payload;
+    }).post(`/projects/${editingProject.value.id}`, {
+        preserveScroll: true,
+        forceFormData: true,
+        onSuccess: () => {
+            isEditModalOpen.value = false;
+            editForm.reset();
+            editSelectedFileName.value = '';
+            editSelectedFileSize.value = '';
+            editFileError.value = '';
+            editingProject.value = null;
         },
     });
 }
@@ -497,7 +580,14 @@ function formatBytes(bytes: number): string {
                                     </Badge>
                                 </div>
 
-                                <div class="absolute top-3 right-3">
+                                <div class="absolute top-3 right-3 flex items-center gap-1.5">
+                                    <button
+                                        @click="openEditModal(project)"
+                                        title="Edit Data Proyek"
+                                        class="rounded-full bg-black/50 p-1.5 text-slate-300 hover:bg-primary hover:text-white transition"
+                                    >
+                                        <Pencil class="h-3.5 w-3.5" />
+                                    </button>
                                     <button
                                         @click="deleteProject(project)"
                                         title="Hapus Proyek"
@@ -582,6 +672,15 @@ function formatBytes(bytes: number): string {
                                     <Box class="mr-1.5 h-3.5 w-3.5" /> Buka 3D Viewer
                                 </Button>
                             </Link>
+                            <Button
+                                @click="openEditModal(project)"
+                                variant="outline"
+                                size="sm"
+                                class="text-xs"
+                                title="Edit Data Proyek"
+                            >
+                                <Pencil class="h-3.5 w-3.5" />
+                            </Button>
                             <Button
                                 @click="openClientModal(project)"
                                 variant="outline"
@@ -800,6 +899,127 @@ function formatBytes(bytes: number): string {
                         >
                             <span v-if="createForm.processing">Mengunggah...</span>
                             <span v-else>Simpan & Buat Proyek</span>
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+
+        <!-- MODAL: EDIT PROYEK -->
+        <Dialog :open="isEditModalOpen" @update:open="isEditModalOpen = $event">
+            <DialogContent class="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle class="flex items-center gap-2">
+                        <Pencil class="h-5 w-5 text-primary" /> Edit Data Proyek 3D
+                    </DialogTitle>
+                    <DialogDescription>
+                        Perbarui informasi proyek atau ganti file model 3D (.glb / .gltf) yang telah diunggah.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <form @submit.prevent="submitEditProject" class="space-y-4 py-2">
+                    <!-- Judul Proyek -->
+                    <div class="space-y-1.5">
+                        <Label for="edit_title">Judul Proyek <span class="text-rose-500">*</span></Label>
+                        <Input
+                            id="edit_title"
+                            v-model="editForm.title"
+                            placeholder="Contoh: Desain Villa Modern Canggu"
+                            required
+                        />
+                        <p v-if="editForm.errors.title" class="text-xs text-rose-500">
+                            {{ editForm.errors.title }}
+                        </p>
+                    </div>
+
+                    <!-- Deskripsi -->
+                    <div class="space-y-1.5">
+                        <Label for="edit_description">Deskripsi Proyek (Opsional)</Label>
+                        <textarea
+                            id="edit_description"
+                            v-model="editForm.description"
+                            placeholder="Catatan konsep arsitektur, lokasi, atau arahan khusus klien..."
+                            rows="2"
+                            class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                        ></textarea>
+                        <p v-if="editForm.errors.description" class="text-xs text-rose-500">
+                            {{ editForm.errors.description }}
+                        </p>
+                    </div>
+
+                    <!-- Batas Maksimal Revisi Klien -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <Label for="edit_max_revisions">Batas Revisi Klien</Label>
+                            <span class="text-xs text-muted-foreground">Saat ini terpakai: {{ editingProject?.current_revision_count ?? 0 }}</span>
+                        </div>
+                        <Input
+                            id="edit_max_revisions"
+                            type="number"
+                            v-model.number="editForm.max_revisions_allowed"
+                            min="1"
+                            max="50"
+                            required
+                        />
+                        <p class="text-[11px] text-muted-foreground">
+                            Klien akan dibatasi hanya dapat membuat thread revisi baru hingga batas ini tercapai.
+                        </p>
+                        <p v-if="editForm.errors.max_revisions_allowed" class="text-xs text-rose-500">
+                            {{ editForm.errors.max_revisions_allowed }}
+                        </p>
+                    </div>
+
+                    <!-- File Upload Input (Opsional saat Edit) -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <Label>Ganti File Model 3D (.glb / .gltf)</Label>
+                            <span class="text-xs text-muted-foreground">Opsional</span>
+                        </div>
+                        <input
+                            ref="editFileInputRef"
+                            type="file"
+                            accept=".glb,.gltf"
+                            @change="onEditFileSelected"
+                            class="hidden"
+                        />
+                        <div
+                            @click="editFileInputRef?.click()"
+                            class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-input p-6 text-center cursor-pointer hover:border-primary/60 hover:bg-primary/5 transition"
+                        >
+                            <FileUp class="h-8 w-8 text-muted-foreground mb-2" />
+                            <div v-if="editSelectedFileName" class="text-sm font-semibold text-primary">
+                                {{ editSelectedFileName }} ({{ editSelectedFileSize }})
+                            </div>
+                            <div v-else class="text-sm font-medium">
+                                Klik jika ingin mengganti file model 3D saat ini ({{ formatBytes(editingProject?.file_size_bytes ?? 0) }})
+                            </div>
+                            <p class="text-[11px] text-muted-foreground mt-1">
+                                Biarkan kosong jika tidak ingin mengubah file 3D
+                            </p>
+                        </div>
+
+                        <p v-if="editFileError" class="text-xs font-semibold text-rose-500 mt-1">
+                            {{ editFileError }}
+                        </p>
+                        <p v-if="editForm.errors.file" class="text-xs font-semibold text-rose-500 mt-1">
+                            {{ editForm.errors.file }}
+                        </p>
+                    </div>
+
+                    <DialogFooter class="gap-2 sm:gap-0 pt-3">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            @click="isEditModalOpen = false"
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            type="submit"
+                            :disabled="editForm.processing || !editForm.title || !!editFileError"
+                        >
+                            <span v-if="editForm.processing">Menyimpan...</span>
+                            <span v-else>Simpan Perubahan</span>
                         </Button>
                     </DialogFooter>
                 </form>
