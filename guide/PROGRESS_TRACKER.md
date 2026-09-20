@@ -136,7 +136,7 @@
   - UI Tombol Edit Kartu Proyek: Tombol edit (`Pencil`) disematkan di sudut kanan atas thumbnail kartu proyek dan pada barisan tombol aksi footer kartu.
   - Penyempurnaan Cabut Akses Klien (Revoke Client): Aksi cabut akses kini secara otomatis menghapus record relasi klien dari database (`$client->delete()`), sehingga klien yang dicabut tidak lagi tampil di daftar undangan aktif proyek.
   - Automated Testing: Penambahan suite pengujian Pest `tests/Feature/ProjectUpdateTest.php` (test update metadata, test upload file 3D baru, dan test otorisasi 403 non-pemilik) dengan total 81 Pest tests lulus 100%.
-
-
-
-
+- **2026-09-20 (Update Lanjutan):** Penambahan Fitur Auto-Active Input Saat Tambah Pin di 3D Viewer:
+  - Implementasi Auto-Focus Input Form: Saat pin baru ditambahkan (baik melalui tombol "Tambah Pin" di toolbar / drawer maupun saat klik pada objek 3D), textarea input catatan revisi langsung otomatis aktif dan terfokus (`focus()`) dengan kursor mengetik yang aktif tanpa perlu klik manual kedua kali.
+  - Tombol Tambah Pin Cerdas: Tombol "Tambah Pin" di toolbar navigasi atas dan panel drawer kini secara instan menembakkan raycast ke pusat viewport model 3D untuk langsung menancapkan pin di tengah model serta mengaktifkan input form. Jika pin pending sudah ada, tombol langsung memfokuskan kembali kursor ke textarea input.
+  - Kompilasi frontend lulus (`npm run build`) dan seluruh 81 pengujian Pest sukses 100%.

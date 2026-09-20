@@ -103,19 +103,19 @@
                     <span>Geser</span>
                 </button>
 
-                <!-- Pin Mode Button -->
+                <!-- Pin Mode Button (Tambah Pin) -->
                 <button
-                    @click="setInteractionMode('pin')"
+                    @click="handleTambahPinButton"
                     :class="[
                         'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition',
                         interactionMode === 'pin'
                             ? 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-500/30'
                             : 'text-slate-300 hover:bg-slate-800 hover:text-white',
                     ]"
-                    title="Klik pada objek 3D untuk membuat pin komentar"
+                    title="Tekan untuk menambah pin komentar pada objek 3D"
                 >
                     <MapPin class="h-3.5 w-3.5 text-rose-400" />
-                    <span>Pin</span>
+                    <span>Tambah Pin</span>
                 </button>
 
                 <div class="h-4 w-px bg-slate-700 my-auto"></div>
@@ -442,11 +442,11 @@
 
                         <form @submit.prevent="submitComment" class="mt-2.5 space-y-2.5 touch-auto" @pointerdown.stop @touchstart.stop>
                             <textarea
+                                ref="newCommentInputRef"
                                 v-model="newCommentText"
                                 placeholder="Tulis feedback revisi atau catatan arsitektur untuk titik ini..."
                                 rows="3"
                                 required
-                                autofocus
                                 class="w-full resize-none rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             ></textarea>
 
@@ -489,16 +489,33 @@
                         Daftar Catatan Pin ({{ comments.length }})
                     </h3>
                 </div>
-                <button
-                    @click="isDrawerOpen = false"
-                    class="text-xs text-slate-400 hover:text-white"
-                >
-                    Sembunyikan
-                </button>
+                <div class="flex items-center gap-2">
+                    <button
+                        @click="handleTambahPinButton"
+                        class="flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-rose-500 shadow-sm"
+                        title="Tambah Pin Komentar"
+                    >
+                        <MapPin class="h-3 w-3" />
+                        <span>Tambah Pin</span>
+                    </button>
+                    <button
+                        @click="isDrawerOpen = false"
+                        class="text-xs text-slate-400 hover:text-white"
+                    >
+                        Sembunyikan
+                    </button>
+                </div>
             </div>
 
-            <div v-if="comments.length === 0" class="py-4 text-center text-xs text-slate-500">
-                Belum ada pin anotasi pada model ini. Klik pada objek 3D untuk meninggalkan catatan revisi.
+            <div v-if="comments.length === 0" class="py-4 text-center text-xs text-slate-500 space-y-2">
+                <p>Belum ada pin anotasi pada model ini. Klik pada objek 3D atau tombol di bawah untuk menambahkan catatan revisi.</p>
+                <button
+                    @click="handleTambahPinButton"
+                    class="inline-flex items-center gap-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition"
+                >
+                    <MapPin class="h-3.5 w-3.5" />
+                    <span>Tambah Pin Baru</span>
+                </button>
             </div>
 
             <div v-else class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -575,7 +592,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import {
     AlertTriangle,
@@ -696,8 +713,21 @@ const pendingPin = ref<{
 } | null>(null);
 
 const newCommentText = ref('');
+const newCommentInputRef = ref<HTMLTextAreaElement | null>(null);
 const isSubmittingComment = ref(false);
 const submitCommentError = ref('');
+
+function focusNewCommentInput() {
+    nextTick(() => {
+        newCommentInputRef.value?.focus();
+    });
+    setTimeout(() => {
+        newCommentInputRef.value?.focus();
+    }, 60);
+    setTimeout(() => {
+        newCommentInputRef.value?.focus();
+    }, 150);
+}
 
 // Check if current user can edit a comment
 function canEditComment(comment: { user_id?: string; user?: { id?: string } }): boolean {
@@ -1059,24 +1089,12 @@ function setInteractionMode(mode: 'rotate' | 'pan' | 'pin') {
     }
 }
 
-async function handlePinClick(event: MouseEvent): Promise<void> {
-    if (!camera || !scene || !viewerContainer.value) return;
-
-    const maxLimit = project.value.max_revisions_allowed || 3;
-    if (comments.value.length >= maxLimit) {
-        limitWarning.value = `Batas revisi maksimal (${maxLimit} pin) telah tercapai. Hapus atau unpin komentar yang ada jika ingin menambahkan revisi baru.`;
-        return;
-    }
-
-    const hit = await useRaycast(event, camera, scene);
-    if (!hit) {
-        return;
-    }
-
-    const rect = viewerContainer.value.getBoundingClientRect();
-    const screenX = event.clientX - rect.left;
-    const screenY = event.clientY - rect.top;
-
+function createPendingPin(
+    hit: { x: number; y: number; z: number; normal?: { x: number; y: number; z: number } },
+    screenX: number,
+    screenY: number,
+    rect: DOMRect
+) {
     // Reset pending offset & always ensure clean empty input on new pin drop
     pendingPinOffset.value = { dx: 0, dy: 0 };
     newCommentText.value = '';
@@ -1087,7 +1105,7 @@ async function handlePinClick(event: MouseEvent): Promise<void> {
     const defaultIsRight = screenX < rect.width * 0.6;
     const cardWidth = 320;
     const defaultDx = defaultIsRight ? 60 : -350;
-    const cardX = screenX + defaultDx;
+    const cardX = Math.max(10, Math.min(rect.width - cardWidth - 10, screenX + defaultDx));
     const cardY = Math.max(20, Math.min(rect.height - 180, screenY - 40));
     const isRightSide = cardX + cardWidth * 0.5 >= screenX;
     const anchorX = isRightSide ? cardX : cardX + cardWidth;
@@ -1109,6 +1127,61 @@ async function handlePinClick(event: MouseEvent): Promise<void> {
     };
 
     updateProjections();
+    focusNewCommentInput();
+}
+
+async function handleTambahPinButton(): Promise<void> {
+    setInteractionMode('pin');
+
+    if (pendingPin.value) {
+        focusNewCommentInput();
+        return;
+    }
+
+    const maxLimit = project.value.max_revisions_allowed || 3;
+    if (comments.value.length >= maxLimit) {
+        limitWarning.value = `Batas revisi maksimal (${maxLimit} pin) telah tercapai. Hapus atau unpin komentar yang ada jika ingin menambahkan revisi baru.`;
+        return;
+    }
+
+    if (viewerContainer.value && camera && scene) {
+        const rect = viewerContainer.value.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        const fakeEvent = {
+            target: viewerContainer.value,
+            clientX: centerX,
+            clientY: centerY,
+        } as unknown as MouseEvent;
+
+        const hit = await useRaycast(fakeEvent, camera, scene);
+        if (hit) {
+            createPendingPin(hit, rect.width / 2, rect.height / 2, rect);
+            return;
+        }
+    }
+}
+
+async function handlePinClick(event: MouseEvent): Promise<void> {
+    if (!camera || !scene || !viewerContainer.value) return;
+
+    const maxLimit = project.value.max_revisions_allowed || 3;
+    if (comments.value.length >= maxLimit) {
+        limitWarning.value = `Batas revisi maksimal (${maxLimit} pin) telah tercapai. Hapus atau unpin komentar yang ada jika ingin menambahkan revisi baru.`;
+        return;
+    }
+
+    const hit = await useRaycast(event, camera, scene);
+    if (!hit) {
+        return;
+    }
+
+    const rect = viewerContainer.value.getBoundingClientRect();
+    const screenX = event.clientX - rect.left;
+    const screenY = event.clientY - rect.top;
+
+    createPendingPin(hit, screenX, screenY, rect);
 }
 
 function cancelPendingPin() {
