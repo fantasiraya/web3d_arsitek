@@ -1,6 +1,6 @@
 import { createInertiaApp } from '@inertiajs/vue3';
 import { initializeTheme } from '@/composables/useAppearance';
-// import AppLayout from '@/layouts/AppLayout.vue';
+import AppLayout from '@/layouts/AppLayout.vue';
 import AppSwissLayout from '@/layouts/AppSwissLayout.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
