@@ -23,7 +23,6 @@ import {
     Users,
     X,
 } from '@lucide/vue';
-import AppLayout from '@/layouts/AppLayout.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -338,7 +337,7 @@ function formatBytes(bytes: number): string {
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="[{ title: 'Dashboard', href: dashboard() }]">
+    <div>
         <Head title="Dashboard Kolaborasi 3D" />
 
         <div class="flex-1 space-y-6 p-4 md:p-8">
@@ -1122,5 +1121,5 @@ function formatBytes(bytes: number): string {
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-    </AppLayout>
+    </div>
 </template>
