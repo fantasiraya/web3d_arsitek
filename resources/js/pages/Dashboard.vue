@@ -350,6 +350,21 @@ function formatBytes(bytes: number): string {
                 <p class="text-sm font-medium">{{ flashSuccess }}</p>
             </div>
 
+            <!-- Limit Warning Banner -->
+            <div
+                v-if="stats?.limit_warning"
+                class="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-50/50 p-4 text-amber-900 shadow-xs dark:bg-amber-950/20 dark:text-amber-300"
+            >
+                <AlertTriangle class="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                <div class="flex-1">
+                    <p class="text-sm font-semibold mb-1">Project Limit Exceeded</p>
+                    <p class="text-sm">{{ stats.limit_warning.message }}</p>
+                    <p class="text-xs mt-2 text-amber-700 dark:text-amber-400">
+                        You cannot create new projects until you upgrade your plan or delete existing projects.
+                    </p>
+                </div>
+            </div>
+
             <!-- Welcome & Header Section -->
             <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>

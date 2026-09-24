@@ -4,10 +4,12 @@ namespace App\Domains\Auth\Models;
 
 use App\Domains\Billing\Models\Subscription;
 use App\Domains\Billing\Models\Transaction;
+use App\Domains\Billing\Models\UserPlanOverride;
 use App\Domains\Chat\Models\ChatMessage;
 use App\Domains\Comment\Models\Comment;
 use App\Domains\Project\Models\Project;
 use App\Domains\Project\Models\ProjectClient;
+use App\Domains\SystemConfig\Models\AuditLog;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -45,6 +47,8 @@ class User extends Authenticatable implements PasskeyUser
 
     protected $table = 'users';
 
+    protected $guard_name = 'web';
+
     /**
      * The attributes that are mass assignable.
      *
@@ -57,6 +61,8 @@ class User extends Authenticatable implements PasskeyUser
         'google_id',
         'avatar',
         'subscription_status',
+        'status',
+        'last_active_at',
     ];
 
     /**
@@ -80,10 +86,20 @@ class User extends Authenticatable implements PasskeyUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'last_active_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
         ];
     }
+
+    /**
+     * Get the default guard name for the model.
+     */
+    public function getDefaultGuardName(): string
+    {
+        return 'web';
+    }
+
 
     /**
      * Projects owned by this user (Architect capability).
@@ -163,6 +179,52 @@ class User extends Authenticatable implements PasskeyUser
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class, 'user_id');
+    }
+
+    /**
+     * Custom project limit override for this user.
+     *
+     * @return HasOne<UserPlanOverride, $this>
+     */
+    public function planOverride(): HasOne
+    {
+        return $this->hasOne(UserPlanOverride::class, 'user_id');
+    }
+
+    /**
+     * Audit logs targeting this user.
+     *
+     * @return HasMany<AuditLog, $this>
+     */
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(AuditLog::class, 'target_user_id');
+    }
+
+    /**
+     * Audit logs performed by this admin user.
+     *
+     * @return HasMany<AuditLog, $this>
+     */
+    public function adminAuditLogs(): HasMany
+    {
+        return $this->hasMany(AuditLog::class, 'admin_id');
+    }
+
+    /**
+     * Check if user account is active (not suspended).
+     */
+    public function isActiveAccount(): bool
+    {
+        return $this->status !== 'suspended';
+    }
+
+    /**
+     * Check if user is currently on Enterprise Tier.
+     */
+    public function isEnterprise(): bool
+    {
+        return $this->subscription_status === 'enterprise';
     }
 
     /**

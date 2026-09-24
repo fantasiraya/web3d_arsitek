@@ -1,0 +1,163 @@
+<script setup lang="ts">
+import { computed } from 'vue';
+import { Head, Link, usePage } from '@inertiajs/vue3';
+import {
+    Activity,
+    ArrowLeft,
+    CheckCircle2,
+    CreditCard,
+    FolderKanban,
+    Layers,
+    LayoutDashboard,
+    LogOut,
+    ShieldAlert,
+    ShieldCheck,
+    Users,
+} from '@lucide/vue';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { logout } from '@/routes';
+
+defineProps<{
+    title?: string;
+}>();
+
+const page = usePage();
+const flashSuccess = computed(() => (page.props as any).flash?.success);
+const authUser = computed(() => (page.props as any).auth?.user);
+
+const currentUrl = computed(() => page.url);
+
+const navItems = [
+    { title: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
+    { title: 'Users', href: '/admin/users', icon: Users },
+    { title: 'Projects', href: '/admin/projects', icon: FolderKanban },
+    { title: 'Subscriptions', href: '/admin/subscriptions', icon: CreditCard },
+    { title: 'Plans', href: '/admin/plans', icon: Layers },
+    { title: 'Audit Logs', href: '/admin/audit-logs', icon: ShieldAlert },
+];
+
+function isActive(href: string): boolean {
+    if (href === '/admin/dashboard') {
+        return currentUrl.value === '/admin/dashboard' || currentUrl.value === '/admin';
+    }
+    return currentUrl.value.startsWith(href);
+}
+</script>
+
+<template>
+    <div class="min-h-screen bg-background text-foreground flex flex-col md:flex-row antialiased">
+        <Head :title="title ? `${title} - SaaS Admin Panel` : 'SaaS Admin Panel'" />
+
+        <!-- Sidebar -->
+        <aside class="w-full md:w-64 bg-sidebar border-r border-sidebar-border shrink-0 flex flex-col justify-between">
+            <div>
+                <!-- Brand / Logo -->
+                <div class="p-5 border-b border-sidebar-border flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="h-9 w-9 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-sm">
+                            <ShieldCheck class="h-5 w-5" />
+                        </div>
+                        <div>
+                            <div class="font-bold text-sm tracking-tight text-sidebar-foreground">ARCHITECT 3D</div>
+                            <div class="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Super Admin</div>
+                        </div>
+                    </div>
+                    <Badge variant="outline" class="text-[10px] uppercase font-mono px-1.5 border-primary/40 text-primary">
+                        Panel
+                    </Badge>
+                </div>
+
+                <!-- Navigation Links -->
+                <nav class="p-3 space-y-1">
+                    <Link
+                        v-for="item in navItems"
+                        :key="item.href"
+                        :href="item.href"
+                        :class="[
+                            'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                            isActive(item.href)
+                                ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-xs'
+                                : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                        ]"
+                    >
+                        <component :is="item.icon" class="h-4 w-4 shrink-0" :class="isActive(item.href) ? 'text-primary' : 'opacity-70'" />
+                        {{ item.title }}
+                    </Link>
+                </nav>
+            </div>
+
+            <!-- Footer actions / App Switcher -->
+            <div class="p-3 border-t border-sidebar-border space-y-2">
+                <Link
+                    href="/dashboard"
+                    class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+                >
+                    <ArrowLeft class="h-4 w-4 text-muted-foreground" />
+                    <span>Kembali ke Aplikasi 3D</span>
+                </Link>
+
+                <div class="pt-2 border-t border-sidebar-border/60 flex items-center justify-between px-2">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <div class="h-8 w-8 rounded-full bg-primary/20 text-primary font-semibold flex items-center justify-center text-xs shrink-0">
+                            {{ authUser?.name?.charAt(0) ?? 'A' }}
+                        </div>
+                        <div class="truncate">
+                            <div class="text-xs font-medium text-sidebar-foreground truncate">{{ authUser?.name }}</div>
+                            <div class="text-[10px] text-muted-foreground truncate">{{ authUser?.email }}</div>
+                        </div>
+                    </div>
+
+                    <Link :href="logout()" method="post" as="button" class="text-muted-foreground hover:text-destructive p-1 rounded-md transition-colors" title="Log out">
+                        <LogOut class="h-4 w-4" />
+                    </Link>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col min-w-0">
+            <!-- Header bar -->
+            <header class="h-16 border-b border-border bg-card/60 backdrop-blur-md px-6 flex items-center justify-between shrink-0 sticky top-0 z-10">
+                <div class="flex items-center gap-2">
+                    <Badge class="bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 text-xs font-semibold uppercase">
+                        Super Admin Mode
+                    </Badge>
+                    <span class="text-xs text-muted-foreground hidden sm:inline">|</span>
+                    <span class="text-xs text-muted-foreground hidden sm:inline">Backend & Subscription Management</span>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <Link href="/dashboard">
+                        <Button variant="outline" size="sm" class="text-xs h-8 gap-1.5">
+                            <ArrowLeft class="h-3.5 w-3.5" />
+                            Client View
+                        </Button>
+                    </Link>
+                </div>
+            </header>
+
+            <!-- Flash Alert -->
+            <div v-if="flashSuccess" class="px-6 pt-4">
+                <div class="flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-50/50 p-3.5 text-emerald-800 shadow-xs dark:bg-emerald-950/20 dark:text-emerald-300">
+                    <CheckCircle2 class="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <p class="text-sm font-medium">{{ flashSuccess }}</p>
+                </div>
+            </div>
+
+            <!-- Page Body -->
+            <main class="flex-1 p-6 md:p-8 overflow-y-auto">
+                <slot />
+            </main>
+        </div>
+    </div>
+</template>
+

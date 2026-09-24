@@ -17,11 +17,13 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             SystemSettingSeeder::class,
+            PlanSeeder::class,
+            SuperAdminSeeder::class,
         ]);
 
         User::factory()->create([
             'name' => 'Test User',
-            'email' => 'test@example.com',
+            'email' => 'test@gmail.com',
         ]);
     }
 }

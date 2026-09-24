@@ -23,13 +23,17 @@
 | Client Invitation Email Matching on Login | Backend `Domains/Auth` | 🔴 Pending | v2.4: cocokkan email login dengan `project_clients.email`, update status `accepted` |
 | Dual-Capacity Account Support (Arsitek + Klien 1 akun) | Backend / QA | 🔴 Pending | v2.4: pastikan tidak ada logic yang mencegah 1 akun jadi Arsitek & Klien bersamaan |
 
-### 2. Platform Config Domain (`Domains/SystemConfig`)
+### 2. Platform Config & Admin Backoffice Domain (`Domains/SystemConfig` & `Domains/Billing`)
 | Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
 | :--- | :--- | :---: | :--- |
 | Database Migration `system_settings` | Database | 🟢 Completed | Selesai & teruji (2026-09-17) |
-| Dynamic Config Seeder | Backend | 🟢 Completed | Quota Free & Pro Tier, default client revisions (2026-09-17) |
+| Dynamic Config Seeder | Database Seeder | 🟢 Completed | Quota Free & Pro Tier, default client revisions (2026-09-17) |
+| Database Migration `plans` | Database | 🟡 In Progress | Dynamic Plan configuration (Free, Pro, Enterprise) |
+| Database Migration `user_plan_overrides` | Database | 🟡 In Progress | Admin custom override project limit |
+| Database Migration `audit_logs` | Database | 🟡 In Progress | Administrative audit trail |
+| Subscription Limit & Feature Gating Service | Backend DDD | 🟡 In Progress | Effective Limit = Override ?? Plan Limit |
+| Admin Panel Backoffice (`/admin/*`) | Backend & Frontend | 🟡 In Progress | Dashboard, Users, Projects, Subscriptions, Plans, Audit Logs |
 | System Settings Caching | Redis | 🔴 Pending | Cache key: `system_settings_all` |
-| Admin Settings Control Panel | Frontend Dashboard | 🔴 Pending | Interface update kuota sistem |
 
 ### 3. Project & Storage Domain (`Domains/Project`)
 | Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
@@ -138,5 +142,9 @@
   - Automated Testing: Penambahan suite pengujian Pest `tests/Feature/ProjectUpdateTest.php` (test update metadata, test upload file 3D baru, dan test otorisasi 403 non-pemilik) dengan total 81 Pest tests lulus 100%.
 - **2026-09-20 (Update Lanjutan):** Penambahan Fitur Auto-Active Input Saat Tambah Pin di 3D Viewer:
   - Implementasi Auto-Focus Input Form: Saat pin baru ditambahkan (baik melalui tombol "Tambah Pin" di toolbar / drawer maupun saat klik pada objek 3D), textarea input catatan revisi langsung otomatis aktif dan terfokus (`focus()`) dengan kursor mengetik yang aktif tanpa perlu klik manual kedua kali.
-  - Tombol Tambah Pin Cerdas: Tombol "Tambah Pin" di toolbar navigasi atas dan panel drawer kini secara instan menembakkan raycast ke pusat viewport model 3D untuk langsung menancapkan pin di tengah model serta mengaktifkan input form. Jika pin pending sudah ada, tombol langsung memfokuskan kembali kursor ke textarea input.
   - Kompilasi frontend lulus (`npm run build`) dan seluruh 81 pengujian Pest sukses 100%.
+- **2026-09-23:** Implementasi Persistensi LocalStorage pada 3D Viewer (`Viewer.vue`):
+  - Tata letak kotak komentar yang digeser (`userBoxOffsets`) kini disimpan secara persisten di `localStorage` per proyek (`project-viewer:{projectId}:preferences`), sehingga saat browser di-refresh posisi kartu komentar tidak akan ter-reset.
+  - Preferensi buka/tutup panel "Daftar Catatan Pin" (`isDrawerOpen`) dan toggle garis anotasi (`showAnnotations`) tersimpan otomatis di `localStorage`.
+  - Mode interaksi (Putar, Geser, Pin) tetap diatur selalu kembali ke default "Putar" (Rotate) setiap kali halaman dimuat untuk keamanan navigasi 3D.
+  - Kompilasi frontend lulus (`npm run build`) dan 81 pengujian Pest sukses 100%.

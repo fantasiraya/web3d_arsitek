@@ -3,6 +3,7 @@
 namespace App\Domains\Project\Actions;
 
 use App\Domains\Auth\Models\User;
+use App\Domains\Billing\Services\SubscriptionLimitService;
 use App\Domains\Project\Models\Project;
 use App\Domains\SystemConfig\Repositories\SystemSettingRepository;
 use Illuminate\Support\Str;
@@ -10,16 +11,16 @@ use Illuminate\Support\Str;
 class CreateProjectAction
 {
     public function __construct(
-        protected SystemSettingRepository $settings
+        protected SystemSettingRepository $settings,
+        protected SubscriptionLimitService $limitService
     ) {}
 
     public function execute(User $user, array $data): Project
     {
-        $maxProjects = $this->settings->get("quota.{$user->subscription_status}.max_projects", 3);
-        $currentProjects = Project::where('user_id', $user->id)->count();
+        $check = $this->limitService->canCreateProject($user);
 
-        if ($currentProjects >= $maxProjects) {
-            abort(403, 'Project quota exceeded for your current subscription.');
+        if (! $check['allowed']) {
+            abort(403, $check['reason'] ?? 'Project limit reached for your current subscription.');
         }
 
         $maxRevisions = $this->settings->get("quota.{$user->subscription_status}.max_revisions_per_project", 3);

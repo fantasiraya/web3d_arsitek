@@ -14,8 +14,11 @@ use Illuminate\Support\Carbon;
  * @property string $id
  * @property string $user_id
  * @property string|null $transaction_id
+ * @property string|null $plan_id
  * @property string $plan
  * @property string $status
+ * @property string $billing_type
+ * @property bool $auto_renewal
  * @property Carbon $started_at
  * @property Carbon|null $expires_at
  * @property Carbon|null $created_at
@@ -28,17 +31,24 @@ class Subscription extends Model
 
     public const STATUS_ACTIVE = 'active';
 
+    public const STATUS_TRIAL = 'trial';
+
     public const STATUS_EXPIRED = 'expired';
 
     public const STATUS_CANCELLED = 'cancelled';
+
+    public const STATUS_PAST_DUE = 'past_due';
 
     protected $table = 'subscriptions';
 
     protected $fillable = [
         'user_id',
         'transaction_id',
+        'plan_id',
         'plan',
         'status',
+        'billing_type',
+        'auto_renewal',
         'started_at',
         'expires_at',
     ];
@@ -46,6 +56,7 @@ class Subscription extends Model
     protected function casts(): array
     {
         return [
+            'auto_renewal' => 'boolean',
             'started_at' => 'datetime',
             'expires_at' => 'datetime',
         ];
@@ -59,6 +70,16 @@ class Subscription extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /**
+     * The plan configuration object.
+     *
+     * @return BelongsTo<Plan, $this>
+     */
+    public function planModel(): BelongsTo
+    {
+        return $this->belongsTo(Plan::class, 'plan_id');
     }
 
     /**
@@ -76,7 +97,7 @@ class Subscription extends Model
      */
     public function isActive(): bool
     {
-        return $this->status === self::STATUS_ACTIVE &&
+        return in_array($this->status, [self::STATUS_ACTIVE, self::STATUS_TRIAL], true) &&
             ($this->expires_at === null || $this->expires_at->isFuture());
     }
 }

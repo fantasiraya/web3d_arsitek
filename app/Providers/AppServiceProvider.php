@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Fortify\Contracts\LoginResponse;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,6 +23,12 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(SystemSettingRepository::class, fn () => new SystemSettingRepository);
+
+        // Custom login response to redirect super admin to admin panel
+        $this->app->singleton(
+            LoginResponse::class,
+            \App\Http\Responses\LoginResponse::class
+        );
     }
 
     /**
@@ -30,6 +37,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+
+        // Eager load roles for all User queries to ensure Spatie Permission works
+        \App\Domains\Auth\Models\User::retrieved(function ($user) {
+            $user->loadMissing('roles');
+        });
 
         Event::listen(Login::class, function (Login $event) {
             app(MatchInvitedClientEmailAction::class)->execute($event->user); // @phpstan-ignore-line

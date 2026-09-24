@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Project;
 
+use App\Domains\Billing\Services\SubscriptionLimitService;
 use App\Domains\Project\Actions\CreateProjectAction;
 use App\Domains\Project\Actions\InviteClientAction;
 use App\Domains\Project\Actions\RevokeClientAccessAction;
@@ -19,7 +20,8 @@ class ProjectController extends Controller
         protected CreateProjectAction $createProjectAction,
         protected UploadProjectFileAction $uploadProjectFileAction,
         protected InviteClientAction $inviteClientAction,
-        protected RevokeClientAccessAction $revokeClientAccessAction
+        protected RevokeClientAccessAction $revokeClientAccessAction,
+        protected SubscriptionLimitService $limitService
     ) {}
 
     /**
@@ -76,8 +78,9 @@ class ProjectController extends Controller
      */
     public function update(Request $request, Project $project): JsonResponse|RedirectResponse
     {
-        if ($project->user_id !== $request->user()->id) {
-            abort(403, 'Hanya arsitek pemilik proyek yang dapat mengubah pengaturan proyek.');
+        $check = $this->limitService->canEditProject($request->user(), $project);
+        if (! $check['allowed']) {
+            abort(403, $check['reason'] ?? 'Hanya arsitek pemilik proyek yang dapat mengubah pengaturan proyek.');
         }
 
         $validated = $request->validate([
@@ -196,8 +199,9 @@ class ProjectController extends Controller
      */
     public function destroy(Request $request, Project $project): RedirectResponse
     {
-        if ($project->user_id !== $request->user()->id) {
-            abort(403, 'Hanya arsitek pemilik proyek yang dapat menghapus proyek ini.');
+        $check = $this->limitService->canDeleteProject($request->user(), $project);
+        if (! $check['allowed']) {
+            abort(403, $check['reason'] ?? 'Hanya arsitek pemilik proyek yang dapat menghapus proyek ini.');
         }
 
         $project->delete();

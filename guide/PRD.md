@@ -40,10 +40,11 @@ Membangun platform SaaS berbasis Web 3D interaktif yang memungkinkan Arsitek men
 
 | Role/Kapasitas | Deskripsi | Akses, Otorisasi & Batasan Kuota |
 | :--- | :--- | :--- |
-| **Arsitek (Free Tier)** | Kapabilitas default setiap akun baru yang ingin mencoba platform[cite: 1, 2]. | • Register/Login (Email & **Google OAuth**)[cite: 2]<br>• Upload & Kelola File 3D (Dibatasi oleh **Dynamic System Settings**, contoh: Maks 2 project, file maks 15MB)[cite: 1, 2]<br>• Atur Batas Kuota Revisi Client per Project (default: 3x revisi, tersimpan di `projects.max_revisions_allowed`)[cite: 1, 3]<br>• **Mengundang Klien via email** (`project_clients`) — bukan lagi generate link publik terbuka<br>• Chat real-time dengan Klien yang sudah accept undangan |
-| **Arsitek (Pro Subscriber)** | Kapasitas berbayar dengan akses fitur penuh, status langganan tercatat di tabel `subscriptions`[cite: 1, 2]. | • Akses tanpa batas kuota project (atau batas jauh lebih besar, dikontrol via `pro_tier_max_projects`, default 100 project)[cite: 1, 2]<br>• File maks 100MB (`pro_tier_max_file_size_mb`)[cite: 1, 2]<br>• Prioritas kompresi file 3D & kustomisasi batas revisi client hingga unlimited[cite: 1, 3]<br>• Undangan Klien tanpa batas jumlah |
+| **Arsitek (Free Tier)** | Kapabilitas default setiap akun baru yang ingin mencoba platform[cite: 1, 2]. | • Register/Login (Email & **Google OAuth**)[cite: 2]<br>• Upload & Kelola File 3D (Maksimal **1 project**, bisa tambah & edit project miliknya)<br>• Atur Batas Kuota Revisi Client per Project (default: 3x revisi, tersimpan di `projects.max_revisions_allowed`)[cite: 1, 3]<br>• **Mengundang Klien via email** (`project_clients`) — bukan lagi generate link publik terbuka<br>• Chat real-time dengan Klien yang sudah accept undangan |
+| **Arsitek (Pro Subscriber)** | Kapasitas berbayar untuk individual atau tim kecil, status langganan tercatat di tabel `subscriptions`[cite: 1, 2]. | • Batas kuota **20 project** (dapat di-override oleh Admin)<br>• File maks 100MB (`pro_tier_max_file_size_mb`)[cite: 1, 2]<br>• Prioritas kompresi file 3D & kustomisasi batas revisi client hingga unlimited[cite: 1, 3]<br>• Undangan Klien hingga batas team plan<br>• Fitur export & productivity tools |
+| **Arsitek (Enterprise)** | Paket organisasi/perusahaan skala besar dengan kebutuhan keamanan, integrasi, dan skalabilitas tinggi. | • **Unlimited projects** (kuota `null` / tanpa batas)<br>• Advanced analytics & audit logs<br>• SSO (Single Sign-On), API Access, Custom Branding<br>• Priority support & dedicated SLA |
 | **Klien (Invited Reviewer)** | Status per-project yang didapat saat email akun cocok dengan undangan Arsitek — **bukan role terpisah**, akun yang sama bisa juga jadi Arsitek di project lain[cite: 1, 2]. | • Menerima email undangan berisi link akses project (`/p/{share_token}`)<br>• **Wajib Login/Register** (Email / **Google OAuth**) sebelum bisa membuka apa pun — tidak ada lagi mode publik read-only tanpa login<br>• Sistem memvalidasi: email akun yang login HARUS match dengan email di `project_clients` untuk project tsb, jika tidak → `403 Forbidden`<br>• Setelah lolos validasi: buka 3D Viewer, lihat Counter Status Revisi (cth: "Revisi 2 dari 3")[cite: 1, 3], menempatkan *Pin Comment* selama kuota revisi belum habis[cite: 1, 3], dan **chat real-time** dengan Arsitek project tsb |
-| **Super Admin** | Role eksplisit internal, tidak bisa didapat via self-registration[cite: 1, 2]. | • Akses Dashboard Backoffice (Filament/Vue Admin)[cite: 1, 2]<br>• Mengatur konfigurasi kuota sistem secara **dinamis** (`system_settings`) tanpa *re-deploy* kode[cite: 1, 2]<br>• Memonitor transaksi, pengguna, subscription, dan log pembayaran[cite: 1, 2] |
+| **Super Admin** | Role eksplisit internal via Spatie `super_admin`, tidak bisa didapat via self-registration[cite: 1, 2]. | • Akses Backoffice Admin Panel (`/admin/*`)<br>• Mengatur konfigurasi kuota sistem secara **dinamis** (`plans` & `system_settings`) tanpa *re-deploy* kode[cite: 1, 2]<br>• Mengelola pengguna, suspend/aktivasi akun, ubah subscription plan<br>• Memberikan **Custom Project Limit Override** secara individual per user<br>• Memonitor transaksi, project lintas user, audit log perubahan admin |
 
 ---
 
@@ -88,20 +89,21 @@ Membangun platform SaaS berbasis Web 3D interaktif yang memungkinkan Arsitek men
 - **Performance Note:** Scrollytelling & sample 3D pada landing page WAJIB lazy-load (canvas 3D hanya mount saat section terlihat di viewport / `IntersectionObserver`) agar tidak membebani First Contentful Paint SSR Nuxt.
 ---
 
-## 4. Dynamic Business Rules & System Configuration
+## 4. Dynamic Business Rules & Subscription Plan Configuration
 
-Tabel konfigurasi global (`system_settings`) digunakan agar Admin SaaS dapat mengubah batasan operasional secara dinamis dari dashboard[cite: 2]:
+Batas kuota dan izin fitur diatur secara dinamis melalui tabel `plans` (dengan fallback/pelengkap di `system_settings`), serta dapat di-override secara individual per user via `user_plan_overrides`:
 
-| Key Config | Default Value | Deskripsi Pengaturan Admin |
-| :--- | :--- | :--- |
-| `free_tier_max_projects` | `2` | Jumlah maksimal project yang bisa dibuat oleh user Free Tier[cite: 2]. |
-| `free_tier_max_file_size_mb` | `15` | Batas ukuran maksimal per file 3D untuk user Free Tier (dalam MB)[cite: 2]. |
-| `free_tier_default_client_revisions` | `3` | Batas default kuota revisi client per project untuk paket Free Tier (nilai awal untuk `projects.max_revisions_allowed`)[cite: 1, 3]. |
-| `free_tier_trial_days` | `14` | Durasi masa uji coba gratis sebelum diminta upgrade[cite: 2]. |
-| `pro_tier_max_projects` | `100` | Jumlah maksimal project yang bisa dibuat oleh user Pro Subscriber[cite: 1, 2]. |
-| `pro_tier_max_file_size_mb` | `100` | Batas ukuran maksimal per file 3D untuk user Pro Subscriber[cite: 2]. |
-| `free_tier_max_invited_clients` | `5` | Batas jumlah email Klien yang boleh diundang per project untuk Free Tier. |
-| `pro_tier_max_invited_clients` | `null` (unlimited) | Batas jumlah email Klien yang boleh diundang per project untuk Pro Tier (unlimited). |
+| Plan Slug | Project Limit | Can Create | Can Edit | Can Delete | Fitur Tambahan |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `free` | `1` | Yes | Yes (Bisa Tambah & Edit) | Yes | Kuota 1 project. Akses basic 3D viewer & pinned comment. |
+| `pro` | `20` | Yes | Yes | Yes | Kuota 20 project, export, productivity tools, higher file size. |
+| `enterprise` | `null` (Unlimited) | Yes | Yes | Yes | Unlimited projects, advanced analytics, audit logs, SSO, API access, custom branding, priority support. |
+
+### 4.A Formula Effective Project Limit
+$$\text{Effective Limit} = \text{Custom User Override (jika ada)} \mathbin{??} \text{Subscription Plan Limit} \mathbin{??} 1$$
+- Nilai `null` merepresentasikan **Unlimited** (bukan angka arbitrer seperti 999999).
+- Jika admin menghapus custom limit, batas kuota otomatis kembali ke default paket langganan.
+- Downgrade paket tidak pernah menghapus project pengguna yang sudah ada; jika jumlah project melebihi batas paket baru, sistem menampilkan status peringatan dan memblokir pembuatan project baru sampai kuota mencukupi.
 
 ### 4.x Client Invitation & Access Control Flow (Ringkasan Bisnis)
 1. Arsitek membuka project miliknya → memasukkan alamat email Klien pada form "Invite Client" → sistem membuat baris di `project_clients` (status `pending`) & mengirim email undangan berisi link `/p/{share_token}`.

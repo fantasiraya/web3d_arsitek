@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Domains\Billing\Services\SubscriptionLimitService;
 use App\Domains\Project\Models\Project;
 use App\Domains\Project\Models\ProjectClient;
-use App\Domains\SystemConfig\Repositories\SystemSettingRepository;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -12,7 +12,7 @@ use Inertia\Response;
 class DashboardController extends Controller
 {
     public function __construct(
-        protected SystemSettingRepository $settings
+        protected SubscriptionLimitService $limitService
     ) {}
 
     /**
@@ -104,11 +104,26 @@ class DashboardController extends Controller
             })
             ->values();
 
-        // 3. User stats & limits
-        $subscriptionStatus = $user->subscription_status ?? 'free';
-        $maxProjects = (int) $this->settings->get("quota.{$subscriptionStatus}.max_projects", 3);
+        // 3. User stats & limits using SubscriptionLimitService
         $ownedCount = $ownedProjects->count();
         $clientCount = $clientProjects->count();
+
+        $effectiveLimit = $this->limitService->getEffectiveProjectLimit($user);
+        $canCreateResult = $this->limitService->canCreateProject($user);
+        $plan = $this->limitService->getPlanForUser($user);
+
+        // Check if user has custom override
+        $hasCustomOverride = $this->limitService->hasCustomLimitOverride($user);
+
+        // Warning when user exceeds limit (e.g., downgraded)
+        $limitWarning = null;
+        if ($effectiveLimit !== null && $ownedCount > $effectiveLimit) {
+            $limitWarning = [
+                'message' => "Your current plan allows {$effectiveLimit} project(s). You currently have {$ownedCount} projects. Please upgrade your plan or contact the administrator.",
+                'current_count' => $ownedCount,
+                'allowed_limit' => $effectiveLimit,
+            ];
+        }
 
         return Inertia::render('Dashboard', [
             'auth' => [
@@ -116,7 +131,7 @@ class DashboardController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'subscription_status' => $subscriptionStatus,
+                    'subscription_status' => $user->subscription_status ?? 'free',
                     'is_pro' => $user->isPro(),
                 ],
             ],
@@ -125,9 +140,14 @@ class DashboardController extends Controller
             'stats' => [
                 'owned_count' => $ownedCount,
                 'client_count' => $clientCount,
-                'max_projects' => $maxProjects,
-                'can_create_project' => $ownedCount < $maxProjects,
-                'subscription_status' => $subscriptionStatus,
+                'max_projects' => $effectiveLimit ?? 999999, // Display 999999 for unlimited
+                'effective_limit' => $effectiveLimit, // null = unlimited
+                'can_create_project' => $canCreateResult['allowed'],
+                'cannot_create_reason' => $canCreateResult['reason'],
+                'subscription_status' => $user->subscription_status ?? 'free',
+                'plan_name' => $plan->name,
+                'has_custom_override' => $hasCustomOverride,
+                'limit_warning' => $limitWarning,
             ],
         ]);
     }

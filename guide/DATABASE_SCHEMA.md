@@ -213,6 +213,60 @@ Menyimpan riwayat pembayaran transaksi upgrade langganan Pro dari Payment Gatewa
 | `created_at` | `timestamp` | `NULLABLE` | Waktu entri dibuat |
 | `updated_at` | `timestamp` | `NULLABLE` | Waktu entri diperbarui |
 
+#### `plans` 🆕
+Menyimpan konfigurasi paket langganan (Free, Pro, Enterprise, dsb.) secara dinamis beserta batasan project dan permission fitur.
+
+| Field | Type | Modifiers | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `uuid` | `PRIMARY KEY` | Unique Identifier |
+| `name` | `string` | `NOT NULL` | Nama paket (contoh: Free, Pro, Enterprise) |
+| `slug` | `string` | `UNIQUE, NOT NULL` | Slug paket (contoh: `free`, `pro`, `enterprise`) |
+| `description` | `text` | `NULLABLE` | Deskripsi paket langganan |
+| `project_limit` | `integer` | `NULLABLE` | Batas project (`null` = Unlimited) |
+| `can_create_project` | `boolean` | `DEFAULT(true)` | Izin membuat project |
+| `can_edit_project` | `boolean` | `DEFAULT(true)` | Izin mengedit project (Free: true (1 project), Pro: true, Enterprise: true) |
+| `can_delete_project`| `boolean` | `DEFAULT(true)` | Izin menghapus project |
+| `can_export` | `boolean` | `DEFAULT(false)` | Akses fitur export |
+| `max_team_members` | `integer` | `DEFAULT(1)` | Batas anggota tim |
+| `api_access` | `boolean` | `DEFAULT(false)` | Akses REST API |
+| `audit_log` | `boolean` | `DEFAULT(false)` | Akses log audit organisasi |
+| `advanced_analytics`| `boolean` | `DEFAULT(false)` | Akses analitik tingkat lanjut |
+| `sso` | `boolean` | `DEFAULT(false)` | Akses Single Sign-On |
+| `custom_branding` | `boolean` | `DEFAULT(false)` | Fitur custom branding |
+| `priority_support` | `boolean` | `DEFAULT(false)` | Akses priority support |
+| `status` | `string` | `DEFAULT('active')` | Status paket: `active`, `inactive` |
+| `created_at` | `timestamp` | `NULLABLE` | Waktu entri dibuat |
+| `updated_at` | `timestamp` | `NULLABLE` | Waktu entri diperbarui |
+
+#### `user_plan_overrides` 🆕
+Menyimpan override batasan project individual per user yang diatur oleh Admin. Override memiliki prioritas lebih tinggi daripada limit bawaan plan.
+
+| Field | Type | Modifiers | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `uuid` | `PRIMARY KEY` | Unique Identifier |
+| `user_id` | `uuid` | `FOREIGN KEY, UNIQUE, NOT NULL` | Relasi ke `users.id` |
+| `custom_project_limit` | `integer` | `NULLABLE` | Nilai batas kuota kustom |
+| `is_unlimited` | `boolean` | `DEFAULT(false)` | Flag eksplisit jika limit di-override menjadi unlimited |
+| `reason` | `string` | `NULLABLE` | Alasan pemberian limit kustom |
+| `created_at` | `timestamp` | `NULLABLE` | Waktu entri dibuat |
+| `updated_at` | `timestamp` | `NULLABLE` | Waktu entri diperbarui |
+
+#### `audit_logs` 🆕
+Menyimpan jejak audit atas seluruh tindakan administratif (perubahan limit, subscription, status akun, dsb.).
+
+| Field | Type | Modifiers | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `uuid` | `PRIMARY KEY` | Unique Identifier |
+| `admin_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Relasi ke `users.id` (Admin pelaku aksi) |
+| `target_user_id` | `uuid` | `FOREIGN KEY, NULLABLE` | Relasi ke `users.id` (User terdampak, jika ada) |
+| `action` | `string` | `NOT NULL` | Jenis aksi (cth: `user.subscription.change`, `user.limit.override`) |
+| `old_value` | `jsonb` | `NULLABLE` | Payload nilai sebelum perubahan |
+| `new_value` | `jsonb` | `NULLABLE` | Payload nilai setelah perubahan |
+| `ip_address` | `string` | `NULLABLE` | Alamat IP admin |
+| `user_agent` | `text` | `NULLABLE` | User Agent browser admin |
+| `metadata` | `jsonb` | `NULLABLE` | Metadata tambahan |
+| `created_at` | `timestamp` | `NOT NULL` | Waktu pencatatan log |
+
 ---
 
 ## 3. Indexing & Optimization Strategy
