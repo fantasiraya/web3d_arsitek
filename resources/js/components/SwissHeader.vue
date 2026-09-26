@@ -1,6 +1,6 @@
 <template>
     <header class="header">
-        <div class="header-left">
+        <div class="hidden md:block header-left">
             <h2 class="page-title">{{ title }}</h2>
         </div>
 

@@ -15,7 +15,7 @@
                 :breadcrumbs="breadcrumbs"
             />
 
-            <main class="main-content">
+            <main class="main-conten">
                 <slot />
             </main>
         </div>
@@ -109,7 +109,7 @@ const breadcrumbs      = computed(() => menuMap[activePage.value].crumbs);
 /* ══════════════════════════════════════
    GLOBAL BASE
 ══════════════════════════════════════ */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; } */
 
 .swiss-wrapper {
     /* ── Ukuran ── */
