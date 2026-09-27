@@ -112,11 +112,11 @@ function closeMobileMenu() {
                         </Transition>
                     </div>
                     <div class="header-actions">
-                        <Transition name="fade">
+                        <!-- <Transition name="fade">
                             <Badge v-if="!isCollapsed" variant="outline" class="badge-panel">
                                 Panel
                             </Badge>
-                        </Transition>
+                        </Transition> -->
                         <!-- Close button for mobile -->
                         <Button
                             variant="ghost"
@@ -193,7 +193,7 @@ function closeMobileMenu() {
             :title="isCollapsed ? 'Buka Sidebar' : 'Tutup Sidebar'"
             @click="isCollapsed = !isCollapsed"
         >
-            <span class="fab-tooltip">{{ isCollapsed ? 'Buka' : 'Tutup' }}</span>
+            <span class="fab-tooltip p-1">{{ isCollapsed ? 'Buka' : 'Tutup' }}</span>
             <ChevronLeft class="fab-icon" :class="{ rotated: isCollapsed }" />
         </button>
 
@@ -636,7 +636,7 @@ function closeMobileMenu() {
 
 .fab-tooltip {
     position: absolute;
-    right: calc(100% + 10px);
+    right: calc(10% + 10px);
     top: 50%;
     transform: translateY(-50%);
     background: hsl(var(--popover));
