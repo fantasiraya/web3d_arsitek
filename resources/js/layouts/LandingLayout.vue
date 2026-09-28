@@ -4,7 +4,7 @@ import LandingFooter from '@/components/landing/LandingFooter.vue';
 </script>
 
 <template>
-    <div class="min-h-screen bg-[#050608] text-neutral-100 antialiased selection:bg-indigo-500 selection:text-white flex flex-col justify-between overflow-x-hidden">
+    <div class="min-h-screen bg-[#050608] text-neutral-100 antialiased selection:bg-indigo-500 selection:text-white flex flex-col justify-between">
         <!-- Persistent Ambient Glow Layers -->
         <div class="pointer-events-none fixed inset-0 z-0 overflow-hidden">
             <div class="absolute -top-[30%] left-1/2 -translate-x-1/2 h-[800px] w-full max-w-7xl bg-indigo-600/10 blur-[160px]"></div>

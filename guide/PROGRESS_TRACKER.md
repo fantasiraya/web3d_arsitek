@@ -107,16 +107,18 @@
 | Chat Domain Feature Tests 🆕 | `Domains/Chat` | 🔴 Pending | v2.4: test broadcasting, channel authorization, test non-invited user ditolak |
 | Billing & Webhook Feature Tests | `Domains/Billing` | 🔴 Pending | Test Midtrans Signature, Status Updates & sinkronisasi `subscriptions` |
 
-### 9. Landing Page & Marketing Domain (Frontend Nuxt 3 - Apple Style + Scrollytelling)
+### 9. Landing Page & Marketing Domain (Frontend Vue 3 / Inertia - Apple Style + Scroll-Driven Scrollytelling)
 | Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
 | :--- | :--- | :---: | :--- |
-| Monumental Hero & Pinned Frame (Act I) | Frontend (`features/landing`) | 🔴 Pending | Typography display monumental, floating UI mockup scale-up |
-| Problem vs Solution Scrubbing (Act II) | Frontend (GSAP ScrollTrigger) | 🔴 Pending | Scroll text blur/fade transitions |
-| Pinned Product Journey 4-Stages (Act III) | Frontend (`features/landing`) | 🔴 Pending | Draco visual, Pin drop & leader lines, Gatekeeper badge, In-app chat slide-in |
-| Apple Pro Bento Grid (Act IV) | Frontend (`features/landing`) | 🔴 Pending | Modular bento boxes (Security, Quotas, Draco, Dual-Capacity) |
-| Tiered Pricing Table (Act V) | Frontend (API Integration) | 🔴 Pending | Apple Store-style comparison card Free vs Pro |
-| Apple-Style Minimalist Navbar & Footer | Frontend (`components/landing`) | 🔴 Pending | Frosted glass backdrop blur, pill CTA button |
-| ~~Sample 3D Model WebGL Demo~~ | Frontend (TresJS) | ⚪ Removed | Ditiadakan; scrollytelling murni animasi layer UI hardware-accelerated |
+| Monumental Hero & Pinned Frame (Act I) | Frontend (`components/landing/HeroSection.vue`) | 🟢 Completed | Typography monumental Apple, pill badge, window titanium villa (2026-09-28) |
+| Scroll-Driven Product Journey 5-Stages (Act II) | Frontend (`components/landing/ScrollyExperienceSection.vue`) | 🟢 Completed | Sticky pinned scroll track (450vh), dynamic stage tracking (Draco, Invite, Pin, Gatekeeper, Chat) (2026-09-28) |
+| Architectural Cinematic Scrollytelling (Act III) | Frontend (`components/landing/ArchitecturalCinematicSection.vue`) | 🟢 Completed | Pinned 4-layer spatial anatomy inspection (Kantilever, Glazing, Dusk Lighting, Obsidian PBR) (2026-09-28) |
+| Apple Pro Bento Grid (Act IV) | Frontend (`components/landing/BentoGridSection.vue`) | 🟢 Completed | Modular bento cards (Zero-Leak Security, Dual-Capacity, Draco, WebSocket) (2026-09-28) |
+| Interactive 3D Spatial Simulator (Act V) | Frontend (`components/landing/InteractiveShowcaseSection.vue`) | 🟢 Completed | Dynamic click-to-pin, dynamic coordinates & normal calculation, real-time feedback popover (2026-09-28) |
+| Tiered Pricing Table (Act VI) | Frontend (`components/landing/PricingSection.vue`) | 🟢 Completed | Apple Store comparison cards (Free, Pro, Enterprise) dengan toggle bulanan/tahunan (2026-09-28) |
+| Frequently Asked Questions Accordion (Act VII) | Frontend (`components/landing/FaqSection.vue`) | 🟢 Completed | Apple-style accordion FAQ covering WebGL, supported formats, revision limits, security (2026-09-28) |
+| Apple-Style Full-Width Navbar & Footer | Frontend (`components/landing/LandingNavbar.vue`, `LandingFooter.vue`) | 🟢 Completed | Edge-to-edge full width without top gaps, frosted glass backdrop blur, Inertia routes (2026-09-28) |
+| ~~Sample 3D Model WebGL Demo~~ | Frontend | ⚪ Removed | Ditiadakan; scrollytelling murni animasi layer UI hardware-accelerated (2026-09-28) |
 
 ---
 
@@ -128,6 +130,13 @@
 - **2026-09-17:** Pengerjaan Fondasi Arsitektur DDD & Database Migrations (v2.4) — instalasi package (`socialite`, `reverb`, `spatie/laravel-permission`, `midtrans`, `predis`), pembuatan dan eksekusi seluruh migrasi database tabel UUID (`users`, `system_settings`, `projects`, `project_versions`, `project_clients`, `comments`, `chat_messages`, `transactions`, `subscriptions`), pembuatan Eloquent Domain Models di `app/Domains/`, Factories dengan dukungan UUID, dan seeder `SystemSettingSeeder` dengan verifikasi 47 Pest tests lulus 100%.
 - **2026-09-20:** Pengerjaan Fitur 3D Viewer, Spatial Annotation Pin & Draggable Comments:
   - Implementasi Three.js WebGL viewport dengan OrbitControls dinamis dan dukungan mode Pan (geser kiri/kanan/atas/bawah via screen-space panning) serta mode Orbit (putar dinamis 360°).
+- **2026-09-28:** Redesain Total Landing Page Menjadi Apple-Style & Scroll-Driven Scrollytelling:
+  - Mengeliminasi demo WebGL publik sesuai revisi PRD untuk menjaga performa Core Web Vitals (LCP < 1.2s).
+  - Implementasi track scroll-pinned interaktif (`sticky top-0 h-screen`) pada `ScrollyExperienceSection.vue` (5 tahapan alur kerja dengan scrub bar dinamis).
+  - Penambahan section scrollytelling kedua: `ArchitecturalCinematicSection.vue` (bedah anatomi arsitektur 4-lapisan dengan telemetri visual fotorealistik).
+  - Penambahan `FaqSection.vue` (Apple-style accordion FAQ).
+  - Transformasi navbar ke full-width edge-to-edge tanpa celah/gap atas (`LandingNavbar.vue`).
+  - Verifikasi build Vite sukses 100%.
   - Raycaster hit detection presisi pada geometri 3D model dengan mengabaikan marker helper dan mendeteksi drag threshold agar tidak memicu pin saat rotasi/geser kamera.
   - Interactive Pin Comment popover: memunculkan form komentar langsung saat pin baru diletakkan di permukaan model 3D, menjamin inputan pertama selalu bersih/kosong (`''`), dan menyimpan via API endpoint `POST /projects/{project}/comments`.
   - Draggable Comment Cards & Continuous Leader Lines: kotak komentar dan form pending pin kini dapat digeser secara bebas ke segala arah (`drag-and-drop`) dengan handle grab khusus, sementara garis SVG tersambung (leader line) secara dinamis tetap terhubung ke titik tancapan pin 3D di permukaan model.

@@ -6,6 +6,7 @@ import ScrollyExperienceSection from '@/components/landing/ScrollyExperienceSect
 import BentoGridSection from '@/components/landing/BentoGridSection.vue';
 import InteractiveShowcaseSection from '@/components/landing/InteractiveShowcaseSection.vue';
 import PricingSection from '@/components/landing/PricingSection.vue';
+import FaqSection from '@/components/landing/FaqSection.vue';
 import CtaSection from '@/components/landing/CtaSection.vue';
 </script>
 
@@ -27,19 +28,22 @@ import CtaSection from '@/components/landing/CtaSection.vue';
         <!-- Act 1: Monumental Hero Section with Villa Showcase Window -->
         <HeroSection />
 
-        <!-- Act 2: Scrollytelling 5-Stage Product Journey (Draco, Invite, Spatial, Gatekeeper, Chat) -->
+        <!-- Act 2: Scrollytelling 4-Step Product Journey (Pinned Sticky 100vh Viewport) -->
         <ScrollyExperienceSection />
 
         <!-- Act 3: Apple Pro Bento Grid (Security, Dual-Capacity, Draco, WebSocket) -->
         <BentoGridSection />
 
-        <!-- Act 4: Interactive 3D Spatial Annotation Simulator -->
+        <!-- Act 5: Interactive 3D Spatial Annotation Simulator -->
         <InteractiveShowcaseSection />
 
-        <!-- Act 5: Tiered Apple Store-style Pricing Comparison -->
+        <!-- Act 6: Tiered Apple Store-style Pricing Comparison -->
         <PricingSection />
 
-        <!-- Act 6: Monumental Closing CTA -->
+        <!-- Act 7: Frequently Asked Questions (Apple-style Accordion) -->
+        <FaqSection />
+
+        <!-- Act 8: Monumental Closing CTA -->
         <CtaSection />
     </LandingLayout>
 </template>

@@ -107,9 +107,17 @@ my-saas-3d-project/
 │   │   │   ├── components/    # ChatWindow.vue, ChatBubble.vue, ChatInput.vue, TypingIndicator.vue
 │   │   │   └── composables/   # useChat.ts (kirim/terima pesan), useEcho.ts (koneksi Reverb/Echo)
 │   │   ├── billing/           # Pricing Table & Midtrans Snap Pop-up
-│   │   └── landing/           # 🍎 Apple-Style Scrollytelling Feature Module
-│   │       ├── components/    # AppleHeroPinned.vue, ScrollyProductJourney.vue, AppleBentoGrid.vue, ApplePricingTable.vue
-│   │       └── composables/   # useAppleScrollytelling.ts (GSAP ScrollTrigger untuk pinned & scrubbed UI animation)
+│   │   └── landing/           # 🍎 Apple-Style Scrollytelling Feature Module (resources/js/components/landing)
+│   │       ├── HeroSection.vue                  # Monumental Apple Hero & Titanium Villa Window
+│   │       ├── ScrollyExperienceSection.vue     # Pinned Scroll Track (450vh) 5-Stage Journey
+│   │       ├── ArchitecturalCinematicSection.vue# Pinned Scroll Track (400vh) 4-Layer Spatial Anatomy
+│   │       ├── BentoGridSection.vue             # Apple Pro Bento Grid (Zero-leak, Dual capacity, Draco, WS)
+│   │       ├── InteractiveShowcaseSection.vue   # Dynamic Click-to-Pin Raycast Simulator
+│   │       ├── PricingSection.vue               # Apple Store Comparison Cards
+│   │       ├── FaqSection.vue                   # Apple-style Accordion FAQ
+│   │       ├── CtaSection.vue                   # Closing Call-To-Action
+│   │       ├── LandingNavbar.vue                # Full-Width Frosted Glass Navbar
+│   │       └── LandingFooter.vue                # Minimalist Multi-Column Footer
 │   │
 │   ├── composables/           # Shared Composables (useAuth.ts, useApi.ts)
 │   ├── layouts/               # default.vue (Apple-Style Landing), dashboard.vue, viewer.vue
