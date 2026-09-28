@@ -49,7 +49,7 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $exceptions->render(function (PostTooLargeException $e, Request $request) {
-            $message = 'Ukuran file terlalu besar! Melebihi batas upload server. Silakan pilih file dengan ukuran lebih kecil.';
+            $message = $e;
 
             if ($request->header('X-Inertia') || $request->expectsJson()) {
                 return response()->json([

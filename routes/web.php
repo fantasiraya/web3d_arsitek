@@ -9,6 +9,7 @@ use App\Http\Controllers\Project\ViewerController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
+Route::inertia('/showcase', 'ShowcaseDemo')->name('showcase');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');

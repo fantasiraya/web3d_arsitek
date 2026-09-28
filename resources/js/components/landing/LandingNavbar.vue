@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { Link, usePage } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import { Box, ChevronRight, Menu, X, Sparkles } from '@lucide/vue';
 import { dashboard, login, register } from '@/routes';
 
@@ -8,17 +8,23 @@ const page = usePage();
 const mobileMenuOpen = ref(false);
 
 const navLinks = [
-    { name: 'Showcase', href: '#showcase' },
+    { name: 'Showcase', href: '/showcase', isPage: true },
     { name: 'Pengalaman 3D', href: '#experience' },
     { name: 'Arsitektur', href: '#features' },
     { name: 'Harga', href: '#pricing' },
 ];
 
-const scrollToSection = (href: string) => {
+const handleNavClick = (link: { name: string; href: string; isPage?: boolean }) => {
     mobileMenuOpen.value = false;
-    const element = document.querySelector(href);
+    if (link.isPage) {
+        router.visit(link.href);
+        return;
+    }
+    const element = document.querySelector(link.href);
     if (element) {
         element.scrollIntoView({ behavior: 'smooth' });
+    } else {
+        router.visit('/' + link.href);
     }
 };
 </script>
@@ -45,15 +51,26 @@ const scrollToSection = (href: string) => {
 
             <!-- Desktop Nav Links -->
             <div class="hidden items-center gap-8 md:flex">
-                <a
-                    v-for="link in navLinks"
-                    :key="link.name"
-                    :href="link.href"
-                    @click.prevent="scrollToSection(link.href)"
-                    class="text-xs font-medium text-neutral-400 transition-colors duration-200 hover:text-white"
-                >
-                    {{ link.name }}
-                </a>
+                <template v-for="link in navLinks" :key="link.name">
+                    <Link
+                        v-if="link.isPage"
+                        :href="link.href"
+                        class="inline-flex items-center gap-1.5 text-xs font-semibold text-white transition-colors duration-200 hover:text-indigo-400 group"
+                    >
+                        <span>{{ link.name }}</span>
+                        <span class="rounded-full bg-indigo-500/20 border border-indigo-500/40 px-1.5 py-0.5 text-[9px] font-mono text-indigo-300 animate-pulse">
+                            LIVE 3D
+                        </span>
+                    </Link>
+                    <a
+                        v-else
+                        :href="link.href"
+                        @click.prevent="handleNavClick(link)"
+                        class="text-xs font-medium text-neutral-400 transition-colors duration-200 hover:text-white"
+                    >
+                        {{ link.name }}
+                    </a>
+                </template>
             </div>
 
             <!-- Right Actions -->
@@ -110,15 +127,27 @@ const scrollToSection = (href: string) => {
                 class="absolute top-16 left-0 right-0 z-50 flex flex-col gap-4 border-b border-white/10 bg-black/95 px-6 py-6 shadow-2xl backdrop-blur-3xl md:hidden"
             >
                 <div class="flex flex-col gap-3">
-                    <a
-                        v-for="link in navLinks"
-                        :key="link.name"
-                        :href="link.href"
-                        @click.prevent="scrollToSection(link.href)"
-                        class="text-sm font-medium text-neutral-300 hover:text-white py-1"
-                    >
-                        {{ link.name }}
-                    </a>
+                    <template v-for="link in navLinks" :key="link.name">
+                        <Link
+                            v-if="link.isPage"
+                            :href="link.href"
+                            @click="mobileMenuOpen = false"
+                            class="flex items-center justify-between text-sm font-semibold text-white hover:text-indigo-400 py-1"
+                        >
+                            <span>{{ link.name }}</span>
+                            <span class="rounded-full bg-indigo-500/20 border border-indigo-500/40 px-2 py-0.5 text-[9px] font-mono text-indigo-300">
+                                LIVE 3D
+                            </span>
+                        </Link>
+                        <a
+                            v-else
+                            :href="link.href"
+                            @click.prevent="handleNavClick(link)"
+                            class="text-sm font-medium text-neutral-300 hover:text-white py-1"
+                        >
+                            {{ link.name }}
+                        </a>
+                    </template>
                 </div>
                 <div class="h-px bg-white/10 my-1"></div>
                 <div class="flex flex-col gap-2.5">
