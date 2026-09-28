@@ -2,7 +2,7 @@
 ## SaaS Web 3D Architecture Presentation & Feedback Platform
 
 > **Revision Note:** v2.4 — disinkronkan dengan `AI_INSTRUCTIONS.md`, `DATABASE_SCHEMA.md`, `FOLDER_STRUCTURE.md`, `RTCF.md`, `RISE.md`. Perubahan utama:
-> 1. Landing page menggunakan **Scrollytelling Experience** dengan sample 3D model interaktif.
+> 1. Landing page menggunakan **Apple-Style Aesthetic dipadukan dengan Scrollytelling Engine** (pinned sections, scroll-driven UI mockup reveals, bento grid, deep obsidian dark mode — murni animasi layer UI hardware-accelerated tanpa WebGL 3D demo berat di halaman publik demi FCP instan).
 > 2. Fitur **In-App Real-time Chat** antara Arsitek & Klien per project.
 > 3. **Perombakan model akses**: link publik read-only dihapus, diganti **Client Invitation by Email** — Klien wajib login & emailnya wajib terdaftar sebagai undangan pada project terkait sebelum bisa membuka 3D Viewer, memberi komentar, atau chat.
 > 4. **Model Role & Akun** diklarifikasi: tidak ada pilihan role saat registrasi; satu akun bisa merangkap Arsitek dan Klien sekaligus.
@@ -62,7 +62,7 @@ Membangun platform SaaS berbasis Web 3D interaktif yang memungkinkan Arsitek men
 | **Must Have** | **In-App Real-time Chat** | Chat 1-ke-1 antara Arsitek & Klien per project (di luar thread pin komentar), untuk diskusi umum yang tidak terikat koordinat 3D tertentu. Hanya bisa diakses oleh Arsitek pemilik project dan Klien yang sudah ter-validasi undangannya. | P0 |
 | **Must Have** | **Dynamic Quota Configuration** | Admin dapat mengubah batasan Free & Pro Tier (Maks Project, Maks File Size, Maks Revisi) via Admin Panel secara dinamis (`system_settings`)[cite: 2, 3]. | P0 |
 | **Must Have** | **Payment Gateway Integration** | Integrasi Midtrans (`midtrans/midtrans-php`) untuk pembayaran otomatis QRIS/VA + Webhook Handler yang menulis ke tabel `transactions` dan `subscriptions`[cite: 2]. | P0 |
-| **Should Have** | **Scrollytelling Landing Page** | Landing page menggunakan teknik *scrollytelling* (section ter-pin, animasi terpicu scroll via GSAP ScrollTrigger) yang terhubung dengan sample model 3D interaktif (rotasi kamera, highlight bagian bangunan mengikuti progres scroll) untuk memperkenalkan value proposition secara naratif & modern. | P1 |
+| **Should Have** | **Apple-Style Scrollytelling Landing Page** | Landing page berestetika Apple (deep obsidian `#000000`, frosted glass, display typography, bento grid) dipadukan dengan teknik *scrollytelling* (pinned narrative, scrubbed scroll transitions, reveal bertahap UI mockup produk & pin comment) tanpa memuat engine 3D WebGL di halaman publik demi FCP instan & feel visual ultra-premium. | P1 |
 | **Should Have** | Camera View Presets | Arsitek bisa menyimpan *angle* kamera penting (misal: "Kamar Utama", "Fasad")[cite: 2]. | P1 |
 | **Should Have** | Sectioning / Clipping Tool | Potongan melintang (Cutaway view) untuk melihat interior bangunan tanpa merusak geometri[cite: 2]. | P1 |
 | **Should Have** | Comment Thread & Status | Balasan komentar bertingkat dan penandaan status (*Open*, *In Progress*, *Resolved*)[cite: 2]. | P1 |
@@ -72,21 +72,45 @@ Membangun platform SaaS berbasis Web 3D interaktif yang memungkinkan Arsitek men
 | **Could Have** | Material Swapper | Klien bisa mengganti warna/tekstur material secara interaktif pada komponen tertentu[cite: 2]. | P2 |
 | **Won't Have** | In-Browser 3D Editing | Mengedit bentuk geometri mesh 3D atau menarik/menggeser komponen (*Drag/Move*) di web[cite: 2]. | Out of Scope |
 | **Won't Have** | Public Read-Only Link (tanpa login/undangan) | Model akses publik terbuka **DIHAPUS** total, digantikan Client Invitation by Email (lihat aturan bisnis Section 4.x). | Deprecated |
+| **Won't Have** | Public 3D Demo / WebGL on Landing Page | **DIHAPUS / DITIADAKAN** — Tidak ada canvas atau demo 3D interaktif di landing page publik. Engine 3D hanya aktif di dalam aplikasi untuk user/klien terotentikasi agar performa FCP instan & hemat bandwidth. | Out of Scope |
 
-## 3.x Landing Page & Public Pages Requirements
-- **Hero Section — Scrollytelling:** Banner interaktif dengan narasi ber-tahap yang mengikuti scroll pengguna (*pinned section* + *scroll-triggered animation* via GSAP ScrollTrigger). Setiap tahap cerita (problem → solution → feature highlight → CTA) disertai perubahan visual pada canvas 3D sample (kamera berputar/zoom, bagian model di-highlight) sehingga landing page terasa hidup dan modern, bukan statis.
-- **Sample 3D Model Showcase:** Canvas 3D (TresJS) menampilkan satu model contoh bangunan (`assets/models/sample-showcase.glb`, ter-Draco-compress) yang dapat diakses **tanpa login**, murni untuk demo visual di landing page — terpisah dari data project asli milik Arsitek (tidak terhubung ke `projects` table, hanya asset statis publik).
-- **Interactive Demo / Embed Preview:** Canvas 3D sederhana dengan orbit control ringan di landing page agar calon pengguna bisa mencoba navigasi model 3D tanpa perlu register — terintegrasi dengan section scrollytelling di atas, bukan komponen terpisah.
-- **Features Breakdown:** Penjelasan fitur unggulan (Spatial Pin Comment, Client Invitation by Email, In-App Chat, Client Revision Limit, Fast Loading Draco Compression)[cite: 1, 3].
-- **Pricing Table:** Tabel komparasi paket `Free` vs `Pro` (Sesuai kuota dinamis dari `system_settings`).
-- **Footer & Legal:** Link ke Terms of Service, Privacy Policy, dan kontak support.
-- **Style:** Modern Dark Mode / High-Tech Minimalist (Sangat cocok untuk produk 3D & storytelling scroll).
-- **Color Palette:**
-     * Background: `#0B0F17` (Dark Slate / Deep Canvas)
-     * Primary Accent: `#6366F1` (Indigo Glow)
-     * Secondary Accent: `#10B981` (Emerald / Active Status)
-     * Text: Slate Gray `#94A3B8` (Muted) & `#F8FAFC` (Heading)
-- **Performance Note:** Scrollytelling & sample 3D pada landing page WAJIB lazy-load (canvas 3D hanya mount saat section terlihat di viewport / `IntersectionObserver`) agar tidak membebani First Contentful Paint SSR Nuxt.
+## 3.x Landing Page & Public Pages Requirements (Apple Style + Scrollytelling)
+
+### 3.x.A Design Philosophy & Aesthetic (Apple Style)
+- **Ultra-Clean Dark Mode Aesthetic:** Mengadopsi bahasa visual Apple Pro — latar belakang deep black/obsidian (`#000000` & `#0A0A0C`), subtle border lines (`rgba(255, 255, 255, 0.08)`), dan frosted glass efek (`backdrop-blur-2xl bg-white/[0.03]`).
+- **Typography-First Hierarchy:** Tipografi ekspansif dengan kontras tinggi (Inter / SF Pro font display), headline besar dengan gradasi halus (*white to metallic gray*), teks pengantar ringkas dan berbobot, serta pill badges minimalis (misal: `"Web3D Platform • Generasi Baru"`).
+- **Subtle Depth & Ambient Lighting:** Glow radial halus di belakang elemen utama (indigo/blue ambient hue yang sangat lembut), floating product frames dengan rounded corners lebar (`rounded-3xl` / `rounded-[32px]`), dan shadow realistis bergaya macOS/iOS window.
+- **Micro-Interactions & Smooth Momentum:** Transisi hover lembut, tombol CTA bertipe pill dengan efek glassmorphism dan shimmer saat disentuh kursor.
+
+### 3.x.B Scrollytelling Engine & Storyboard
+Landing page dibangun dengan narasi terarah (*product storytelling*) yang digerakkan oleh posisi scroll pengguna via GSAP ScrollTrigger / CSS scroll-driven animation (hardware-accelerated transforms), **tanpa memuat engine 3D WebGL / canvas 3D publik**:
+1. **Act I — The Monumental Hero:**
+   - Headline monumental: *"Presentasi Arsitektur. Diciptakan Ulang."*
+   - Subheadline elegan tentang menghilangkan file berat dan komunikasi tercecer.
+   - Pinned hero container: Frame UI Web3D Viewer melayang dari bawah dengan scale up dinamis (`scale 0.9` ke `1.0`), menampilkan visual render fasad arsitektur modern dalam mock window beresolusi tinggi.
+2. **Act II — The Problem vs Breakthrough (Text Scrubbing):**
+   - Transisi teks scrollytelling di mana problem statement ("File SKP 500MB yang macet di email, revisi tanpa batas di WhatsApp") memudar keluar (*fade & blur out*), digantikan oleh solusi platform ("Satu link undangan email. Satu kanvas interaktif presisi.").
+3. **Act III — The Pinned Product Journey (Interactive Mockup Layering):**
+   Section ter-pin di viewport, di mana scroll pengguna mengontrol rangkaian layer animasi pada UI mockup:
+   - *Stage 1 (Draco Upload Engine):* Kartu file `.glb` terkompresi hingga 85% secara visual dalam hitungan detik.
+   - *Stage 2 (Spatial Pin Drop):* Animasi titik koordinat pin komentar jatuh tepat ke sudut fasad bangunan pada mockup, menarik leader line SVG dinamis dengan bubble komentar *"Tinggi plafon tolong disesuaikan ke 3.8m"*.
+   - *Stage 3 (Client Revision Gatekeeper):* Kartu status revisi berubah dari *"Revisi 2 dari 3"* menjadi gatekeeper badge yang melindungi arsitek dari revisi tak terhingga.
+   - *Stage 4 (Direct In-App Chat):* Panel chat real-time meluncur masuk dari samping kanan frame mockup, memperlihatkan pesan konfirmasi instan dari klien.
+4. **Act IV — Apple-Style Bento Grid (Deep Architecture Breakdown):**
+   Grid modular bergaya Apple Pro Bento Box:
+   - *Box 1 (Hero Bento - Security & Privacy):* Client Invitation by Email — sistem eksklusif anti bocor link.
+   - *Box 2:* Dynamic Quota & Subscription System.
+   - *Box 3:* Lightning-Fast Draco Compression Engine.
+   - *Box 4:* Dual-Capacity Architecture (1 Akun untuk Arsitek & Klien).
+5. **Act V — Tiered Pricing Table:**
+   Kartu perbandingan harga bergaya Apple Store: Free vs Pro Tier dengan switcher periode langganan dan rincian kuota dinamis dari `system_settings`.
+6. **Act VI — Minimalist Final CTA & Footer:**
+   Headline penutup yang ringkas dan kuat, tombol CTA *"Mulai Sekarang — Gratis"*, didukung footer minimalis dengan tautan legalitas dan copyright.
+
+### 3.x.C Performance & Architecture Guardrails
+- **Zero WebGL Overhead:** Tidak ada engine Three.js/TresJS atau aset model `.glb` yang di-download di landing page publik. Seluruh efek scrollytelling memanfaatkan CSS `translate3d`, `opacity`, `transform-gpu`, dan SVG paths yang diorkestrasi GSAP.
+- **Blazing Fast FCP & LCP:** First Contentful Paint < 1.0 detik dengan dukungan Nuxt SSR/SSG.
+- **Reduced Motion Friendly:** Mendukung `@media (prefers-reduced-motion)` di mana scrollytelling secara graceful berubah menjadi tata letak vertikal standar bagi pengguna yang sensitif terhadap gerakan animasi.
 ---
 
 ## 4. Dynamic Business Rules & Subscription Plan Configuration
@@ -133,8 +157,8 @@ $$\text{Effective Limit} = \text{Custom User Override (jika ada)} \mathbin{??} \
 
 ### **B. Frontend Feature-Driven Architecture**
 * **Framework:** Vue 3 / Nuxt 3 dengan pendekatan Feature-Based (`features/auth`, `features/viewer-3d`, `features/spatial-comments`, `features/chat`, `features/billing`, `features/landing`)[cite: 2].
-* **3D Engine & Utils:** Three.js, `@tresjs/core`, `three-stdlib` (DRACOLoader), Pinia, `@vueuse/core`, `lucide-vue-next`, `vue3-google-signin`[cite: 2].
-* **Scrollytelling & Motion:** `gsap` + `ScrollTrigger` plugin untuk pinned section & scroll-driven animation pada landing page, dikombinasikan dengan reactive camera TresJS.
+* **3D Engine & Utils (Aplikasi Internal):** Three.js, `@tresjs/core`, `three-stdlib` (DRACOLoader), Pinia, `@vueuse/core`, `lucide-vue-next`, `vue3-google-signin`[cite: 2] — hanya aktif di 3D Viewer internal setelah login/undangan.
+* **Apple-Style Motion & Scrollytelling Engine:** `gsap` + plugin `ScrollTrigger` untuk pinned section, scrubbing animations, layered mockup transformations, dan smooth scroll pacing bergaya Apple product landing page (murni hardware-accelerated CSS/SVG, 0% WebGL di landing page).
 * **Real-time Client:** `laravel-echo` + adapter Reverb (`@laravel/echo` pusher-compatible protocol) untuk konsumsi WebSocket chat di frontend.
 * **Raycasting:** `THREE.Raycaster` untuk kalkulasi interseksi $(X, Y, Z)$ saat objek diklik[cite: 2].
 

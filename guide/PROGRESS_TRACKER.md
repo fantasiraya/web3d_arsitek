@@ -107,15 +107,16 @@
 | Chat Domain Feature Tests 🆕 | `Domains/Chat` | 🔴 Pending | v2.4: test broadcasting, channel authorization, test non-invited user ditolak |
 | Billing & Webhook Feature Tests | `Domains/Billing` | 🔴 Pending | Test Midtrans Signature, Status Updates & sinkronisasi `subscriptions` |
 
-### 9. Landing Page & Marketing Domain (Frontend Nuxt 3)
+### 9. Landing Page & Marketing Domain (Frontend Nuxt 3 - Apple Style + Scrollytelling)
 | Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
 | :--- | :--- | :---: | :--- |
-| Hero Section & CTA | Frontend (SSR) | 🔴 Pending | Landing Page Index |
-| Scrollytelling Engine (GSAP ScrollTrigger) 🆕 | Frontend (`features/landing`) | 🔴 Pending | v2.4: `useScrollytelling.ts`, pinned section per narasi |
-| Sample 3D Model Showcase (Publik, No Login) 🆕 | Frontend (TresJS) | 🔴 Pending | v2.4: `assets/models/sample-showcase.glb`, lazy-mount via IntersectionObserver |
-| Interactive 3D Demo Preview | Frontend (TresJS) | 🔴 Pending | Demo tanpa login, terintegrasi scrollytelling |
-| Dynamic Pricing Table | Frontend | 🔴 Pending | Fetch data kuota dari API |
-| SEO Meta Tags & OpenGraph | Frontend Nuxt | 🔴 Pending | Support social media preview |
+| Monumental Hero & Pinned Frame (Act I) | Frontend (`features/landing`) | 🔴 Pending | Typography display monumental, floating UI mockup scale-up |
+| Problem vs Solution Scrubbing (Act II) | Frontend (GSAP ScrollTrigger) | 🔴 Pending | Scroll text blur/fade transitions |
+| Pinned Product Journey 4-Stages (Act III) | Frontend (`features/landing`) | 🔴 Pending | Draco visual, Pin drop & leader lines, Gatekeeper badge, In-app chat slide-in |
+| Apple Pro Bento Grid (Act IV) | Frontend (`features/landing`) | 🔴 Pending | Modular bento boxes (Security, Quotas, Draco, Dual-Capacity) |
+| Tiered Pricing Table (Act V) | Frontend (API Integration) | 🔴 Pending | Apple Store-style comparison card Free vs Pro |
+| Apple-Style Minimalist Navbar & Footer | Frontend (`components/landing`) | 🔴 Pending | Frosted glass backdrop blur, pill CTA button |
+| ~~Sample 3D Model WebGL Demo~~ | Frontend (TresJS) | ⚪ Removed | Ditiadakan; scrollytelling murni animasi layer UI hardware-accelerated |
 
 ---
 
@@ -147,4 +148,5 @@
   - Tata letak kotak komentar yang digeser (`userBoxOffsets`) kini disimpan secara persisten di `localStorage` per proyek (`project-viewer:{projectId}:preferences`), sehingga saat browser di-refresh posisi kartu komentar tidak akan ter-reset.
   - Preferensi buka/tutup panel "Daftar Catatan Pin" (`isDrawerOpen`) dan toggle garis anotasi (`showAnnotations`) tersimpan otomatis di `localStorage`.
   - Mode interaksi (Putar, Geser, Pin) tetap diatur selalu kembali ke default "Putar" (Rotate) setiap kali halaman dimuat untuk keamanan navigasi 3D.
+- **2026-09-28:** Sinkronisasi PRD & Dokumen Guide: Perombakan spesifikasi Landing Page menjadi **Apple-Style Theme dipadukan dengan Scrollytelling Engine**. Mengadopsi estetika Apple Pro (deep obsidian `#000000`, frosted glass backdrop blur, display typography ekspansif, bento grid) dan storytelling sekuensial (pinned product journey, scrubbing problem-to-solution, layered UI mockup animation via GSAP ScrollTrigger) tanpa beban engine 3D WebGL publik demi mempertahankan performa FCP < 1.0s. Dokumen yang disinkronkan: `guide/PRD.md`, `guide/FOLDER_STRUCTURE.md`, `guide/PROGRESS_TRACKER.md`, `guide/RTCF.md`, `guide/RISE.md`.
   - Kompilasi frontend lulus (`npm run build`) dan 81 pengujian Pest sukses 100%.

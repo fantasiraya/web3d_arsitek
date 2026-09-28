@@ -2,7 +2,7 @@
 
 Dokumen ini adalah acuan resmi struktur folder untuk backend (Laravel 13 DDD), frontend (Nuxt 3 Feature-Driven), dan berkas panduan AI.
 
-> **v2.4 Changelog:** Menambahkan `Domains/Chat` (real-time messaging), `Domains/Project/Actions` untuk Client Invitation, `Http/Middleware` untuk validasi akses Klien, `features/chat`, serta struktur landing page scrollytelling + sample 3D showcase publik.
+> **v2.4 Changelog:** Menambahkan `Domains/Chat` (real-time messaging), `Domains/Project/Actions` untuk Client Invitation, `Http/Middleware` untuk validasi akses Klien, `features/chat`, serta Landing Page bertema Apple Style dipadukan dengan Scrollytelling Engine.
 
 ---
 
@@ -86,18 +86,16 @@ my-saas-3d-project/
 │   └── storage/
 │
 ├── frontend/                  # 🟢 NUXT 3 / VUE 3 (FEATURE-DRIVEN)
-│   ├── assets/                # CSS, Tailwind, WebGL Textures/Shaders
+│   ├── assets/                # CSS, Tailwind, Images/Mockups
 │   │   ├── css/                # main.css, tailwind.css, theme.css
-│   │   ├── images/             # Hero banners, logo, favicon
-│   │   └── models/             # 🆕 sample-showcase.glb (Draco-compressed, demo publik landing page)
+│   │   └── images/             # Hero banners, logo, favicon, UI product mockups
 │   │
 │   ├── components/            # UI Reusable Components
 │   │   ├── ui/                 # Base UI (Button, Modal, Card, Navbar, Footer)
-│   │   └── landing/            # Landing Page Components (Hero, FeatureCard, PricingTable)
-│   │       └── scrollytelling/ # 🆕 ScrollytellingSection.vue, StorySceneCanvas.vue, ScrollProgressDots.vue
+│   │   └── landing/            # Apple-Style UI Atoms (AppleNavBar, GlassCard, PillBadge, AppleFooter)
 │   │
 │   ├── features/              # 🧩 FEATURE-BASED MODULES
-│   │   ├── viewer-3d/         # Engine Three.js / TresJS
+│   │   ├── viewer-3d/         # Engine Three.js / TresJS (Hanya untuk Authenticated Project View)
 │   │   │   ├── components/    # Canvas3D.vue, PinMarker.vue, OrbitControls.vue, RevisionBadge.vue
 │   │   │   ├── composables/   # useRaycaster.ts, useThreeScene.ts
 │   │   │   └── utils/         # dracoLoader.ts
@@ -109,16 +107,15 @@ my-saas-3d-project/
 │   │   │   ├── components/    # ChatWindow.vue, ChatBubble.vue, ChatInput.vue, TypingIndicator.vue
 │   │   │   └── composables/   # useChat.ts (kirim/terima pesan), useEcho.ts (koneksi Reverb/Echo)
 │   │   ├── billing/           # Pricing Table & Midtrans Snap Pop-up
-│   │   └── landing/           # 🆕 Landing Page Scrollytelling Engine
-│   │       ├── components/    # HeroScrollScene.vue, NarrativeStep.vue
-│   │       └── composables/   # useScrollytelling.ts (GSAP ScrollTrigger + kamera TresJS reaktif terhadap progres scroll)
+│   │   └── landing/           # 🍎 Apple-Style Scrollytelling Feature Module
+│   │       ├── components/    # AppleHeroPinned.vue, ScrollyProductJourney.vue, AppleBentoGrid.vue, ApplePricingTable.vue
+│   │       └── composables/   # useAppleScrollytelling.ts (GSAP ScrollTrigger untuk pinned & scrubbed UI animation)
 │   │
 │   ├── composables/           # Shared Composables (useAuth.ts, useApi.ts)
-│   ├── layouts/               # default.vue (Landing Page), dashboard.vue, viewer.vue
+│   ├── layouts/               # default.vue (Apple-Style Landing), dashboard.vue, viewer.vue
 │   ├── pages/                 # Routing Nuxt
-│   │   ├── index.vue          # 🏠 Landing Page Scrollytelling (SSR Enabled)
+│   │   ├── index.vue          # 🏠 Landing Page Apple Style Scrollytelling (SSR Enabled, Fast FCP)
 │   │   ├── pricing.vue        # Pricing & Benefit Page
-│   │   ├── demo.vue           # Interactive 3D Demo Preview (publik, sample model)
 │   │   ├── login.vue          # Mendukung query `?invited_email=` prefill dari undangan
 │   │   ├── register.vue
 │   │   ├── dashboard/

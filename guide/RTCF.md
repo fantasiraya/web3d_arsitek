@@ -1,4 +1,4 @@
-> **v2.4 Note:** File ini adalah versi terkonversi & disinkronkan dari `RTCF.txt` awal, mengikuti PRD v2.4 (Scrollytelling Landing, Client Invitation by Email, In-App Chat, Role Model tanpa pilihan role).
+> **v2.4 Note:** File ini adalah versi terkonversi & disinkronkan dari `RTCF.txt` awal, mengikuti PRD v2.4 (Apple-Style Scrollytelling Landing Page tanpa 3D WebGL publik, Client Invitation by Email, In-App Chat, Role Model tanpa pilihan role).
 
 [ROLE]
 Bertindaklah sebagai Senior Full-Stack Developer & Software Architect spesialis Laravel 13 (DDD) dan Vue 3 / Nuxt 3 (Feature-Driven).
@@ -18,8 +18,8 @@ Buatkan rancangan arsitektur teknis dan panduan integrasi sistem untuk platform 
    - Packages: spatie/laravel-permission (khusus role `super_admin`), spatie/laravel-medialibrary, midtrans/midtrans-php, predis/predis, laravel/reverb.
 4. Frontend Tech Stack:
    - Framework: Vue 3 / Nuxt 3 (Feature-Driven Architecture).
-   - 3D Engine: Three.js, @tresjs/core, three-stdlib (DRACOLoader).
-   - Scrollytelling & Motion: **gsap** + plugin **ScrollTrigger** untuk pinned section & animasi terpicu scroll pada landing page, terhubung dengan kamera TresJS reaktif.
+   - 3D Engine: Three.js, @tresjs/core, three-stdlib (DRACOLoader) — hanya untuk authenticated 3D Viewer di dalam aplikasi.
+   - Motion & Scrollytelling: **gsap** + plugin **ScrollTrigger** untuk Apple-style pinned sections, text scrubbing, dan translasi animasi mockup UI produk (tanpa WebGL di landing page).
    - Real-time Client: **laravel-echo** (adapter Reverb) untuk konsumsi WebSocket chat.
    - Utilities & UI: Pinia, @vueuse/core, lucide-vue-next, vue3-google-signin, Tailwind CSS.
 5. Fitur Utama & Aturan Bisnis:
@@ -30,7 +30,7 @@ Buatkan rancangan arsitektur teknis dan panduan integrasi sistem untuk platform 
    - SaaS Billing dengan Payment Gateway (Midtrans) via Webhook Handler yang menulis ke tabel `transactions` dan `subscriptions` secara sinkron.
    - Background Queue untuk Draco Compression menggunakan gltf-pipeline di server.
    - Client Revision Limit dinamis per project (`projects.max_revisions_allowed` & `current_revision_count`) dengan gatekeeper 403.
-   - **Landing Page Scrollytelling**: hero & narasi fitur disampaikan lewat pinned scroll section, disertai sample model 3D publik (tanpa login) yang bereaksi terhadap progres scroll (rotasi kamera/highlight).
+   - **Apple-Style Scrollytelling Landing Page**: estetika Apple Pro (obsidian `#000000`, frosted glass, display typography bold, bento grid) dipadukan dengan storytelling sekuensial (pinned product journey, scrubbing problem-to-solution, layered UI mockup animation) tanpa WebGL demi FCP < 1.0s.
 
 [FORMAT]
 Sajikan output secara terstruktur dalam format Markdown:
@@ -44,6 +44,6 @@ Sajikan output secara terstruktur dalam format Markdown:
    - Dynamic Storage Handling
    - File Upload Queue
    - 3D Viewer
-   - **Scrollytelling Landing Page Flow** (lazy-mount canvas 3D publik, scroll progress → camera/narrative state)
+   - **Apple Scrollytelling Flow** (pinned container, scrubbed progress → UI mockup layer translation, fast SSR FCP)
 2. Draf Struktur Folder DDD di Laravel 13 (termasuk `Domains/Chat`, `Domains/Project/Actions` untuk invitation) & Feature-Driven di Vue 3 (termasuk `features/chat`, `features/landing`).
 3. Rekomendasi Struktur Endpoint API / Route Laravel 13 (Termasuk Auth/OAuth, Client Invitation endpoints, Chat endpoints & channel broadcasting, Webhook, dan System Settings).
