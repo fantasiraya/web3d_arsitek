@@ -5,6 +5,9 @@ import {
     ArrowLeft, 
     RotateCw, 
     Hand, 
+    Focus,
+    Maximize2,
+    Minimize2,
     MapPin, 
     Plus, 
     Eye, 
@@ -164,6 +167,74 @@ const applyPreset = (presetName: string) => {
     autoRotate.value = false;
 };
 
+// Reset / Frame Model View
+const resetModelView = () => {
+    applyPreset('Eksterior Utama');
+};
+
+// Interaction Mode Setting (Putar, Geser, Pin)
+const setInteractionMode = (mode: 'rotate' | 'pan' | 'pin') => {
+    interactionMode.value = mode;
+    if (!controls) return;
+
+    if (mode === 'pan') {
+        controls.mouseButtons = {
+            LEFT: THREE.MOUSE.PAN,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.ROTATE,
+        };
+        controls.touches = {
+            ONE: THREE.TOUCH.PAN,
+            TWO: THREE.TOUCH.DOLLY_PAN,
+        };
+    } else if (mode === 'rotate') {
+        controls.mouseButtons = {
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN,
+        };
+        controls.touches = {
+            ONE: THREE.TOUCH.ROTATE,
+            TWO: THREE.TOUCH.DOLLY_PAN,
+        };
+    } else if (mode === 'pin') {
+        controls.mouseButtons = {
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN,
+        };
+        controls.touches = {
+            ONE: THREE.TOUCH.ROTATE,
+            TWO: THREE.TOUCH.DOLLY_PAN,
+        };
+    }
+};
+
+// Fullscreen State & Methods
+const isFullscreen = ref(false);
+
+const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().then(() => {
+            isFullscreen.value = true;
+        }).catch(err => {
+            console.error('Error attempting to enable fullscreen:', err);
+        });
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen().then(() => {
+                isFullscreen.value = false;
+            }).catch(err => {
+                console.error('Error attempting to exit fullscreen:', err);
+            });
+        }
+    }
+};
+
+const handleFullscreenChange = () => {
+    isFullscreen.value = !!document.fullscreenElement;
+};
+
 // Canvas Click for Unlimited Spatial Pin Dropping
 const onCanvasClick = (e: MouseEvent) => {
     if (interactionMode.value !== 'pin' || !canvasContainer.value) return;
@@ -249,10 +320,15 @@ const initThree = () => {
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
+    controls.enablePan = true;
+    controls.screenSpacePanning = true;
+    controls.panSpeed = 1.0;
+    controls.rotateSpeed = 0.8;
     controls.maxPolarAngle = Math.PI / 2 + 0.05; // Don't flip below ground
     controls.minDistance = 1;
     controls.maxDistance = 45;
     controls.target.set(0, 1.5, 0);
+    setInteractionMode(interactionMode.value);
 
     // 5. Lighting Setup (Photometric Warm Interior & Cool Dusk Exterior)
     const ambientLight = new THREE.AmbientLight(0xdde8ff, 0.9);
@@ -378,11 +454,13 @@ const onResize = () => {
 onMounted(() => {
     initThree();
     window.addEventListener('resize', onResize);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
 });
 
 onBeforeUnmount(() => {
     cancelAnimationFrame(animationFrameId);
     window.removeEventListener('resize', onResize);
+    document.removeEventListener('fullscreenchange', handleFullscreenChange);
     if (renderer && renderer.domElement && canvasContainer.value) {
         canvasContainer.value.removeChild(renderer.domElement);
     }
@@ -432,6 +510,17 @@ onBeforeUnmount(() => {
                 >
                     <MessageSquare class="h-3.5 w-3.5 text-indigo-400" />
                     <span>{{ pins.length }} Pin Catatan</span>
+                </button>
+
+                <button
+                    type="button"
+                    @click="toggleFullscreen"
+                    class="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
+                    :title="isFullscreen ? 'Keluar Layar Penuh (Esc)' : 'Layar Penuh (Fullscreen)'"
+                >
+                    <Minimize2 v-if="isFullscreen" class="h-3.5 w-3.5 text-rose-400" />
+                    <Maximize2 v-else class="h-3.5 w-3.5 text-neutral-300" />
+                    <span class="hidden sm:inline">{{ isFullscreen ? 'Keluar Penuh' : 'Layar Penuh' }}</span>
                 </button>
 
                 <Link
@@ -500,24 +589,61 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- Floating Interaction Modes Toolbar -->
-            <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full border border-white/15 bg-black/85 p-2 shadow-2xl backdrop-blur-2xl">
+            <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 rounded-full border border-white/15 bg-black/85 p-1.5 sm:p-2 shadow-2xl backdrop-blur-2xl max-w-[95vw]">
                 <!-- Rotate Mode Button -->
                 <button
                     type="button"
-                    @click="interactionMode = 'rotate'"
-                    class="flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-medium transition-all"
+                    @click="setInteractionMode('rotate')"
+                    class="flex items-center gap-1.5 rounded-full px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs font-medium transition-all"
                     :class="interactionMode === 'rotate' ? 'bg-indigo-600 text-white shadow-md' : 'text-neutral-300 hover:bg-white/10 hover:text-white'"
-                    title="Putar kamera bebas (Orbit)"
+                    title="Putar kamera secara dinamis (Orbit)"
                 >
                     <RotateCw class="h-3.5 w-3.5" />
-                    <span>Putar 360°</span>
+                    <span>Putar</span>
                 </button>
+
+                <!-- Pan Mode Button -->
+                <button
+                    type="button"
+                    @click="setInteractionMode('pan')"
+                    class="flex items-center gap-1.5 rounded-full px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs font-medium transition-all"
+                    :class="interactionMode === 'pan' ? 'bg-indigo-600 text-white shadow-md' : 'text-neutral-300 hover:bg-white/10 hover:text-white'"
+                    title="Geser kamera ke kanan, kiri, atas, bawah (Pan)"
+                >
+                    <Hand class="h-3.5 w-3.5" />
+                    <span>Geser</span>
+                </button>
+
+                <!-- Reset Camera / Pusatkan Kembali -->
+                <button
+                    type="button"
+                    @click="resetModelView"
+                    class="flex items-center gap-1.5 rounded-full px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs font-medium text-neutral-300 hover:bg-white/10 hover:text-white transition-all"
+                    title="Pusatkan kembali model 3D di tengah layar"
+                >
+                    <Focus class="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Pusatkan</span>
+                </button>
+
+                <!-- Fullscreen Toggle Button -->
+                <button
+                    type="button"
+                    @click="toggleFullscreen"
+                    class="flex items-center gap-1.5 rounded-full px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs font-medium text-neutral-300 hover:bg-white/10 hover:text-white transition-all"
+                    :title="isFullscreen ? 'Keluar Layar Penuh (Esc)' : 'Tampilan Layar Penuh (Fullscreen)'"
+                >
+                    <Minimize2 v-if="isFullscreen" class="h-3.5 w-3.5 text-rose-400" />
+                    <Maximize2 v-else class="h-3.5 w-3.5 text-slate-300" />
+                    <span class="hidden md:inline">{{ isFullscreen ? 'Keluar Penuh' : 'Layar Penuh' }}</span>
+                </button>
+
+                <div class="h-4 w-px bg-white/20 mx-0.5 hidden sm:block"></div>
 
                 <!-- Auto Rotate Toggle -->
                 <button
                     type="button"
                     @click="autoRotate = !autoRotate"
-                    class="rounded-full px-3 py-2 text-xs font-medium transition-all"
+                    class="rounded-full px-3 py-1.5 sm:py-2 text-xs font-medium transition-all"
                     :class="autoRotate ? 'bg-purple-600 text-white' : 'text-neutral-400 hover:bg-white/10 hover:text-white'"
                     title="Rotasi otomatis melingkar"
                 >

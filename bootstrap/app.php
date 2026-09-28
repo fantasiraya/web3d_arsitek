@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\CheckAccountStatus;
+use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ProjectClientAccessMiddleware;
@@ -40,7 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
             'account.active' => CheckAccountStatus::class,
-            'super_admin' => \App\Http\Middleware\EnsureSuperAdmin::class,
+            'super_admin' => EnsureSuperAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -49,7 +50,7 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $exceptions->render(function (PostTooLargeException $e, Request $request) {
-            $message = $e;
+            $message = 'Ukuran file terlalu besar! Melebihi batas upload server. Silakan pilih file dengan ukuran lebih kecil.';
 
             if ($request->header('X-Inertia') || $request->expectsJson()) {
                 return response()->json([
