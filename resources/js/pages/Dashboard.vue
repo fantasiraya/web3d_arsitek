@@ -37,7 +37,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
-import AppSwissLayout from '@/layouts/AppSwissLayout.vue';
+import AppSidebar from '@/components/app/AppSidebar.vue';
+import AppHeader from '@/components/app/AppHeader.vue';
+import { useSidebar } from '@/composables/useSidebar';
 
 interface ProjectClientItem {
     id: string;
@@ -335,33 +337,60 @@ function formatBytes(bytes: number): string {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
+
+// Sidebar state
+const { isSidebarOpen, isMobile } = useSidebar();
+
 </script>
 
 <template>
-    <AppSwissLayout>
-        <div class="min-h-screen bg-red-50 dark:bg-red-950/20">
-            <Head title="Dashboard Kolaborasi 3D" />
+    <Head title="Dashboard - AETHER 3D Spatial CAD" />
 
-            <div class="space-y-6 md:p-8 bg-blue-50 dark:bg-blue-950/20">
+    <!-- Main Container with Sidebar -->
+    <div class="min-h-screen bg-[#0b0c10] text-[#f3f4f6] font-['Geist',sans-serif] antialiased selection:bg-[#38bdf8]/20 selection:text-white relative overflow-x-hidden flex">
+        
+        <!-- Ambient Background Lighting -->
+        <div class="fixed top-0 left-64 w-[650px] h-[400px] bg-[#38bdf8]/10 blur-[150px] pointer-events-none rounded-full"></div>
+        <div class="fixed top-1/2 right-10 w-[500px] h-[500px] bg-[#6366f1]/10 blur-[170px] pointer-events-none rounded-full"></div>
+        <div class="fixed bottom-0 left-80 w-[550px] h-[350px] bg-[#2e303d]/20 blur-[130px] pointer-events-none rounded-full"></div>
+
+        <!-- Sidebar Component -->
+        <AppSidebar />
+
+        <!-- Right Wrapper (Header + Main Content) -->
+        <div 
+            :class="[
+                'flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out',
+                isSidebarOpen && !isMobile ? 'ml-64' : 'ml-0 lg:ml-16'
+            ]"
+        >
+            
+            <!-- Header Component -->
+            <AppHeader 
+                @create-project="isCreateModalOpen = true"
+            />
+
+            <!-- Main Content Workspace -->
+            <main class="flex-1 p-6 lg:p-8 space-y-6 w-full relative z-10">
                 <!-- Flash Message -->
                 <div
                     v-if="flashSuccess"
-                    class="flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-50/50 p-4 text-emerald-800 shadow-xs dark:bg-emerald-950/20 dark:text-emerald-300"
+                    class="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 backdrop-blur-xl p-4 text-emerald-200 shadow-[0_0_35px_rgba(16,185,129,0.15)]"
                 >
-                    <CheckCircle2 class="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <CheckCircle2 class="h-5 w-5 shrink-0 text-emerald-400" />
                     <p class="text-sm font-medium">{{ flashSuccess }}</p>
                 </div>
 
                 <!-- Limit Warning Banner -->
                 <div
                     v-if="stats?.limit_warning"
-                    class="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-50/50 p-4 text-amber-900 shadow-xs dark:bg-amber-950/20 dark:text-amber-300"
+                    class="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 backdrop-blur-xl p-4 text-amber-200 shadow-[0_0_35px_rgba(245,158,11,0.15)]"
                 >
-                    <AlertTriangle class="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                    <AlertTriangle class="h-5 w-5 shrink-0 text-amber-400 mt-0.5" />
                     <div class="flex-1">
                         <p class="text-sm font-semibold mb-1">Project Limit Exceeded</p>
                         <p class="text-sm">{{ stats.limit_warning.message }}</p>
-                        <p class="text-xs mt-2 text-amber-700 dark:text-amber-400">
+                        <p class="text-xs mt-2 text-amber-300">
                             You cannot create new projects until you upgrade your plan or delete existing projects.
                         </p>
                     </div>
@@ -371,24 +400,23 @@ function formatBytes(bytes: number): string {
                 <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <h1 class="text-2xl font-bold tracking-tight md:text-3xl">
+                            <h1 class="text-2xl font-extrabold tracking-tight text-neutral-100 dark:text-neutral-100 md:text-3xl">
                                 Selamat Datang, {{ auth?.user?.name ?? 'Pengguna' }}
                             </h1>
                             <Badge
                                 v-if="stats?.subscription_status === 'pro'"
-                                class="bg-linear-to-r from-amber-500 to-orange-600 text-white font-semibold text-xs"
+                                class="bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold text-xs shadow-[0_0_20px_rgba(245,158,11,0.3)]"
                             >
                                 <Sparkles class="mr-1 h-3.5 w-3.5" /> PRO TIER
                             </Badge>
                             <Badge
                                 v-else
-                                variant="secondary"
-                                class="text-xs font-medium border"
+                                class="bg-white/5 text-neutral-300 text-xs font-medium border border-white/15 backdrop-blur-xl"
                             >
                                 FREE TIER ({{ stats?.owned_count ?? 0 }}/{{ stats?.max_projects ?? 3 }} Proyek)
                             </Badge>
                         </div>
-                        <p class="mt-1 text-sm text-muted-foreground">
+                        <p class="mt-2 text-sm text-neutral-300 dark:text-neutral-300 leading-relaxed">
                             Kelola proyek arsitektur 3D Anda dan berikan feedback revisi secara interaktif dengan Klien.
                         </p>
                     </div>
@@ -396,7 +424,7 @@ function formatBytes(bytes: number): string {
                     <div class="flex items-center gap-2">
                         <Button
                             @click="isCreateModalOpen = true"
-                            class="bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-xs px-12"
+                            class="bg-white text-black hover:bg-neutral-100 font-semibold shadow-[0_0_35px_rgba(255,255,255,0.25)] transition-all duration-300 hover:scale-[1.02] px-6 rounded-full"
                             :disabled="stats ? !stats.can_create_project : false"
                         >
                             <Plus class="mr-1.5 h-4 w-4" />
@@ -408,23 +436,23 @@ function formatBytes(bytes: number): string {
                 <!-- Summary Stat Cards -->
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <!-- Card 1: Proyek Arsitek -->
-                    <div class="rounded-xl border bg-card p-5 shadow-xs transition hover:shadow-md">
+                    <div class="rounded-2xl border border-white/15 bg-white/[0.04] backdrop-blur-xl p-5 shadow-lg transition-all duration-300 hover:shadow-[0_0_35px_rgba(99,102,241,0.2)] hover:border-white/30 group">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            <span class="text-xs font-medium uppercase tracking-wider text-neutral-400">
                                 Proyek Arsitek (Milik Saya)
                             </span>
-                            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
                                 <Box class="h-5 w-5" />
                             </div>
                         </div>
                         <div class="mt-3 flex items-baseline gap-2">
-                            <span class="text-2xl font-bold">{{ stats?.owned_count ?? 0 }}</span>
-                            <span class="text-xs text-muted-foreground">/ {{ stats?.max_projects ?? 3 }} kuota</span>
+                            <span class="text-2xl font-extrabold text-white">{{ stats?.owned_count ?? 0 }}</span>
+                            <span class="text-xs text-neutral-400">/ {{ stats?.max_projects ?? 3 }} kuota</span>
                         </div>
                         <!-- Quota progress -->
-                        <div class="mt-3 h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+                        <div class="mt-3 h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
                             <div
-                                class="h-full bg-primary rounded-full transition-all"
+                                class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all"
                                 :style="{
                                     width: `${Math.min(100, (((stats?.owned_count ?? 0) / (stats?.max_projects ?? 3)) * 100))}%`,
                                 }"
@@ -433,83 +461,82 @@ function formatBytes(bytes: number): string {
                     </div>
 
                     <!-- Card 2: Proyek Klien -->
-                    <div class="rounded-xl border bg-card p-5 shadow-xs transition hover:shadow-md">
+                    <div class="rounded-2xl border border-white/15 bg-white/[0.04] backdrop-blur-xl p-5 shadow-lg transition-all duration-300 hover:shadow-[0_0_35px_rgba(59,130,246,0.2)] hover:border-white/30 group">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            <span class="text-xs font-medium uppercase tracking-wider text-neutral-400">
                                 Proyek Klien (Reviewer)
                             </span>
-                            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30">
                                 <Users class="h-5 w-5" />
                             </div>
                         </div>
                         <div class="mt-3 flex items-baseline gap-2">
-                            <span class="text-2xl font-bold">{{ stats?.client_count ?? 0 }}</span>
-                            <span class="text-xs text-muted-foreground">proyek kolaborasi</span>
+                            <span class="text-2xl font-extrabold text-white">{{ stats?.client_count ?? 0 }}</span>
+                            <span class="text-xs text-neutral-400">proyek kolaborasi</span>
                         </div>
-                        <p class="mt-3 text-xs text-muted-foreground">
+                        <p class="mt-3 text-xs text-neutral-400">
                             Diundang oleh arsitek untuk meninjau model
                         </p>
                     </div>
 
                     <!-- Card 3: Proteksi Revisi -->
-                    <div class="rounded-xl border bg-card p-5 shadow-xs transition hover:shadow-md">
+                    <div class="rounded-2xl border border-white/15 bg-white/[0.04] backdrop-blur-xl p-5 shadow-lg transition-all duration-300 hover:shadow-[0_0_35px_rgba(245,158,11,0.2)] hover:border-white/30 group">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            <span class="text-xs font-medium uppercase tracking-wider text-neutral-400">
                                 Batas Revisi Klien
                             </span>
-                            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
                                 <Clock class="h-5 w-5" />
                             </div>
                         </div>
                         <div class="mt-3 flex items-baseline gap-2">
-                            <span class="text-2xl font-bold">Maks. 3x</span>
-                            <span class="text-xs text-muted-foreground">default per proyek</span>
+                            <span class="text-2xl font-extrabold text-white">Maks. 3x</span>
+                            <span class="text-xs text-neutral-400">default per proyek</span>
                         </div>
-                        <p class="mt-3 text-xs text-muted-foreground">
+                        <p class="mt-3 text-xs text-neutral-400">
                             Proteksi sistem otomatis dari revisi berlebihan
                         </p>
                     </div>
 
                     <!-- Card 4: Model Dual-Capacity -->
-                    <div class="rounded-xl border bg-card p-5 shadow-xs transition hover:shadow-md">
+                    <div class="rounded-2xl border border-white/15 bg-white/[0.04] backdrop-blur-xl p-5 shadow-lg transition-all duration-300 hover:shadow-[0_0_35px_rgba(168,85,247,0.2)] hover:border-white/30 group">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            <span class="text-xs font-medium uppercase tracking-wider text-neutral-400">
                                 Kapabilitas Akun
                             </span>
-                            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30">
                                 <ShieldCheck class="h-5 w-5" />
                             </div>
                         </div>
                         <div class="mt-3 flex items-baseline gap-2">
-                            <span class="text-sm font-semibold text-purple-600 dark:text-purple-400">Dual-Capacity</span>
+                            <span class="text-sm font-semibold text-purple-400">Dual-Capacity</span>
                         </div>
-                        <p class="mt-3 text-xs text-muted-foreground">
+                        <p class="mt-3 text-xs text-neutral-400">
                             Bisa jadi Arsitek & Klien tanpa switch akun
                         </p>
                     </div>
                 </div>
 
                 <!-- Tab Navigation (Architect vs Client) -->
-                <div class="flex flex-col gap-4 border-b pb-2 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-col gap-4 border-b border-white/15 pb-2 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex flex-col md:flex-row items-center gap-2">
                         <button
-                            class="border border-primary"
                             @click="activeTab = 'architect'"
                             :class="[
-                                'flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition',
+                                'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all duration-300 border',
                                 activeTab === 'architect'
-                                    ? 'bg-primary text-primary-foreground shadow-xs'
-                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                                    ? 'bg-white text-black shadow-[0_0_25px_rgba(255,255,255,0.2)] border-white'
+                                    : 'text-neutral-300 hover:bg-white/5 hover:text-neutral-100 border-white/15 backdrop-blur-xl',
                             ]"
                         >
                             <Box class="h-4 w-4" />
                             <span>Proyek Arsitek (Milik Saya)</span>
                             <span
                                 :class="[
-                                    'ml-1 rounded-full px-2 py-0.5 text-xs',
+                                    'ml-1 rounded-full px-2 py-0.5 text-xs font-semibold',
                                     activeTab === 'architect'
-                                        ? 'bg-primary-foreground/20 text-primary-foreground'
-                                        : 'bg-muted text-muted-foreground',
+                                        ? 'bg-black/10 text-black'
+                                        : 'bg-white/10 text-neutral-300',
                                 ]"
                             >
                                 {{ ownedProjects?.length ?? 0 }}
@@ -518,22 +545,21 @@ function formatBytes(bytes: number): string {
 
                         <button
                             @click="activeTab = 'client'"
-                            class="border border-primary"
                             :class="[
-                                'flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition',
+                                'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all duration-300 border',
                                 activeTab === 'client'
-                                    ? 'bg-primary text-primary-foreground shadow-xs'
-                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                                    ? 'bg-white text-black shadow-[0_0_25px_rgba(255,255,255,0.2)] border-white'
+                                    : 'text-neutral-300 hover:bg-white/5 hover:text-neutral-100 border-white/15 backdrop-blur-xl',
                             ]"
                         >
                             <Users class="h-4 w-4" />
                             <span>Proyek Kolaborasi (Sebagai Klien)</span>
                             <span
                                 :class="[
-                                    'ml-1 rounded-full px-2 py-0.5 text-xs',
+                                    'ml-1 rounded-full px-2 py-0.5 text-xs font-semibold',
                                     activeTab === 'client'
-                                        ? 'bg-primary-foreground/20 text-primary-foreground'
-                                        : 'bg-muted text-muted-foreground',
+                                        ? 'bg-black/10 text-black'
+                                        : 'bg-white/10 text-neutral-300',
                                 ]"
                             >
                                 {{ clientProjects?.length ?? 0 }}
@@ -546,7 +572,7 @@ function formatBytes(bytes: number): string {
                         <Input
                             v-model="searchQuery"
                             placeholder="Cari judul proyek..."
-                            class="h-9 text-xs"
+                            class="h-9 text-xs bg-white/5 border-white/15 text-neutral-100 placeholder:text-neutral-400 backdrop-blur-xl"
                         />
                     </div>
                 </div>
@@ -556,18 +582,18 @@ function formatBytes(bytes: number): string {
                     <!-- Empty State -->
                     <div
                         v-if="filteredOwnedProjects.length === 0"
-                        class="flex min-h-[340px] flex-col items-center justify-center rounded-xl border border-dashed p-8 text-center"
+                        class="flex min-h-[340px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/[0.02] backdrop-blur-xl p-8 text-center"
                     >
-                        <div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <div class="flex h-16 w-16 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
                             <FolderOpen class="h-8 w-8" />
                         </div>
-                        <h3 class="mt-4 text-lg font-semibold">Belum Ada Proyek 3D</h3>
-                        <p class="mt-2 max-w-md text-sm text-muted-foreground">
+                        <h3 class="mt-4 text-lg font-bold text-neutral-100">Belum Ada Proyek 3D</h3>
+                        <p class="mt-2 max-w-md text-sm text-neutral-300 leading-relaxed">
                             Unggah model 3D pertama Anda (.glb) untuk memvisualisasikan arsitektur dan undang Klien untuk memberikan pin komentar revisi.
                         </p>
                         <Button
                             @click="isCreateModalOpen = true"
-                            class="mt-5"
+                            class="mt-5 bg-white text-black hover:bg-neutral-100 font-semibold shadow-[0_0_25px_rgba(255,255,255,0.2)] rounded-full"
                             :disabled="stats ? !stats.can_create_project : false"
                         >
                             <Plus class="mr-1.5 h-4 w-4" /> Unggah Proyek Pertama
@@ -579,20 +605,20 @@ function formatBytes(bytes: number): string {
                         <div
                             v-for="project in filteredOwnedProjects"
                             :key="project.id"
-                            class="flex flex-col justify-between overflow-hidden rounded-xl border bg-card shadow-xs transition hover:shadow-md"
+                            class="flex flex-col justify-between overflow-hidden rounded-2xl border border-white/15 bg-white/[0.04] backdrop-blur-xl shadow-lg transition-all duration-300 hover:shadow-[0_0_45px_rgba(99,102,241,0.25)] hover:border-white/30 hover:scale-[1.02] group"
                         >
                             <!-- Card Header & 3D Thumbnail Banner -->
                             <div>
-                                <div class="relative flex h-36 w-full items-center justify-center bg-linear-to-br from-slate-800 to-slate-950 text-white overflow-hidden">
-                                    <Box class="h-16 w-16 opacity-30 transition-transform group-hover:scale-110" />
+                                <div class="relative flex h-36 w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-950 text-white overflow-hidden">
+                                    <Box class="h-16 w-16 opacity-20 transition-transform duration-500 group-hover:scale-110 group-hover:opacity-30" />
                                     
                                     <div class="absolute top-3 left-3 flex flex-wrap gap-1.5">
-                                        <Badge variant="secondary" class="bg-black/60 text-white backdrop-blur-xs text-[11px]">
+                                        <Badge class="bg-black/60 text-white backdrop-blur-xl text-[11px] border border-white/20">
                                             3D GLB
                                         </Badge>
                                         <Badge
                                             v-if="project.is_draco_compressed"
-                                            class="bg-emerald-500/80 text-white text-[10px]"
+                                            class="bg-emerald-500/80 text-white text-[10px] border border-emerald-400/50"
                                         >
                                             Draco
                                         </Badge>
@@ -602,50 +628,50 @@ function formatBytes(bytes: number): string {
                                         <button
                                             @click="openEditModal(project)"
                                             title="Edit Data Proyek"
-                                            class="rounded-full bg-black/50 p-1.5 text-slate-300 hover:bg-primary hover:text-white transition"
+                                            class="rounded-full bg-black/50 border border-white/20 backdrop-blur-xl p-1.5 text-slate-300 hover:bg-indigo-500 hover:text-white hover:border-indigo-400 transition-all duration-300"
                                         >
                                             <Pencil class="h-3.5 w-3.5" />
                                         </button>
                                         <button
                                             @click="deleteProject(project)"
                                             title="Hapus Proyek"
-                                            class="rounded-full bg-black/50 p-1.5 text-slate-300 hover:bg-rose-600 hover:text-white transition"
+                                            class="rounded-full bg-black/50 border border-white/20 backdrop-blur-xl p-1.5 text-slate-300 hover:bg-rose-600 hover:text-white hover:border-rose-400 transition-all duration-300"
                                         >
                                             <Trash2 class="h-3.5 w-3.5" />
                                         </button>
                                     </div>
 
-                                    <div class="absolute bottom-2 right-3 text-[11px] text-slate-300">
+                                    <div class="absolute bottom-2 right-3 text-[11px] text-slate-300 font-mono">
                                         {{ formatBytes(project.file_size_bytes) }}
                                     </div>
                                 </div>
 
                                 <!-- Card Content -->
                                 <div class="p-5">
-                                    <h3 class="font-bold text-base line-clamp-1" :title="project.title">
+                                    <h3 class="font-bold text-base line-clamp-1 text-neutral-100" :title="project.title">
                                         {{ project.title }}
                                     </h3>
-                                    <p class="mt-1 text-xs text-muted-foreground line-clamp-2 min-h-[32px]">
+                                    <p class="mt-1 text-xs text-neutral-400 line-clamp-2 min-h-[32px]">
                                         {{ project.description || 'Tidak ada deskripsi proyek.' }}
                                     </p>
 
                                     <!-- Revision Limit Tracker -->
-                                    <div class="mt-4 rounded-lg bg-muted/60 p-3">
+                                    <div class="mt-4 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xl p-3">
                                         <div class="flex items-center justify-between text-xs">
-                                            <span class="font-medium text-muted-foreground">Kuota Revisi Klien:</span>
-                                            <span class="font-bold">
+                                            <span class="font-medium text-neutral-400">Kuota Revisi Klien:</span>
+                                            <span class="font-bold text-neutral-100">
                                                 {{ project.current_revision_count }} / {{ project.max_revisions_allowed }}
                                             </span>
                                         </div>
-                                        <div class="mt-2 h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+                                        <div class="mt-2 h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
                                             <div
                                                 class="h-full rounded-full transition-all"
                                                 :class="[
                                                     project.has_reached_revision_limit
-                                                        ? 'bg-rose-500'
+                                                        ? 'bg-gradient-to-r from-rose-500 to-rose-600'
                                                         : project.current_revision_count > 0
-                                                        ? 'bg-amber-500'
-                                                        : 'bg-emerald-500',
+                                                        ? 'bg-gradient-to-r from-amber-500 to-orange-500'
+                                                        : 'bg-gradient-to-r from-emerald-500 to-green-500',
                                                 ]"
                                                 :style="{
                                                     width: `${Math.min(100, (project.current_revision_count / project.max_revisions_allowed) * 100)}%`,
@@ -655,23 +681,23 @@ function formatBytes(bytes: number): string {
                                         <div class="mt-1.5 flex items-center justify-between text-[11px]">
                                             <span
                                                 v-if="project.has_reached_revision_limit"
-                                                class="font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1"
+                                                class="font-semibold text-rose-400 flex items-center gap-1"
                                             >
                                                 <AlertTriangle class="h-3 w-3" /> Batas revisi habis
                                             </span>
-                                            <span v-else class="text-emerald-600 dark:text-emerald-400">
+                                            <span v-else class="text-emerald-400">
                                                 Revisi terbuka
                                             </span>
-                                            <span class="text-muted-foreground">{{ project.created_at }}</span>
+                                            <span class="text-neutral-400">{{ project.created_at }}</span>
                                         </div>
                                     </div>
 
                                     <!-- Collaborators pill -->
                                     <div class="mt-3 flex items-center justify-between text-xs">
-                                        <span class="text-muted-foreground">Klien Kolaborator:</span>
+                                        <span class="text-neutral-400">Klien Kolaborator:</span>
                                         <button
                                             @click="openClientModal(project)"
-                                            class="font-medium text-primary hover:underline flex items-center gap-1"
+                                            class="font-medium text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 transition-colors"
                                         >
                                             <UserCheck class="h-3.5 w-3.5" />
                                             {{ project.invited_clients.length }} Klien
@@ -681,12 +707,12 @@ function formatBytes(bytes: number): string {
                             </div>
 
                             <!-- Card Footer Actions -->
-                            <div class="border-t bg-muted/20 p-4 flex items-center gap-2">
+                            <div class="border-t border-white/10 bg-white/[0.02] backdrop-blur-xl p-4 flex items-center gap-2">
                                 <Link
                                     :href="`/projects/${project.id}/viewer`"
                                     class="flex-1"
                                 >
-                                    <Button class="w-full text-xs font-semibold" size="sm">
+                                    <Button class="w-full text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white shadow-[0_0_20px_rgba(99,102,241,0.3)] transition-all duration-300" size="sm">
                                         <Box class="mr-1.5 h-3.5 w-3.5" /> Buka 3D Viewer
                                     </Button>
                                 </Link>
@@ -694,7 +720,7 @@ function formatBytes(bytes: number): string {
                                     @click="openEditModal(project)"
                                     variant="outline"
                                     size="sm"
-                                    class="text-xs"
+                                    class="text-xs border-white/15 bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white hover:border-white/30 backdrop-blur-xl"
                                     title="Edit Data Proyek"
                                 >
                                     <Pencil class="h-3.5 w-3.5" />
@@ -703,7 +729,7 @@ function formatBytes(bytes: number): string {
                                     @click="openClientModal(project)"
                                     variant="outline"
                                     size="sm"
-                                    class="text-xs"
+                                    class="text-xs border-white/15 bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white hover:border-white/30 backdrop-blur-xl"
                                     title="Undang / Kelola Klien"
                                 >
                                     <UserPlus class="h-3.5 w-3.5" />
@@ -718,14 +744,14 @@ function formatBytes(bytes: number): string {
                     <!-- Empty State -->
                     <div
                         v-if="filteredClientProjects.length === 0"
-                        class="flex min-h-[340px] flex-col items-center justify-center rounded-xl border border-dashed p-8 text-center"
+                        class="flex min-h-[340px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/[0.02] backdrop-blur-xl p-8 text-center"
                     >
-                        <div class="flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                        <div class="flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
                             <Users class="h-8 w-8" />
                         </div>
-                        <h3 class="mt-4 text-lg font-semibold">Belum Ada Proyek Kolaborasi</h3>
-                        <p class="mt-2 max-w-md text-sm text-muted-foreground">
-                            Ketika seorang arsitek mengundang email Anda (<strong>{{ auth?.user?.email }}</strong>) ke proyek mereka, proyek tersebut akan langsung muncul di sini secara otomatis.
+                        <h3 class="mt-4 text-lg font-bold text-neutral-100">Belum Ada Proyek Kolaborasi</h3>
+                        <p class="mt-2 max-w-md text-sm text-neutral-300 leading-relaxed">
+                            Ketika seorang arsitek mengundang email Anda (<strong class="text-neutral-100">{{ auth?.user?.email }}</strong>) ke proyek mereka, proyek tersebut akan langsung muncul di sini secara otomatis.
                         </p>
                     </div>
 
@@ -734,52 +760,52 @@ function formatBytes(bytes: number): string {
                         <div
                             v-for="project in filteredClientProjects"
                             :key="project.invitation_id"
-                            class="flex flex-col justify-between overflow-hidden rounded-xl border bg-card shadow-xs transition hover:shadow-md"
+                            class="flex flex-col justify-between overflow-hidden rounded-2xl border border-white/15 bg-white/[0.04] backdrop-blur-xl shadow-lg transition-all duration-300 hover:shadow-[0_0_45px_rgba(59,130,246,0.25)] hover:border-white/30 hover:scale-[1.02] group"
                         >
                             <div>
                                 <!-- Header Status -->
-                                <div class="flex items-center justify-between border-b p-4 bg-muted/40">
+                                <div class="flex items-center justify-between border-b border-white/10 p-4 bg-white/[0.02] backdrop-blur-xl">
                                     <div class="flex items-center gap-1.5">
                                         <Badge
                                             v-if="project.invitation_status === 'accepted'"
-                                            class="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[11px] border border-emerald-500/30 font-medium"
+                                            class="bg-emerald-500/20 text-emerald-300 text-[11px] border border-emerald-500/30 font-medium backdrop-blur-xl"
                                         >
                                             <CheckCircle2 class="mr-1 h-3 w-3" /> Akses Aktif (Reviewer)
                                         </Badge>
                                         <Badge
                                             v-else
-                                            class="bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[11px] border border-amber-500/30 font-medium"
+                                            class="bg-amber-500/20 text-amber-300 text-[11px] border border-amber-500/30 font-medium backdrop-blur-xl"
                                         >
                                             <Clock class="mr-1 h-3 w-3" /> Menunggu Konfirmasi
                                         </Badge>
                                     </div>
-                                    <span class="text-[11px] text-muted-foreground">{{ project.invited_at }}</span>
+                                    <span class="text-[11px] text-neutral-400">{{ project.invited_at }}</span>
                                 </div>
 
                                 <!-- Body -->
                                 <div class="p-5">
-                                    <h3 class="font-bold text-base line-clamp-1" :title="project.title">
+                                    <h3 class="font-bold text-base line-clamp-1 text-neutral-100" :title="project.title">
                                         {{ project.title }}
                                     </h3>
-                                    <p class="mt-1 text-xs text-muted-foreground line-clamp-2 min-h-[32px]">
+                                    <p class="mt-1 text-xs text-neutral-400 line-clamp-2 min-h-[32px]">
                                         {{ project.description || 'Proyek visualisasi arsitektur 3D dari klien.' }}
                                     </p>
 
                                     <!-- Architect information -->
-                                    <div class="mt-4 rounded-lg bg-muted/60 p-3 text-xs space-y-1">
-                                        <div class="text-muted-foreground">Arsitek Pengundang:</div>
-                                        <div class="font-semibold text-foreground">
+                                    <div class="mt-4 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xl p-3 text-xs space-y-1">
+                                        <div class="text-neutral-400">Arsitek Pengundang:</div>
+                                        <div class="font-semibold text-neutral-100">
                                             {{ project.architect_name }}
                                         </div>
-                                        <div class="text-muted-foreground text-[11px]">
+                                        <div class="text-neutral-400 text-[11px]">
                                             {{ project.architect_email }}
                                         </div>
                                     </div>
 
                                     <!-- Revision status -->
                                     <div class="mt-3 flex items-center justify-between text-xs">
-                                        <span class="text-muted-foreground">Revisi Terpakai:</span>
-                                        <span class="font-semibold">
+                                        <span class="text-neutral-400">Revisi Terpakai:</span>
+                                        <span class="font-semibold text-neutral-100">
                                             {{ project.current_revision_count }} / {{ project.max_revisions_allowed }}
                                         </span>
                                     </div>
@@ -787,11 +813,11 @@ function formatBytes(bytes: number): string {
                             </div>
 
                             <!-- Footer Actions -->
-                            <div class="border-t bg-muted/20 p-4">
+                            <div class="border-t border-white/10 bg-white/[0.02] backdrop-blur-xl p-4">
                                 <div v-if="project.invitation_status === 'pending'">
                                     <Button
                                         @click="acceptInvitation(project)"
-                                        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
+                                        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all duration-300"
                                         size="sm"
                                     >
                                         <CheckCircle2 class="mr-1.5 h-3.5 w-3.5" /> Terima Undangan & Buka Viewer
@@ -799,7 +825,7 @@ function formatBytes(bytes: number): string {
                                 </div>
                                 <div v-else>
                                     <Link :href="`/projects/${project.id}/viewer`">
-                                        <Button class="w-full text-xs font-semibold" size="sm">
+                                        <Button class="w-full text-xs font-semibold bg-blue-500 hover:bg-blue-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300" size="sm">
                                             <Box class="mr-1.5 h-3.5 w-3.5" /> Buka 3D Viewer & Beri Feedback
                                         </Button>
                                     </Link>
@@ -808,7 +834,6 @@ function formatBytes(bytes: number): string {
                         </div>
                     </div>
                 </div>
-            </div>
 
             <!-- MODAL: BUAT PROYEK BARU -->
             <Dialog :open="isCreateModalOpen" @update:open="isCreateModalOpen = $event">
@@ -1140,6 +1165,7 @@ function formatBytes(bytes: number): string {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            </main>
         </div>
-    </AppSwissLayout>
+    </div>
 </template>

@@ -1,0 +1,785 @@
+<!DOCTYPE html><html class="dark" lang="id"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>AETHER 3D — Spatial Collaboration Dashboard</title>
+<!-- Google Fonts & Material Symbols -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS v3 with Container Queries & Forms -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-container-lowest": "#0b0c10",
+            "on-primary": "#00354a",
+            "primary-fixed-dim": "#7bd0ff",
+            "secondary-fixed": "#e1e0ff",
+            "tertiary-fixed-dim": "#b9c8de",
+            "on-primary-fixed": "#001e2c",
+            "on-primary-container": "#004965",
+            "secondary-container": "#3131c0",
+            "inverse-primary": "#00668a",
+            "on-tertiary": "#233143",
+            "on-secondary-container": "#b0b2ff",
+            "outline-variant": "#23262d",
+            "error-container": "#93000a",
+            "on-secondary": "#1000a9",
+            "surface-dim": "#111217",
+            "secondary-fixed-dim": "#c0c1ff",
+            "on-surface-variant": "#9ca3af",
+            "surface-container": "#181920",
+            "surface": "#131315",
+            "outline": "#6b7280",
+            "surface-container-high": "#22232c",
+            "on-primary-fixed-variant": "#004c69",
+            "background": "#0b0c10",
+            "on-background": "#f3f4f6",
+            "tertiary-container": "#a3b2c7",
+            "on-surface": "#f3f4f6",
+            "surface-variant": "#262833",
+            "error": "#ffb4ab",
+            "inverse-on-surface": "#313032",
+            "tertiary": "#becee4",
+            "surface-tint": "#7bd0ff",
+            "secondary": "#c0c1ff",
+            "on-error-container": "#ffdad6",
+            "surface-container-highest": "#2e303d",
+            "on-secondary-fixed": "#07006c",
+            "primary-container": "#38bdf8",
+            "surface-bright": "#323442",
+            "on-tertiary-fixed": "#0d1c2d",
+            "primary-fixed": "#c4e7ff",
+            "on-error": "#690005",
+            "on-secondary-fixed-variant": "#2f2ebe",
+            "surface-container-low": "#13141a",
+            "primary": "#8ed5ff",
+            "on-tertiary-fixed-variant": "#39485a",
+            "inverse-surface": "#e5e1e4",
+            "tertiary-fixed": "#d4e4fa",
+            "on-tertiary-container": "#364557"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "2xl": "1rem",
+            "full": "9999px"
+          },
+          "fontFamily": {
+            "body-md": ["Geist", "sans-serif"],
+            "display-lg": ["Geist", "sans-serif"],
+            "body-lg": ["Geist", "sans-serif"],
+            "headline-xl-mobile": ["Geist", "sans-serif"],
+            "headline-xl": ["Geist", "sans-serif"],
+            "label-xs": ["JetBrains Mono", "monospace"],
+            "headline-md": ["Geist", "sans-serif"],
+            "label-md": ["JetBrains Mono", "monospace"],
+            "title-sm": ["Geist", "sans-serif"]
+          },
+          "fontSize": {
+            "body-md": ["0.875rem", { "lineHeight": "1.4rem", "letterSpacing": "0em", "fontWeight": "400" }],
+            "display-lg": ["4rem", { "lineHeight": "4.5rem", "letterSpacing": "-0.04em", "fontWeight": "600" }],
+            "body-lg": ["1rem", { "lineHeight": "1.6rem", "letterSpacing": "-0.005em", "fontWeight": "400" }],
+            "headline-xl-mobile": ["1.75rem", { "lineHeight": "2.25rem", "letterSpacing": "-0.02em", "fontWeight": "500" }],
+            "headline-xl": ["2.25rem", { "lineHeight": "2.75rem", "letterSpacing": "-0.03em", "fontWeight": "500" }],
+            "label-xs": ["0.625rem", { "lineHeight": "0.875rem", "letterSpacing": "0.06em", "fontWeight": "500" }],
+            "headline-md": ["1.375rem", { "lineHeight": "1.875rem", "letterSpacing": "-0.02em", "fontWeight": "500" }],
+            "label-md": ["0.75rem", { "lineHeight": "1rem", "letterSpacing": "0.04em", "fontWeight": "500" }],
+            "title-sm": ["1.05rem", { "lineHeight": "1.45rem", "letterSpacing": "-0.01em", "fontWeight": "500" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 350, 'GRAD' 0, 'opsz' 20;
+      font-size: 1.2rem;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.16);
+    }
+  </style>
+</head>
+<body class="bg-[#0b0c10] text-on-surface font-body-md text-body-md antialiased selection:bg-primary-container selection:text-on-primary-container relative overflow-x-hidden min-h-screen flex">
+<!-- Ambient Background Lighting -->
+<div class="fixed top-0 left-64 w-[650px] h-[400px] bg-primary-container/10 blur-[150px] pointer-events-none rounded-full"></div>
+<div class="fixed top-1/2 right-10 w-[500px] h-[500px] bg-secondary-container/10 blur-[170px] pointer-events-none rounded-full"></div>
+<div class="fixed bottom-0 left-80 w-[550px] h-[350px] bg-surface-container-high/20 blur-[130px] pointer-events-none rounded-full"></div>
+<!-- 1. PERSISTENT LEFT SIDEBAR -->
+<aside class="fixed inset-y-0 left-0 w-64 z-50 flex flex-col bg-[#0d0e13]/90 backdrop-blur-2xl border-r border-white/5 text-on-surface select-none">
+<!-- Brand Logo & Studio Tier -->
+<div class="h-16 px-5 flex items-center justify-between border-b border-white/5">
+<a class="flex items-center gap-2.5" href="#">
+<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-white to-gray-200 flex items-center justify-center text-surface-container-lowest shadow-[0_0_15px_rgba(255,255,255,0.25)]">
+<span class="material-symbols-outlined text-surface-container-lowest text-[20px]" style="font-variation-settings: 'FILL' 1;">layers</span>
+</div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="font-bold tracking-tight text-white text-[15px]">AETHER</span>
+<span class="text-[12px] font-mono font-medium text-primary">3D</span>
+</div>
+<span class="text-[9px] font-mono uppercase tracking-widest text-outline block -mt-0.5">Spatial CAD</span>
+</div>
+</a>
+<span class="px-1.5 py-0.5 rounded text-[10px] font-mono text-primary bg-primary/10 border border-primary/20 font-medium">
+      PRO
+    </span>
+</div>
+<!-- Navigation Menu List -->
+<div class="flex-1 overflow-y-auto custom-scroll px-3 py-4 space-y-6">
+<!-- Main Group -->
+<div class="space-y-1">
+<div class="px-3 pb-1.5 text-[10px] font-mono uppercase tracking-wider text-outline/80">Menu Utama</div>
+<!-- Dashboard (Active) -->
+<a class="group relative flex items-center gap-3 px-3 py-2 rounded-xl bg-white/[0.06] text-white font-medium shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] border border-white/10 transition-all" href="#">
+<div class="absolute left-0 top-2 bottom-2 w-1 bg-primary rounded-r-full shadow-[0_0_8px_rgba(56,189,248,0.8)]"></div>
+<span class="material-symbols-outlined text-primary text-[19px]" style="font-variation-settings: 'FILL' 1;">grid_view</span>
+<span class="text-[13px] tracking-tight">Dashboard</span>
+</a>
+<!-- Proyek 3D -->
+<a class="group flex items-center justify-between px-3 py-2 rounded-xl text-on-surface-variant hover:text-white hover:bg-white/[0.04] transition-all" href="#">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[19px] text-outline group-hover:text-white transition-colors">view_in_ar</span>
+<span class="text-[13px] tracking-tight">Proyek 3D</span>
+</div>
+<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/[0.06] text-white border border-white/5">2</span>
+</a>
+<!-- Spatial Review / Anotasi -->
+<a class="group flex items-center justify-between px-3 py-2 rounded-xl text-on-surface-variant hover:text-white hover:bg-white/[0.04] transition-all" href="#">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[19px] text-outline group-hover:text-white transition-colors">rate_review</span>
+<span class="text-[13px] tracking-tight">Spatial Review</span>
+</div>
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+</a>
+<!-- Kompresi Draco & Pipeline -->
+<a class="group flex items-center gap-3 px-3 py-2 rounded-xl text-on-surface-variant hover:text-white hover:bg-white/[0.04] transition-all" href="#">
+<span class="material-symbols-outlined text-[19px] text-outline group-hover:text-white transition-colors">precision_manufacturing</span>
+<span class="text-[13px] tracking-tight">Pipeline Draco</span>
+</a>
+<!-- Tim & Klien (Reviewer) -->
+<a class="group flex items-center justify-between px-3 py-2 rounded-xl text-on-surface-variant hover:text-white hover:bg-white/[0.04] transition-all" href="#">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[19px] text-outline group-hover:text-white transition-colors">groups</span>
+<span class="text-[13px] tracking-tight">Tim &amp; Klien</span>
+</div>
+<span class="text-[10px] font-mono text-amber-300 bg-amber-400/10 px-1 rounded border border-amber-400/20">1 Invite</span>
+</a>
+</div>
+<!-- Management Group -->
+<div class="space-y-1">
+<div class="px-3 pb-1.5 text-[10px] font-mono uppercase tracking-wider text-outline/80">Konfigurasi</div>
+<!-- Tagihan & Kuota -->
+<a class="group flex items-center gap-3 px-3 py-2 rounded-xl text-on-surface-variant hover:text-white hover:bg-white/[0.04] transition-all" href="#">
+<span class="material-symbols-outlined text-[19px] text-outline group-hover:text-white transition-colors">credit_card</span>
+<span class="text-[13px] tracking-tight">Tagihan &amp; Kuota</span>
+</a>
+<!-- Pengaturan -->
+<a class="group flex items-center gap-3 px-3 py-2 rounded-xl text-on-surface-variant hover:text-white hover:bg-white/[0.04] transition-all" href="#">
+<span class="material-symbols-outlined text-[19px] text-outline group-hover:text-white transition-colors">settings</span>
+<span class="text-[13px] tracking-tight">Pengaturan</span>
+</a>
+</div>
+<!-- Quick Utilities -->
+<div class="space-y-1">
+<div class="px-3 pb-1.5 text-[10px] font-mono uppercase tracking-wider text-outline/80">Support</div>
+<a class="group flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-outline hover:text-on-surface transition-colors" href="#">
+<span class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">menu_book</span>
+<span class="">Dokumentasi API</span>
+</span>
+<span class="material-symbols-outlined text-[14px]">arrow_outward</span>
+</a>
+<a class="group flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-outline hover:text-on-surface transition-colors" href="#">
+<span class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-emerald-400">dns</span>
+<span class="">Status Engine</span>
+</span>
+<span class="text-[10px] font-mono text-emerald-400">Operational</span>
+</a>
+</div>
+</div>
+<!-- Bottom Section: Storage & User Pill -->
+<div class="p-3 border-t border-white/5 space-y-3 bg-[#0a0b0e]/70">
+<!-- Storage & Quota Widget -->
+<div class="p-3 rounded-xl bg-surface-container-low/70 border border-white/5 space-y-2">
+<div class="flex items-center justify-between text-xs">
+<span class="text-on-surface-variant font-medium">Draco Storage</span>
+<span class="font-mono text-primary text-[11px]">30.5 / 100 MB</span>
+</div>
+<div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-primary-container rounded-full w-[30.5%]"></div>
+</div>
+<div class="flex items-center justify-between text-[10px] font-mono text-outline">
+<span class="">Proyek: 2 / 20 kuota</span>
+<span class="text-primary hover:underline cursor-pointer">Upgrade</span>
+</div>
+</div>
+<!-- User Profile Pill -->
+<div class="flex items-center justify-between p-2 rounded-xl bg-surface-container-low/50 hover:bg-white/[0.04] border border-white/5 transition-colors">
+<div class="flex items-center gap-2.5 overflow-hidden">
+<div class="relative shrink-0">
+<div class="w-8 h-8 rounded-full bg-gradient-to-tr from-surface-container-highest to-surface-bright border border-white/10 flex items-center justify-center text-white text-xs font-semibold">
+            HP
+          </div>
+<span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 border-2 border-surface-container-lowest rounded-full"></span>
+</div>
+<div class="truncate">
+<div class="text-xs font-medium text-white truncate">Hendra Pratama</div>
+<div class="flex items-center gap-1">
+<span class="text-[9px] font-mono px-1 py-0.2 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30">PRO TIER</span>
+<span class="text-[10px] text-outline truncate">Jakarta</span>
+</div>
+</div>
+</div>
+<button aria-label="Account Settings" class="text-outline hover:text-white p-1 rounded-md transition-colors">
+<span class="material-symbols-outlined text-[17px]">more_vert</span>
+</button>
+</div>
+</div>
+</aside>
+<!-- RIGHT WRAPPER (Header + Main Scroll Area) -->
+<div class="flex-1 flex flex-col pl-64 min-w-0">
+<!-- 2. TOP APPLICATION HEADER -->
+<header class="sticky top-0 z-40 h-16 bg-[#0b0c10]/85 backdrop-blur-xl border-b border-white/5 px-6 flex items-center justify-between">
+<!-- Left: Collapse & Breadcrumbs -->
+<div class="flex items-center gap-4">
+<button aria-label="Toggle menu" class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-white hover:bg-white/5 transition-colors">
+<span class="material-symbols-outlined text-[20px]">menu_open</span>
+</button>
+<nav class="flex items-center gap-2 text-xs font-mono text-outline">
+<span class="hover:text-on-surface cursor-pointer">Dashboard</span>
+<span class="text-white/20">/</span>
+<span class="hover:text-on-surface cursor-pointer">Proyek 3D</span>
+<span class="text-white/20">/</span>
+<span class="text-white font-medium">Overview</span>
+</nav>
+</div>
+<!-- Right: Telemetry, Global Search & CTA -->
+<div class="flex items-center gap-3">
+<!-- Edge CDN Status Pill -->
+<div class="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-low border border-white/5 text-[11px] font-mono text-outline">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+<span class="">Edge CDN: SGP-01 • 14ms (Operational)</span>
+</div>
+<!-- Quick Search Bar -->
+<div class="relative w-64 lg:w-72 hidden sm:block">
+<input class="w-full bg-[#13141a] border border-white/10 rounded-xl pl-9 pr-12 py-1.5 text-xs text-on-surface placeholder:text-outline focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-all" placeholder="Cari proyek, klien, revisi..." type="text">
+<span class="material-symbols-outlined absolute left-2.5 top-2 text-[16px] text-outline">search</span>
+<kbd class="absolute right-2 top-1.5 px-1.5 py-0.5 text-[9px] font-mono bg-white/5 border border-white/10 rounded text-outline">⌘K</kbd>
+</div>
+<!-- Notification Bell -->
+<div class="relative flex items-center" id="theme-toggle-wrapper"><button id="theme-toggle-btn" type="button" onclick="(function(){const html = document.documentElement; const isDark = html.classList.toggle('dark'); const icon = document.getElementById('theme-toggle-icon'); const tip = document.getElementById('theme-tooltip-text'); if(isDark){ icon.innerText = 'light_mode'; icon.classList.remove('text-amber-500'); icon.classList.add('text-amber-300'); if(tip) tip.innerText = 'Mode Gelap'; } else { icon.innerText = 'dark_mode'; icon.classList.remove('text-amber-300'); icon.classList.add('text-amber-500'); if(tip) tip.innerText = 'Mode Terang'; }})()" aria-label="Ganti Mode Tema" class="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-container-low border border-white/10 hover:border-white/20 hover:bg-surface-container transition-all text-xs font-mono select-none"><span id="theme-toggle-icon" class="material-symbols-outlined text-[17px] text-amber-300 transition-transform group-hover:rotate-45 duration-300">light_mode</span><span id="theme-tooltip-text" class="hidden md:inline-block text-[11px] text-outline group-hover:text-on-surface transition-colors font-medium">Mode Gelap</span></button></div><button aria-label="Notifikasi" class="relative w-9 h-9 rounded-xl flex items-center justify-center text-outline hover:text-white hover:bg-white/5 border border-transparent hover:border-white/5 transition-all">
+<span class="material-symbols-outlined text-[19px]">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-primary-container rounded-full ring-2 ring-[#0b0c10]"></span>
+</button>
+<!-- Primary Action CTA -->
+<button class="px-4 py-2 rounded-xl bg-white text-surface-container-lowest font-medium text-xs hover:bg-primary-fixed hover:text-on-primary-fixed hover:shadow-[0_0_20px_rgba(56,189,248,0.3)] active:scale-[0.98] transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-[17px] font-bold text-surface-container-lowest">add</span>
+<span class="font-semibold tracking-tight">Buat Proyek 3D</span>
+</button>
+<!-- Profile Quick Dropdown -->
+<div class="flex items-center gap-2 pl-2 border-l border-white/10 cursor-pointer group">
+<div class="w-8 h-8 rounded-full bg-surface-container-high border border-white/10 flex items-center justify-center text-xs font-semibold text-white">
+          HP
+        </div>
+<div class="hidden md:block text-left leading-tight">
+<div class="text-xs font-medium text-white flex items-center gap-1">
+<span class="">Hendra Pratama</span>
+<span class="material-symbols-outlined text-[15px] text-outline group-hover:text-white">keyboard_arrow_down</span>
+</div>
+<span class="text-[10px] font-mono text-primary">PRO TIER</span>
+</div>
+</div>
+</div>
+</header>
+<!-- 3. MAIN CONTENT WORKSPACE -->
+<main class="flex-1 p-6 lg:p-8 space-y-6 max-w-7xl w-full">
+<!-- Flash Notification / Compression Telemetry Banner -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface-container-low/80 backdrop-blur-xl border border-primary-container/20 shadow-lg shadow-surface-container-lowest/50">
+<div class="flex items-center gap-3">
+<span class="w-6 h-6 rounded-lg bg-primary-container/15 flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[17px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</span>
+<p class="text-xs text-on-surface">
+<span class="font-semibold text-primary">Proyek "Villa Karang Cantilever"</span> berhasil diperbarui dengan kompresi Draco 85% (18.4 MB).
+        </p>
+</div>
+<div class="flex items-center gap-3 text-[11px] font-mono text-outline">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">dns</span> Edge CDN: SGP-01 • 14ms
+        </span>
+<button aria-label="Close message" class="text-outline hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+</div>
+<!-- Welcome & Action Bar -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
+<div>
+<div class="flex items-center gap-2.5">
+<h1 class="text-headline-xl font-headline-xl text-white tracking-tight">Selamat Datang, Hendra Pratama</h1>
+<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-400/10 text-amber-300 border border-amber-400/30">JAKARTA STUDIO</span>
+</div>
+<p class="text-xs text-outline mt-1 max-w-2xl">
+          Kelola representasi 3D spatial CAD, kontrol kuota iterasi klien, dan koordinasikan review viewport real-time.
+        </p>
+</div>
+<div class="flex items-center gap-2 shrink-0">
+<button class="px-3.5 py-2 rounded-xl bg-surface-container-low border border-white/10 text-on-surface hover:bg-surface-container hover:border-white/20 active:scale-[0.98] transition-all text-xs font-medium flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[17px]">tune</span>
+<span class="">Studio Presets</span>
+</button>
+<button class="px-4 py-2 rounded-xl bg-primary text-on-primary font-medium text-xs hover:bg-primary-fixed active:scale-[0.98] transition-all flex items-center gap-1.5 shadow-[0_0_15px_rgba(142,213,255,0.25)]">
+<span class="material-symbols-outlined text-[17px] font-bold">add</span>
+<span class="">Buat Proyek 3D</span>
+</button>
+</div>
+</div>
+<!-- Metric & Telemetry Bento Cards (4-Column) -->
+<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+<!-- Card 1: Kuota Proyek Arsitek -->
+<div class="p-4 rounded-xl bg-[#13141a]/90 backdrop-blur-xl border border-white/5 hover:border-white/10 transition-all flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<div>
+<span class="text-[10px] font-mono text-outline uppercase tracking-wider">Proyek Arsitek (Milik Saya)</span>
+<div class="text-headline-md font-headline-md text-white mt-1 font-semibold">2 <span class="text-xs text-outline font-normal font-mono">/ 20 kuota</span></div>
+</div>
+<div class="w-8 h-8 rounded-lg bg-primary-container/10 border border-primary-container/20 flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[19px]">architecture</span>
+</div>
+</div>
+<div class="mt-4 space-y-1.5">
+<div class="flex justify-between text-[11px] font-mono text-outline">
+<span class="">Storage: 30.5 MB</span>
+<span class="text-primary">10% Terpakai</span>
+</div>
+<div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary-container to-secondary rounded-full w-[10%]"></div>
+</div>
+</div>
+</div>
+<!-- Card 2: Proyek Klien (Reviewer) -->
+<div class="p-4 rounded-xl bg-[#13141a]/90 backdrop-blur-xl border border-white/5 hover:border-white/10 transition-all flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<div>
+<span class="text-[10px] font-mono text-outline uppercase tracking-wider">Reviewer Kolaborator</span>
+<div class="text-headline-md font-headline-md text-white mt-1 font-semibold">3 <span class="text-xs text-outline font-normal">proyek</span></div>
+</div>
+<div class="w-8 h-8 rounded-lg bg-secondary/10 border border-secondary/20 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[19px]">groups</span>
+</div>
+</div>
+<div class="mt-4 pt-2 border-t border-white/5 flex items-center justify-between text-[11px]">
+<span class="text-secondary font-medium font-mono">1 Undangan Menunggu</span>
+<span class="material-symbols-outlined text-outline text-[16px]">arrow_forward</span>
+</div>
+</div>
+<!-- Card 3: Batas Revisi Klien -->
+<div class="p-4 rounded-xl bg-[#13141a]/90 backdrop-blur-xl border border-white/5 hover:border-white/10 transition-all flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<div>
+<span class="text-[10px] font-mono text-outline uppercase tracking-wider">Batas Revisi Klien</span>
+<div class="text-headline-md font-headline-md text-white mt-1 font-semibold">Maks. 3x <span class="text-xs text-outline font-normal">/ proyek</span></div>
+</div>
+<div class="w-8 h-8 rounded-lg bg-amber-400/10 border border-amber-400/20 flex items-center justify-center text-amber-300">
+<span class="material-symbols-outlined text-[19px]">shield_with_heart</span>
+</div>
+</div>
+<div class="mt-4 pt-2 border-t border-white/5 flex items-center gap-1.5 text-[11px] text-amber-300 font-mono">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+<span class="">Gatekeeper Kontrak Aktif</span>
+</div>
+</div>
+<!-- Card 4: Kapabilitas Akun -->
+<div class="p-4 rounded-xl bg-[#13141a]/90 backdrop-blur-xl border border-white/5 hover:border-white/10 transition-all flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<div>
+<span class="text-[10px] font-mono text-outline uppercase tracking-wider">Kapabilitas Akun</span>
+<div class="text-title-sm font-title-sm text-white mt-1 font-semibold">Dual-Capacity</div>
+</div>
+<div class="w-8 h-8 rounded-lg bg-surface-container-high border border-white/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[19px]">swap_horiz</span>
+</div>
+</div>
+<p class="mt-4 text-[11px] text-outline leading-relaxed">
+          Bisa bertindak sebagai Arsitek &amp; Reviewer Klien dalam satu dashboard tanpa beralih credential.
+        </p>
+</div>
+</section>
+<!-- Tab Filter & Search Controls -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+<!-- Tabs -->
+<div class="flex items-center gap-1.5 p-1 rounded-xl bg-[#13141a] border border-white/5 w-fit">
+<button class="px-3.5 py-1.5 rounded-lg bg-white/[0.08] text-white font-medium text-xs shadow-sm transition-all flex items-center gap-2 border border-white/10">
+<span class="">Proyek Arsitek (Milik Saya)</span>
+<span class="px-1.5 py-0.2 rounded-full bg-primary/20 text-primary text-[10px] font-mono font-bold">2</span>
+</button>
+<button class="px-3.5 py-1.5 rounded-lg text-outline hover:text-white hover:bg-white/[0.03] text-xs transition-all flex items-center gap-2">
+<span class="">Proyek Kolaborasi (Sebagai Klien)</span>
+<span class="px-1.5 py-0.2 rounded-full bg-white/5 text-outline text-[10px] font-mono">3</span>
+</button>
+</div>
+<!-- Search & Filters -->
+<div class="flex items-center gap-2.5">
+<div class="relative w-64">
+<input class="w-full bg-[#13141a] border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-on-surface placeholder:text-outline focus:outline-none focus:border-primary-container transition-all" placeholder="Cari judul proyek, arsitek..." type="text">
+<span class="material-symbols-outlined absolute left-2.5 top-2 text-[15px] text-outline">search</span>
+</div>
+<button class="px-3 py-1.5 rounded-xl bg-[#13141a] border border-white/10 text-outline hover:text-white hover:bg-white/5 transition-colors flex items-center gap-1.5 text-xs font-mono">
+<span class="material-symbols-outlined text-[16px]">sort</span>
+<span class="">Terbaru</span>
+</button>
+</div>
+</div>
+<!-- Main Workspace Section: Projects Grid & Side HUD Panel -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+<!-- Left Column: Project Cards (8 cols) -->
+<div class="lg:col-span-8 space-y-6">
+<!-- Project Card 1: Villa Karang Cantilever (Featured Hero Project) -->
+<article class="group rounded-2xl bg-[#13141a]/80 backdrop-blur-2xl border border-white/10 hover:border-primary-container/40 transition-all duration-300 overflow-hidden shadow-2xl shadow-surface-container-lowest/80">
+<!-- Viewport Image / Thumbnail -->
+<div class="relative w-full h-64 sm:h-72 bg-surface-container-lowest overflow-hidden">
+<img alt="Villa Karang Cantilever 3D Render at dusk" class="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700 ease-out" src="https://lh3.googleusercontent.com/aida/AEtjO1XNB8KpkdhXkWr_Lhzxuj17mc7i0HQRMr_ywjQT4mDh-N3GtvVcTUTp0y6tjGuTwqpHSDSpc-SnHQELnkn5-BLE2Hux-RmcdYSq0osglG32_T0ypxrghiCG3ZfJ49GLPk_38_DOG5errtUTsw_zvyDk5wPP07DbPV0_UK05Ggh6fXsfbV_zBaYU1wG0sBt13pEXK6AbVt_67WeQ4OshMbHIj_UMP7ic028WZrmLQD0ERZ9T7FlFy4kqwHI">
+<!-- Overlay Gradients -->
+<div class="absolute inset-0 bg-gradient-to-t from-[#13141a] via-transparent to-surface-container-lowest/40"></div>
+<!-- Top Badges -->
+<div class="absolute top-4 left-4 flex flex-wrap items-center gap-2">
+<span class="px-2.5 py-1 rounded-md bg-[#0b0c10]/80 backdrop-blur-md border border-white/10 text-primary text-[10px] font-mono uppercase font-semibold flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                Draco 85% Active
+              </span>
+<span class="px-2.5 py-1 rounded-md bg-[#0b0c10]/80 backdrop-blur-md border border-white/10 text-on-surface text-[10px] font-mono">
+                GLB • 18.4 MB
+              </span>
+</div>
+<!-- Hover Quick Floating Actions -->
+<div class="absolute top-4 right-4 flex items-center gap-1.5 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+<button aria-label="Edit project" class="w-8 h-8 rounded-lg bg-[#0b0c10]/80 backdrop-blur-md border border-white/10 text-on-surface hover:text-primary hover:border-primary/40 flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[17px]">edit</span>
+</button>
+<button aria-label="Delete project" class="w-8 h-8 rounded-lg bg-[#0b0c10]/80 backdrop-blur-md border border-white/10 text-on-surface hover:text-error hover:border-error/40 flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[17px]">delete</span>
+</button>
+</div>
+<!-- Spatial Telemetry Overlay Bar (Bottom of image) -->
+<div class="absolute bottom-3 left-4 right-4 flex items-center justify-between text-[10px] font-mono text-outline">
+<span class="bg-[#0b0c10]/80 backdrop-blur-sm px-2 py-0.5 rounded border border-white/5">Fov: 45° • HDR: Sunset Coast</span>
+<span class="bg-[#0b0c10]/80 backdrop-blur-sm px-2 py-0.5 rounded text-primary border border-white/5">3D Spatial Scene</span>
+</div>
+</div>
+<!-- Card Content Body -->
+<div class="p-6 space-y-4">
+<div class="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+<div>
+<div class="flex items-center gap-2">
+<h2 class="text-title-sm font-title-sm text-white font-semibold">Villa Karang Cantilever</h2>
+<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Live Spatial Sync</span>
+</div>
+<p class="text-xs text-outline mt-1 line-clamp-2">
+                  Fasad beton ekspos cantilever di atas tebing laut dengan ambient lighting senja dan simulasi pencahayaan ray-traced.
+                </p>
+</div>
+<div class="shrink-0 text-right font-mono text-[10px] text-outline">
+                Diperbarui 14 mnt lalu
+              </div>
+</div>
+<!-- Revision Gatekeeper Meter & Collaborator Pill -->
+<div class="p-3.5 rounded-xl bg-[#0e0f14]/80 border border-white/5 space-y-2.5">
+<div class="flex items-center justify-between text-xs">
+<div class="flex items-center gap-2">
+<span class="text-on-surface font-medium">Batas Revisi Klien:</span>
+<span class="font-mono text-amber-300 font-semibold">2 / 3 Digunakan</span>
+</div>
+<span class="text-amber-300 flex items-center gap-1 font-mono text-[11px]">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> 1 Revisi Tersisa
+                </span>
+</div>
+<!-- Progress Bar -->
+<div class="h-2 w-full bg-white/5 rounded-full overflow-hidden p-0.5">
+<div class="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full w-[66.6%]"></div>
+</div>
+<!-- Collaborators Micro Bar -->
+<div class="pt-1 flex items-center justify-between text-[11px] text-outline">
+<div class="flex items-center gap-2">
+<div class="flex -space-x-1.5 overflow-hidden">
+<div class="inline-block h-5 w-5 rounded-full ring-2 ring-[#0e0f14] bg-surface-bright text-[9px] text-center leading-5 font-bold text-white">H</div>
+<div class="inline-block h-5 w-5 rounded-full ring-2 ring-[#0e0f14] bg-secondary-container text-secondary text-[9px] text-center leading-5 font-bold">M</div>
+</div>
+<span class="">2 Klien Terverifikasi (Hendra, Bu Maya)</span>
+</div>
+<span class="text-primary font-mono cursor-pointer hover:underline">Log Aktivitas (8)</span>
+</div>
+</div>
+<!-- Card Actions Footer -->
+<div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-white/5">
+<div class="flex items-center gap-2 w-full sm:w-auto">
+<button class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-on-surface text-xs font-medium flex items-center justify-center gap-1.5 transition-colors">
+<span class="material-symbols-outlined text-outline text-[16px]">group_add</span>
+<span class="">Kelola Klien</span>
+</button>
+<button class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-on-surface text-xs font-medium flex items-center justify-center gap-1.5 transition-colors">
+<span class="material-symbols-outlined text-outline text-[16px]">ios_share</span>
+<span class="">Bagikan Link</span>
+</button>
+</div>
+<button class="w-full sm:w-auto px-4 py-2 rounded-lg bg-white text-surface-container-lowest font-medium text-xs hover:bg-primary-fixed hover:text-on-primary-fixed active:scale-[0.98] transition-all flex items-center justify-center gap-1.5">
+<span class="material-symbols-outlined font-bold text-surface-container-lowest text-[17px]" style="font-variation-settings: 'FILL' 1;">view_in_ar</span>
+<span class="">Buka 3D Viewer</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Project Card 2: Pavilion Taman Suropati -->
+<article class="group rounded-2xl bg-[#13141a]/80 backdrop-blur-2xl border border-white/10 hover:border-primary-container/40 transition-all duration-300 overflow-hidden shadow-xl shadow-surface-container-lowest/80">
+<div class="grid grid-cols-1 md:grid-cols-12">
+<!-- Wireframe / Preview Column -->
+<div class="md:col-span-5 relative bg-surface-container-lowest h-48 md:h-auto overflow-hidden flex items-center justify-center border-b md:border-b-0 md:border-r border-white/5">
+<div class="absolute inset-0 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px] opacity-20"></div>
+<div class="relative flex flex-col items-center justify-center p-4 text-center">
+<div class="w-10 h-10 rounded-full bg-surface-container-lowest/80 border border-white/10 flex items-center justify-center text-primary-container mb-2">
+<span class="material-symbols-outlined text-[20px]">view_in_ar</span>
+</div>
+<span class="text-[10px] font-mono text-on-surface bg-surface-container-lowest/80 px-2.5 py-1 rounded border border-white/10">
+                  Draco 12.1 MB
+                </span>
+</div>
+</div>
+<!-- Details Column -->
+<div class="md:col-span-7 p-5 flex flex-col justify-between space-y-4">
+<div>
+<div class="flex items-center justify-between">
+<h3 class="text-title-sm font-title-sm text-white font-semibold">Pavilion Taman Suropati</h3>
+<span class="text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded">
+                    Revisi Terbuka
+                  </span>
+</div>
+<p class="text-xs text-outline mt-1.5 leading-relaxed">
+                  Eksplorasi struktur kisi kayu ulin modular dan sistem ventilasi pasif untuk ruang publik kontemporer.
+                </p>
+</div>
+<!-- Telemetry Metrics -->
+<div class="space-y-1.5 pt-1">
+<div class="flex justify-between text-[10px] font-mono text-outline">
+<span class="">Revisi Klien: 0 / 3</span>
+<span class="text-emerald-400 font-semibold">3 Tersisa</span>
+</div>
+<div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+<div class="h-full bg-emerald-400 rounded-full w-[0%]"></div>
+</div>
+<div class="flex items-center justify-between text-[10px] font-mono text-outline pt-1">
+<span class="">1 Klien Diundang (Pak Bambang)</span>
+<span class="">Diunggah 2 hari lalu</span>
+</div>
+</div>
+<!-- Action Bar -->
+<div class="pt-3 border-t border-white/5 flex items-center justify-between gap-3">
+<button class="text-xs text-outline hover:text-white flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">settings</span>
+<span class="">Konfigurasi</span>
+</button>
+<button class="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white hover:text-surface-container-lowest text-white text-xs font-medium transition-all flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">play_arrow</span>
+<span class="">Buka 3D Viewer</span>
+</button>
+</div>
+</div>
+</div>
+</article>
+<!-- Project Card 3: Invited Collaboration as Client -->
+<article class="group rounded-2xl bg-[#13141a]/60 backdrop-blur-xl border border-secondary/20 hover:border-secondary/40 transition-all p-5 space-y-4">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-secondary/15 border border-secondary/30 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[19px]">apartment</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<h3 class="text-title-sm font-title-sm text-white font-semibold">Atelier Penthouse SCBD</h3>
+<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-secondary/20 text-secondary border border-secondary/30 font-medium">Sebagai Reviewer</span>
+</div>
+<p class="text-xs text-outline mt-0.5">
+                  Diundang oleh: <span class="text-white font-medium">Arsitek Raditya (Studio R+)</span>
+</p>
+</div>
+</div>
+<span class="text-[10px] font-mono text-outline">Status: Accepted</span>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl bg-[#0e0f14] border border-white/5 text-xs">
+<div>
+<span class="text-outline text-[11px] block">Format Model</span>
+<span class="text-white font-mono font-medium text-[11px]">Spatial GLB • 42 MB</span>
+</div>
+<div>
+<span class="text-outline text-[11px] block">Jatah Review Anda</span>
+<span class="text-primary font-mono font-medium text-[11px]">1 / 3 Revisi Diajukan</span>
+</div>
+<div>
+<span class="text-outline text-[11px] block">Deadline Feedback</span>
+<span class="text-amber-300 font-mono font-medium text-[11px]">28 Okt 2025 (3 Hari)</span>
+</div>
+</div>
+<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-1">
+<span class="text-xs text-outline">
+              Terdapat 4 anotasi ruang belum dijawab arsitek.
+            </span>
+<button class="px-3.5 py-1.5 rounded-lg bg-secondary text-surface-container-lowest font-medium text-xs hover:bg-secondary-fixed transition-all flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">rate_review</span>
+<span class="">Buka Viewer &amp; Beri Feedback</span>
+</button>
+</div>
+</article>
+</div>
+<!-- Right Column: Interactive HUD & Queue Panel (4 cols) -->
+<aside class="lg:col-span-4 space-y-5">
+<!-- Interactive Modal Showcase: Kelola Klien Reviewer -->
+<div class="rounded-2xl bg-[#13141a]/90 backdrop-blur-2xl border border-white/10 p-5 space-y-4 shadow-2xl relative">
+<!-- Header -->
+<div class="flex items-start justify-between border-b border-white/5 pb-3.5">
+<div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container text-[19px]">manage_accounts</span>
+<h3 class="text-title-sm font-title-sm text-white font-semibold">Kelola Klien Reviewer</h3>
+</div>
+<p class="text-xs text-outline mt-0.5">
+                Villa Karang Cantilever (Gatekeeper: 3x)
+              </p>
+</div>
+<span class="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded text-outline border border-white/5">
+              HUD-01
+            </span>
+</div>
+<!-- Add Client Form Input -->
+<div class="space-y-2">
+<label class="block text-[10px] font-mono text-outline uppercase tracking-wider">
+              Undang Klien via Email
+            </label>
+<div class="flex gap-2">
+<input class="flex-1 bg-[#0b0c10] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-on-surface placeholder:text-outline focus:outline-none focus:border-primary-container" placeholder="nama.klien@gmail.com" type="email" value="klien.investor@arch.id">
+<button class="px-3 py-1.5 rounded-xl bg-white text-surface-container-lowest font-medium text-xs hover:bg-primary-fixed transition-all shrink-0">
+                Undang
+              </button>
+</div>
+<p class="text-[11px] text-outline leading-tight">
+              Klien akan menerima link WebGL terenkripsi tanpa perlu instalasi software CAD.
+            </p>
+</div>
+<!-- List of Invited Reviewers -->
+<div class="space-y-2">
+<div class="flex items-center justify-between text-[10px] font-mono text-outline">
+<span class="">Kolaborator Terdaftar (2/5)</span>
+<span class="">Hak Akses</span>
+</div>
+<!-- Client Item 1 -->
+<div class="p-2.5 rounded-xl bg-[#0b0c10] border border-white/5 space-y-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold text-[10px]">
+                    HP
+                  </div>
+<div>
+<div class="text-xs text-white font-medium">Bpk. Hendra S.</div>
+<div class="text-[10px] font-mono text-outline">hendra.property@lux.id</div>
+</div>
+</div>
+<span class="px-1.5 py-0.5 rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/30 text-[9px] font-mono">
+                  Accepted
+                </span>
+</div>
+<div class="flex items-center justify-between pt-1 border-t border-white/5 text-[10px] font-mono text-outline">
+<span class="">Menggunakan: <strong class="text-white">2 Revisi</strong></span>
+<button class="text-error hover:underline">Revoke</button>
+</div>
+</div>
+<!-- Client Item 2 -->
+<div class="p-2.5 rounded-xl bg-[#0b0c10] border border-white/5 space-y-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 flex items-center justify-center font-bold text-[10px]">
+                    MY
+                  </div>
+<div>
+<div class="text-xs text-white font-medium">Bu Maya Kartika</div>
+<div class="text-[10px] font-mono text-outline">maya.interior@design.com</div>
+</div>
+</div>
+<span class="px-1.5 py-0.5 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/30 text-[9px] font-mono">
+                  Pending
+                </span>
+</div>
+<div class="flex items-center justify-between pt-1 border-t border-white/5 text-[10px] font-mono text-outline">
+<span class="">Undangan dikirim 4 jam lalu</span>
+<button class="text-primary hover:underline">Resend</button>
+</div>
+</div>
+</div>
+<!-- Revision Protocol Toggle Switch -->
+<div class="p-3 rounded-xl bg-[#0b0c10] border border-white/5 space-y-1.5">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container text-[17px]">lock</span>
+<span class="text-xs text-white font-medium">Hard Lock Revisi 3x</span>
+</div>
+<div class="w-8 h-4 bg-primary-container rounded-full p-0.5 flex items-center justify-end cursor-pointer">
+<div class="w-3 h-3 bg-surface-container-lowest rounded-full shadow-sm"></div>
+</div>
+</div>
+<p class="text-[10px] text-outline leading-tight">
+              Jika aktif, sistem otomatis membekukan input markup klien setelah 3 sesi feedback selesai.
+            </p>
+</div>
+<!-- Bottom Action -->
+<button class="w-full py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-white text-xs border border-white/10 transition-all font-medium">
+            Simpan Konfigurasi Klien
+          </button>
+</div>
+<!-- Secondary HUD Telemetry: Draco Compression Queue -->
+<div class="rounded-2xl bg-[#13141a]/70 backdrop-blur-xl border border-white/5 p-4 space-y-2.5">
+<div class="flex items-center justify-between text-xs">
+<span class="text-white font-medium flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[17px]">memory</span>
+              Draco Compression Queue
+            </span>
+<span class="text-[10px] font-mono text-emerald-400">Idle • 0 jobs</span>
+</div>
+<div class="text-[11px] text-outline leading-relaxed">
+            Semua pipeline konversi mesh IFC ke GLB Draco teroptimasi otomatis di edge worker AETHER Spatial Engine.
+          </div>
+</div>
+</aside>
+</div>
+<!-- Footer within Main Workspace -->
+<footer class="pt-8 pb-4 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-outline">
+<div class="flex items-center gap-3">
+<span class="font-bold text-white tracking-wider">AETHER 3D</span>
+<span class="">•</span>
+<span class="">© 2025 Aether Spatial Technologies Inc. Precision Spatial CAD Engine.</span>
+</div>
+<div class="flex items-center gap-4">
+<a class="hover:text-white transition-colors" href="#">Draco Compression</a>
+<a class="hover:text-white transition-colors" href="#">Client Encryption</a>
+<a class="hover:text-white transition-colors" href="#">Documentation</a>
+<a class="hover:text-white transition-colors" href="#">Privacy</a>
+</div>
+</footer>
+</main>
+</div>
+
+
+</body></html>

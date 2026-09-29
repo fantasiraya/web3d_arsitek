@@ -85,7 +85,7 @@ export function initializeTheme(): void {
 
 const appearance = ref<Appearance>('system');
 
-export function useAppearance(): UseAppearanceReturn {
+export function useAppearance(): UseAppearanceReturn & { isDark: ComputedRef<boolean>; toggleTheme: () => void } {
     onMounted(() => {
         const savedAppearance = localStorage.getItem(
             'appearance',
@@ -104,6 +104,10 @@ export function useAppearance(): UseAppearanceReturn {
         return appearance.value;
     });
 
+    const isDark = computed<boolean>(() => {
+        return resolvedAppearance.value === 'dark';
+    });
+
     function updateAppearance(value: Appearance) {
         appearance.value = value;
 
@@ -116,9 +120,16 @@ export function useAppearance(): UseAppearanceReturn {
         updateTheme(value);
     }
 
+    function toggleTheme() {
+        const newTheme = resolvedAppearance.value === 'dark' ? 'light' : 'dark';
+        updateAppearance(newTheme);
+    }
+
     return {
         appearance,
         resolvedAppearance,
         updateAppearance,
+        isDark,
+        toggleTheme,
     };
 }
