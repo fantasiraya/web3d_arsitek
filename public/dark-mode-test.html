@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dark Mode Test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Dark Mode Debug Tool</h1>
+    
+    <div class="test-section">
+        <h2>1. Check Current State</h2>
+        <button onclick="checkState()">Check State</button>
+        <div id="stateResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Clear localStorage</h2>
+        <button onclick="clearStorage()">Clear localStorage</button>
+        <div id="clearResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Manual Toggle Dark Mode</h2>
+        <button onclick="setDark()">Set Dark</button>
+        <button onclick="setLight()">Set Light</button>
+        <div id="toggleResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Test Navigation</h2>
+        <button onclick="goToDashboard()">Go to Dashboard</button>
+    </div>
+
+    <script>
+        function checkState() {
+            const html = document.documentElement;
+            const hasDarkClass = html.classList.contains('dark');
+            const localStorage = window.localStorage.getItem('appearance');
+            const cookies = document.cookie;
+            
+            const result = `
+HTML has 'dark' class: ${hasDarkClass}
+HTML classes: ${html.className || '(empty)'}
+localStorage 'appearance': ${localStorage || '(not set)'}
+Cookies: ${cookies || '(empty)'}
+System prefers dark: ${window.matchMedia('(prefers-color-scheme: dark)').matches}
+            `.trim();
+            
+            document.getElementById('stateResult').textContent = result;
+        }
+
+        function clearStorage() {
+            localStorage.removeItem('appearance');
+            document.cookie = 'appearance=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+            document.getElementById('clearResult').textContent = '✅ localStorage and cookies cleared!';
+            setTimeout(checkState, 100);
+        }
+
+        function setDark() {
+            localStorage.setItem('appearance', 'dark');
+            document.documentElement.classList.add('dark');
+            document.getElementById('toggleResult').textContent = '🌙 Set to DARK mode';
+            setTimeout(checkState, 100);
+        }
+
+        function setLight() {
+            localStorage.setItem('appearance', 'light');
+            document.documentElement.classList.remove('dark');
+            document.getElementById('toggleResult').textContent = '☀️ Set to LIGHT mode';
+            setTimeout(checkState, 100);
+        }
+
+        function goToDashboard() {
+            window.location.href = 'http://localhost:8000/dashboard';
+        }
+
+        // Auto-check on load
+        window.onload = checkState;
+    </script>
+</body>
+</html>

@@ -32,8 +32,18 @@ import { useAppearance } from '@/composables/useAppearance';
 /* ─────────────────────────────
    DARK MODE
 ───────────────────────────── */
-const { appearance } = useAppearance();
-const isDark = computed(() => appearance.value === 'dark');
+const { resolvedAppearance } = useAppearance();
+const isDark = computed(() => resolvedAppearance.value === 'dark');
+
+// Watch for changes to ensure reactivity
+watch(resolvedAppearance, (newValue) => {
+    console.log('[AppSwissLayout] resolvedAppearance changed to:', newValue);
+}, { immediate: true });
+
+watch(isDark, (newValue) => {
+    console.log('[AppSwissLayout] isDark changed to:', newValue);
+    console.log('[AppSwissLayout] Will apply class:', newValue ? 'theme-dark' : 'theme-light');
+}, { immediate: true });
 
 /* ─────────────────────────────
    STATE

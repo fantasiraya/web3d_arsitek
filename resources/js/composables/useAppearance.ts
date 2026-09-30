@@ -83,24 +83,39 @@ export function initializeTheme(): void {
     mediaQuery()?.addEventListener('change', handleSystemThemeChange);
 }
 
+// Module-scope reactive state — shared across all useAppearance() calls
 const appearance = ref<Appearance>('system');
+
+// Reactive flag that mirrors document.documentElement.classList.has('dark')
+// Updated whenever updateTheme() runs so computed isDark stays in sync
+const _isDarkDOM = ref(false);
+
+/** Patch updateTheme so it also keeps _isDarkDOM in sync */
+const _originalUpdateTheme = updateTheme;
+function _updateThemeReactive(value: Appearance): void {
+    _originalUpdateTheme(value);
+    if (typeof document !== 'undefined') {
+        _isDarkDOM.value = document.documentElement.classList.contains('dark');
+    }
+}
 
 export function useAppearance(): UseAppearanceReturn & { isDark: ComputedRef<boolean>; toggleTheme: () => void } {
     onMounted(() => {
-        const savedAppearance = localStorage.getItem(
-            'appearance',
-        ) as Appearance | null;
+        const savedAppearance = localStorage.getItem('appearance') as Appearance | null;
 
         if (savedAppearance) {
             appearance.value = savedAppearance;
         }
+
+        // Always sync reactive DOM flag on mount
+        _isDarkDOM.value = document.documentElement.classList.contains('dark');
     });
 
     const resolvedAppearance = computed<ResolvedAppearance>(() => {
         if (appearance.value === 'system') {
-            return prefersDark() ? 'dark' : 'light';
+            // Use _isDarkDOM as reactive dependency so computed updates when DOM changes
+            return _isDarkDOM.value ? 'dark' : 'light';
         }
-
         return appearance.value;
     });
 
@@ -110,14 +125,9 @@ export function useAppearance(): UseAppearanceReturn & { isDark: ComputedRef<boo
 
     function updateAppearance(value: Appearance) {
         appearance.value = value;
-
-        // Store in localStorage for client-side persistence...
         localStorage.setItem('appearance', value);
-
-        // Store in cookie for SSR...
         setCookie('appearance', value);
-
-        updateTheme(value);
+        _updateThemeReactive(value);
     }
 
     function toggleTheme() {

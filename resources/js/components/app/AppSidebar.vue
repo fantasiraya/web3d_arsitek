@@ -75,15 +75,15 @@ onUnmounted(() => {
     <!-- PERSISTENT LEFT SIDEBAR -->
     <aside 
         :class="[
-            'fixed inset-y-0 left-0 z-50 flex flex-col bg-[#0d0e13]/90 backdrop-blur-2xl border-r border-white/5 text-on-surface select-none transition-all duration-300 ease-in-out',
+            'fixed inset-y-0 left-0 z-50 flex flex-col bg-white dark:bg-[#0d0e13]/90 backdrop-blur-2xl border-r border-slate-200 dark:border-white/5 text-slate-800 dark:text-on-surface select-none transition-all duration-300 ease-in-out',
             isSidebarOpen ? 'w-64' : (isMobile ? '-translate-x-full w-64' : 'w-16'),
         ]"
     >
         <!-- Brand Logo & Studio Tier -->
-        <div class="h-16 px-5 flex items-center justify-between border-b border-white/5">
+        <div class="h-16 px-5 flex items-center justify-between border-b border-slate-200 dark:border-white/5">
             <Link href="/dashboard" class="flex items-center gap-2.5 min-w-0">
-                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-white to-gray-200 flex items-center justify-center text-surface-container-lowest shadow-[0_0_15px_rgba(255,255,255,0.25)] shrink-0">
-                    <Box class="h-5 w-5 text-[#0d0e13]" :stroke-width="2.5" />
+                <div class="w-8 h-8 rounded-lg bg-slate-900 dark:bg-gradient-to-br dark:from-white dark:to-gray-200 flex items-center justify-center shadow-sm shrink-0">
+                    <Box class="h-5 w-5 text-white dark:text-[#0d0e13]" :stroke-width="2.5" />
                 </div>
                 <Transition
                     enter-active-class="transition-opacity duration-200 delay-100"
@@ -95,10 +95,10 @@ onUnmounted(() => {
                 >
                     <div v-if="isSidebarOpen" class="min-w-0">
                         <div class="flex items-center gap-1.5">
-                            <span class="font-bold tracking-tight text-white text-[15px]">AETHER</span>
-                            <span class="text-[12px] font-mono font-medium text-[#38bdf8]">3D</span>
+                            <span class="font-bold tracking-tight text-slate-900 dark:text-white text-[15px]">AETHER</span>
+                            <span class="text-[12px] font-mono font-semibold text-sky-600 dark:text-[#38bdf8]">3D</span>
                         </div>
-                        <span class="text-[9px] font-mono uppercase tracking-widest text-[#6b7280] block -mt-0.5">Spatial CAD</span>
+                        <span class="text-[9px] font-mono uppercase tracking-widest text-slate-400 dark:text-[#6b7280] block -mt-0.5">Spatial CAD</span>
                     </div>
                 </Transition>
             </Link>
@@ -110,7 +110,7 @@ onUnmounted(() => {
                 leave-from-class="opacity-100"
                 leave-to-class="opacity-0"
             >
-                <span v-if="isSidebarOpen" class="px-1.5 py-0.5 rounded text-[10px] font-mono text-[#38bdf8] bg-[#38bdf8]/10 border border-[#38bdf8]/20 font-medium shrink-0">
+                <span v-if="isSidebarOpen" class="px-1.5 py-0.5 rounded text-[10px] font-mono text-sky-700 dark:text-[#38bdf8] bg-sky-50 dark:bg-[#38bdf8]/10 border border-sky-200 dark:border-[#38bdf8]/20 font-semibold shrink-0">
                     PRO
                 </span>
             </Transition>
@@ -122,25 +122,25 @@ onUnmounted(() => {
             <div class="space-y-1">
                 <div 
                     v-if="isSidebarOpen" 
-                    class="px-3 pb-1.5 text-[10px] font-mono uppercase tracking-wider text-[#6b7280]/80 transition-opacity duration-200"
+                    class="px-3 pb-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-400 dark:text-[#6b7280]/80 font-semibold transition-opacity duration-200"
                 >
                     Menu Utama
                 </div>
                 
-                <!-- Dashboard (Active) -->
+                <!-- Dashboard -->
                 <Link 
                     href="/dashboard"
                     :class="[
                         'group relative flex items-center gap-3 px-3 py-2 rounded-xl font-medium transition-all',
                         isActiveRoute('dashboard')
-                            ? 'bg-white/[0.06] text-white shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] border border-white/10'
-                            : 'text-[#9ca3af] hover:text-white hover:bg-white/[0.04]',
+                            ? 'bg-slate-100 dark:bg-white/[0.06] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 shadow-sm'
+                            : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
                         !isSidebarOpen && 'justify-center'
                     ]"
                     :title="!isSidebarOpen ? 'Dashboard' : ''"
                 >
-                    <div v-if="isActiveRoute('dashboard')" class="absolute left-0 top-2 bottom-2 w-1 bg-[#38bdf8] rounded-r-full shadow-[0_0_8px_rgba(56,189,248,0.8)]"></div>
-                    <LayoutDashboard class="h-[19px] w-[19px] shrink-0" :class="isActiveRoute('dashboard') ? 'text-[#38bdf8]' : 'text-[#6b7280] group-hover:text-white'" :stroke-width="2" />
+                    <div v-if="isActiveRoute('dashboard')" class="absolute left-0 top-2 bottom-2 w-1 bg-sky-500 dark:bg-[#38bdf8] rounded-r-full"></div>
+                    <LayoutDashboard class="h-[19px] w-[19px] shrink-0" :class="isActiveRoute('dashboard') ? 'text-sky-600 dark:text-[#38bdf8]' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'" :stroke-width="2" />
                     <Transition
                         enter-active-class="transition-opacity duration-200 delay-75"
                         enter-from-class="opacity-0"
@@ -157,13 +157,16 @@ onUnmounted(() => {
                 <Link 
                     href="/projects"
                     :class="[
-                        'group flex items-center justify-between px-3 py-2 rounded-xl text-[#9ca3af] hover:text-white hover:bg-white/[0.04] transition-all',
+                        'group flex items-center justify-between px-3 py-2 rounded-xl transition-all',
+                        isActiveRoute('projects')
+                            ? 'bg-slate-100 dark:bg-white/[0.06] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 shadow-sm'
+                            : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
                         !isSidebarOpen && 'justify-center'
                     ]"
                     :title="!isSidebarOpen ? 'Proyek 3D' : ''"
                 >
                     <div class="flex items-center gap-3 min-w-0">
-                        <Box class="h-[19px] w-[19px] text-[#6b7280] group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
+                        <Box class="h-[19px] w-[19px] text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
                         <Transition
                             enter-active-class="transition-opacity duration-200 delay-75"
                             enter-from-class="opacity-0"
@@ -172,7 +175,7 @@ onUnmounted(() => {
                             leave-from-class="opacity-100"
                             leave-to-class="opacity-0"
                         >
-                            <span v-if="isSidebarOpen" class="text-[13px] tracking-tight truncate">Proyek 3D</span>
+                            <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">Proyek 3D</span>
                         </Transition>
                     </div>
                     <Transition
@@ -183,23 +186,23 @@ onUnmounted(() => {
                         leave-from-class="opacity-100"
                         leave-to-class="opacity-0"
                     >
-                        <span v-if="isSidebarOpen && stats?.owned_count" class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/[0.06] text-white border border-white/5 shrink-0">
+                        <span v-if="isSidebarOpen && stats?.owned_count" class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-white border border-slate-200 dark:border-white/5 shrink-0">
                             {{ stats.owned_count }}
                         </span>
                     </Transition>
                 </Link>
 
-                <!-- Spatial Review / Anotasi -->
+                <!-- Spatial Review -->
                 <a 
                     href="#" 
                     :class="[
-                        'group flex items-center justify-between px-3 py-2 rounded-xl text-[#9ca3af] hover:text-white hover:bg-white/[0.04] transition-all',
+                        'group flex items-center justify-between px-3 py-2 rounded-xl text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all',
                         !isSidebarOpen && 'justify-center'
                     ]"
                     :title="!isSidebarOpen ? 'Spatial Review' : ''"
                 >
                     <div class="flex items-center gap-3 min-w-0">
-                        <MessageSquare class="h-[19px] w-[19px] text-[#6b7280] group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
+                        <MessageSquare class="h-[19px] w-[19px] text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
                         <Transition
                             enter-active-class="transition-opacity duration-200 delay-75"
                             enter-from-class="opacity-0"
@@ -208,22 +211,22 @@ onUnmounted(() => {
                             leave-from-class="opacity-100"
                             leave-to-class="opacity-0"
                         >
-                            <span v-if="isSidebarOpen" class="text-[13px] tracking-tight">Spatial Review</span>
+                            <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">Spatial Review</span>
                         </Transition>
                     </div>
-                    <span v-if="isSidebarOpen" class="w-1.5 h-1.5 rounded-full bg-[#c0c1ff] shrink-0"></span>
+                    <span v-if="isSidebarOpen" class="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"></span>
                 </a>
 
-                <!-- Kompresi Draco & Pipeline -->
+                <!-- Pipeline Draco -->
                 <a 
                     href="#" 
                     :class="[
-                        'group flex items-center gap-3 px-3 py-2 rounded-xl text-[#9ca3af] hover:text-white hover:bg-white/[0.04] transition-all',
+                        'group flex items-center gap-3 px-3 py-2 rounded-xl text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all',
                         !isSidebarOpen && 'justify-center'
                     ]"
                     :title="!isSidebarOpen ? 'Pipeline Draco' : ''"
                 >
-                    <Zap class="h-[19px] w-[19px] text-[#6b7280] group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
+                    <Zap class="h-[19px] w-[19px] text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
                     <Transition
                         enter-active-class="transition-opacity duration-200 delay-75"
                         enter-from-class="opacity-0"
@@ -232,21 +235,21 @@ onUnmounted(() => {
                         leave-from-class="opacity-100"
                         leave-to-class="opacity-0"
                     >
-                        <span v-if="isSidebarOpen" class="text-[13px] tracking-tight">Pipeline Draco</span>
+                        <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">Pipeline Draco</span>
                     </Transition>
                 </a>
 
-                <!-- Tim & Klien (Reviewer) -->
+                <!-- Tim & Klien -->
                 <a 
                     href="#" 
                     :class="[
-                        'group flex items-center justify-between px-3 py-2 rounded-xl text-[#9ca3af] hover:text-white hover:bg-white/[0.04] transition-all',
+                        'group flex items-center justify-between px-3 py-2 rounded-xl text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all',
                         !isSidebarOpen && 'justify-center'
                     ]"
                     :title="!isSidebarOpen ? 'Tim & Klien' : ''"
                 >
                     <div class="flex items-center gap-3 min-w-0">
-                        <Users class="h-[19px] w-[19px] text-[#6b7280] group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
+                        <Users class="h-[19px] w-[19px] text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
                         <Transition
                             enter-active-class="transition-opacity duration-200 delay-75"
                             enter-from-class="opacity-0"
@@ -255,7 +258,7 @@ onUnmounted(() => {
                             leave-from-class="opacity-100"
                             leave-to-class="opacity-0"
                         >
-                            <span v-if="isSidebarOpen" class="text-[13px] tracking-tight">Tim & Klien</span>
+                            <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">Tim & Klien</span>
                         </Transition>
                     </div>
                     <Transition
@@ -266,33 +269,31 @@ onUnmounted(() => {
                         leave-from-class="opacity-100"
                         leave-to-class="opacity-0"
                     >
-                        <span v-if="isSidebarOpen" class="text-[10px] font-mono text-amber-300 bg-amber-400/10 px-1 rounded border border-amber-400/20 shrink-0">1 Invite</span>
+                        <span v-if="isSidebarOpen" class="text-[10px] font-mono text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-400/20 shrink-0 font-semibold">1 Invite</span>
                     </Transition>
                 </a>
             </div>
 
-            <!-- Management Group -->
+            <!-- Konfigurasi Group -->
             <div v-if="isSidebarOpen" class="space-y-1">
-                <div class="px-3 pb-1.5 text-[10px] font-mono uppercase tracking-wider text-[#6b7280]/80">Konfigurasi</div>
+                <div class="px-3 pb-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-400 dark:text-[#6b7280]/80 font-semibold">Konfigurasi</div>
                 
-                <!-- Tagihan & Kuota -->
-                <a href="#" class="group flex items-center gap-3 px-3 py-2 rounded-xl text-[#9ca3af] hover:text-white hover:bg-white/[0.04] transition-all">
-                    <CreditCard class="h-[19px] w-[19px] text-[#6b7280] group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
-                    <span class="text-[13px] tracking-tight">Tagihan & Kuota</span>
+                <a href="#" class="group flex items-center gap-3 px-3 py-2 rounded-xl text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all">
+                    <CreditCard class="h-[19px] w-[19px] text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
+                    <span class="text-[13px] tracking-tight font-medium">Tagihan & Kuota</span>
                 </a>
 
-                <!-- Pengaturan -->
-                <a href="#" class="group flex items-center gap-3 px-3 py-2 rounded-xl text-[#9ca3af] hover:text-white hover:bg-white/[0.04] transition-all">
-                    <Settings class="h-[19px] w-[19px] text-[#6b7280] group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
-                    <span class="text-[13px] tracking-tight">Pengaturan</span>
+                <a href="#" class="group flex items-center gap-3 px-3 py-2 rounded-xl text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all">
+                    <Settings class="h-[19px] w-[19px] text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
+                    <span class="text-[13px] tracking-tight font-medium">Pengaturan</span>
                 </a>
             </div>
 
-            <!-- Quick Utilities -->
+            <!-- Support Group -->
             <div v-if="isSidebarOpen" class="space-y-1">
-                <div class="px-3 pb-1.5 text-[10px] font-mono uppercase tracking-wider text-[#6b7280]/80">Support</div>
+                <div class="px-3 pb-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-400 dark:text-[#6b7280]/80 font-semibold">Support</div>
                 
-                <a href="#" class="group flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-[#6b7280] hover:text-[#f3f4f6] transition-colors">
+                <a href="#" class="group flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-slate-400 dark:text-[#6b7280] hover:text-slate-700 dark:hover:text-[#f3f4f6] transition-colors">
                     <span class="flex items-center gap-2">
                         <BookOpen class="h-[16px] w-[16px] shrink-0" :stroke-width="2" />
                         <span>Dokumentasi API</span>
@@ -300,18 +301,18 @@ onUnmounted(() => {
                     <ChevronRight class="h-[14px] w-[14px] shrink-0" :stroke-width="2" />
                 </a>
 
-                <a href="#" class="group flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-[#6b7280] hover:text-[#f3f4f6] transition-colors">
+                <a href="#" class="group flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-slate-400 dark:text-[#6b7280] hover:text-slate-700 dark:hover:text-[#f3f4f6] transition-colors">
                     <span class="flex items-center gap-2">
-                        <Server class="h-[16px] w-[16px] text-emerald-400 shrink-0" :stroke-width="2" />
+                        <Server class="h-[16px] w-[16px] text-emerald-500 dark:text-emerald-400 shrink-0" :stroke-width="2" />
                         <span>Status Engine</span>
                     </span>
-                    <span class="text-[10px] font-mono text-emerald-400">Operational</span>
+                    <span class="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">Operational</span>
                 </a>
             </div>
         </div>
 
         <!-- Bottom Section: Storage & User Pill -->
-        <div class="p-3 border-t border-white/5 space-y-3 bg-[#0a0b0e]/70">
+        <div class="p-3 border-t border-slate-200 dark:border-white/5 space-y-3 bg-slate-50 dark:bg-[#0a0b0e]/70">
             <!-- Storage & Quota Widget -->
             <Transition
                 enter-active-class="transition-opacity duration-200 delay-100"
@@ -321,17 +322,17 @@ onUnmounted(() => {
                 leave-from-class="opacity-100"
                 leave-to-class="opacity-0"
             >
-                <div v-if="isSidebarOpen" class="p-3 rounded-xl bg-[#13141a]/70 border border-white/5 space-y-2">
+                <div v-if="isSidebarOpen" class="p-3 rounded-xl bg-white dark:bg-[#13141a]/70 border border-slate-200 dark:border-white/5 space-y-2">
                     <div class="flex items-center justify-between text-xs">
-                        <span class="text-[#9ca3af] font-medium">Draco Storage</span>
-                        <span class="font-mono text-[#38bdf8] text-[11px]">30.5 / 100 MB</span>
+                        <span class="text-slate-500 dark:text-[#9ca3af] font-medium">Draco Storage</span>
+                        <span class="font-mono text-sky-600 dark:text-[#38bdf8] text-[11px] font-semibold">30.5 / 100 MB</span>
                     </div>
-                    <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                        <div class="h-full bg-gradient-to-r from-[#38bdf8] to-[#8ed5ff] rounded-full w-[30.5%]"></div>
+                    <div class="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-sky-500 dark:from-[#38bdf8] to-sky-300 dark:to-[#8ed5ff] rounded-full w-[30.5%]"></div>
                     </div>
-                    <div class="flex items-center justify-between text-[10px] font-mono text-[#6b7280]">
+                    <div class="flex items-center justify-between text-[10px] font-mono text-slate-400 dark:text-[#6b7280]">
                         <span>Proyek: {{ stats?.owned_count || 0 }} / 20 kuota</span>
-                        <span class="text-[#38bdf8] hover:underline cursor-pointer">Upgrade</span>
+                        <span class="text-sky-600 dark:text-[#38bdf8] hover:underline cursor-pointer font-semibold">Upgrade</span>
                     </div>
                 </div>
             </Transition>
@@ -341,17 +342,16 @@ onUnmounted(() => {
                 <div 
                     @click="showUserDropdown = !showUserDropdown"
                     :class="[
-                        'flex items-center p-2.5 rounded-xl bg-[#13141a]/50 hover:bg-white/[0.04] border border-white/5 transition-colors cursor-pointer group',
+                        'flex items-center p-2.5 rounded-xl bg-white dark:bg-[#13141a]/50 hover:bg-slate-100 dark:hover:bg-white/[0.04] border border-slate-200 dark:border-white/5 transition-colors cursor-pointer group',
                         isSidebarOpen ? 'justify-between' : 'justify-center'
                     ]"
                 >
                     <div class="flex items-center gap-2.5 overflow-hidden min-w-0">
                         <div class="relative shrink-0">
-                            <!-- Avatar dengan ukuran sama seperti icon menu lainnya -->
-                            <div class="w-[15px] h-[15px] rounded-full bg-gradient-to-tr from-[#2e303d] to-[#323442] border border-white/10 flex items-center justify-center text-white text-[10px] font-semibold">
+                            <div class="w-7 h-7 rounded-full bg-slate-200 dark:bg-gradient-to-tr dark:from-[#2e303d] dark:to-[#323442] border border-slate-300 dark:border-white/10 flex items-center justify-center text-slate-700 dark:text-white text-[10px] font-semibold">
                                 {{ user?.name?.charAt(0).toUpperCase() || 'U' }}
                             </div>
-                            <span class="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-400 border border-[#0b0c10] rounded-full"></span>
+                            <span class="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-500 border border-white dark:border-[#0b0c10] rounded-full"></span>
                         </div>
                         <Transition
                             enter-active-class="transition-opacity duration-200 delay-75"
@@ -362,9 +362,9 @@ onUnmounted(() => {
                             leave-to-class="opacity-0"
                         >
                             <div v-if="isSidebarOpen" class="truncate min-w-0 flex-1">
-                                <div class="text-xs font-medium text-white truncate">{{ user?.name || 'User' }}</div>
+                                <div class="text-xs font-semibold text-slate-800 dark:text-white truncate">{{ user?.name || 'User' }}</div>
                                 <div class="flex items-center gap-1">
-                                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30">PRO TIER</span>
+                                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-400/20 text-amber-600 dark:text-amber-300 border border-amber-200 dark:border-amber-400/30">PRO TIER</span>
                                 </div>
                             </div>
                         </Transition>
@@ -377,7 +377,7 @@ onUnmounted(() => {
                         leave-from-class="opacity-100"
                         leave-to-class="opacity-0"
                     >
-                        <div v-if="isSidebarOpen" class="text-[#6b7280] group-hover:text-white transition-colors shrink-0">
+                        <div v-if="isSidebarOpen" class="text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-colors shrink-0">
                             <MoreVertical class="h-4 w-4" :stroke-width="2" />
                         </div>
                     </Transition>
@@ -396,29 +396,29 @@ onUnmounted(() => {
                         v-if="showUserDropdown"
                         @click.stop
                         :class="[
-                            'absolute bottom-full mb-2 bg-[#13141a]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden z-[60]',
+                            'absolute bottom-full mb-2 bg-white dark:bg-[#13141a]/95 backdrop-blur-2xl border border-slate-200 dark:border-white/10 rounded-2xl shadow-xl dark:shadow-2xl shadow-slate-200/80 dark:shadow-black/50 overflow-hidden z-[60]',
                             isSidebarOpen ? 'left-0 right-0' : 'left-0 w-64'
                         ]"
                     >
                         <!-- User Info Header -->
-                        <div class="p-4 border-b border-white/5 bg-gradient-to-br from-[#38bdf8]/10 to-transparent">
+                        <div class="p-4 border-b border-slate-100 dark:border-white/5 bg-gradient-to-br from-sky-50 dark:from-[#38bdf8]/10 to-transparent">
                             <div class="flex items-center gap-3">
                                 <div class="relative">
-                                    <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-[#2e303d] to-[#323442] border border-white/20 flex items-center justify-center text-white text-lg font-bold shadow-lg">
+                                    <div class="w-12 h-12 rounded-full bg-slate-100 dark:bg-gradient-to-tr dark:from-[#2e303d] dark:to-[#323442] border border-slate-200 dark:border-white/20 flex items-center justify-center text-slate-700 dark:text-white text-lg font-bold shadow-sm">
                                         {{ user?.name?.charAt(0).toUpperCase() || 'U' }}
                                     </div>
-                                    <span class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-400 border-2 border-[#13141a] rounded-full"></span>
+                                    <span class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-400 border-2 border-white dark:border-[#13141a] rounded-full"></span>
                                 </div>
                                 <div class="flex-1 min-w-0">
-                                    <div class="text-sm font-semibold text-white truncate">{{ user?.name || 'User' }}</div>
-                                    <div class="text-xs text-[#9ca3af] truncate">{{ user?.email || 'user@example.com' }}</div>
+                                    <div class="text-sm font-semibold text-slate-900 dark:text-white truncate">{{ user?.name || 'User' }}</div>
+                                    <div class="text-xs text-slate-500 dark:text-[#9ca3af] truncate">{{ user?.email || 'user@example.com' }}</div>
                                     <div class="mt-1">
                                         <span 
                                             :class="[
                                                 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium',
                                                 user?.is_pro 
-                                                    ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' 
-                                                    : 'bg-white/5 text-[#9ca3af] border border-white/10'
+                                                    ? 'bg-amber-50 dark:bg-amber-400/20 text-amber-600 dark:text-amber-300 border border-amber-200 dark:border-amber-400/30' 
+                                                    : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-[#9ca3af] border border-slate-200 dark:border-white/10'
                                             ]"
                                         >
                                             {{ user?.is_pro ? '⭐ PRO TIER' : 'FREE TIER' }}
@@ -432,25 +432,25 @@ onUnmounted(() => {
                         <div class="p-2">
                             <Link 
                                 href="/profile"
-                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[#f3f4f6] hover:bg-white/5 transition-all text-sm group"
+                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 dark:text-[#f3f4f6] hover:bg-slate-50 dark:hover:bg-white/5 transition-all text-sm group"
                             >
-                                <User class="h-4 w-4 text-[#6b7280] group-hover:text-[#38bdf8] transition-colors" :stroke-width="2" />
+                                <User class="h-4 w-4 text-slate-400 dark:text-[#6b7280] group-hover:text-sky-600 dark:group-hover:text-[#38bdf8] transition-colors" :stroke-width="2" />
                                 <span>Profil Saya</span>
                             </Link>
 
                             <Link 
                                 href="/settings"
-                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[#f3f4f6] hover:bg-white/5 transition-all text-sm group"
+                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 dark:text-[#f3f4f6] hover:bg-slate-50 dark:hover:bg-white/5 transition-all text-sm group"
                             >
-                                <Settings class="h-4 w-4 text-[#6b7280] group-hover:text-[#38bdf8] transition-colors" :stroke-width="2" />
+                                <Settings class="h-4 w-4 text-slate-400 dark:text-[#6b7280] group-hover:text-sky-600 dark:group-hover:text-[#38bdf8] transition-colors" :stroke-width="2" />
                                 <span>Pengaturan</span>
                             </Link>
 
-                            <div class="my-2 border-t border-white/5"></div>
+                            <div class="my-2 border-t border-slate-100 dark:border-white/5"></div>
 
                             <button
                                 @click="logout"
-                                class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-rose-400 hover:bg-rose-500/10 transition-all text-sm group"
+                                class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all text-sm group"
                             >
                                 <LogOut class="h-4 w-4 group-hover:translate-x-0.5 transition-transform" :stroke-width="2" />
                                 <span>Keluar</span>
@@ -458,10 +458,10 @@ onUnmounted(() => {
                         </div>
 
                         <!-- Footer Info -->
-                        <div class="px-4 py-3 bg-[#0a0b0e]/50 border-t border-white/5">
+                        <div class="px-4 py-3 bg-slate-50 dark:bg-[#0a0b0e]/50 border-t border-slate-100 dark:border-white/5">
                             <div class="flex items-center justify-between text-[10px] font-mono">
-                                <span class="text-[#6b7280]">Subscription Status</span>
-                                <span class="text-[#38bdf8] font-semibold">{{ user?.subscription_status?.toUpperCase() || 'FREE' }}</span>
+                                <span class="text-slate-400 dark:text-[#6b7280]">Subscription Status</span>
+                                <span class="text-sky-600 dark:text-[#38bdf8] font-semibold">{{ user?.subscription_status?.toUpperCase() || 'FREE' }}</span>
                             </div>
                         </div>
                     </div>
@@ -477,10 +477,16 @@ onUnmounted(() => {
     height: 4px;
 }
 .custom-scroll::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.1);
     border-radius: 9999px;
 }
 .custom-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.18);
+}
+:is(.dark *) .custom-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+}
+:is(.dark *) .custom-scroll::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.16);
 }
 </style>
