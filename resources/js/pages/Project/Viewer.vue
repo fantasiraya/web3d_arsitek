@@ -181,7 +181,7 @@
                         : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40'"
                 >
                     <Plus class="h-3.5 w-3.5" />
-                    <span>{{ interactionMode === 'pin' ? 'Klik di Model!' : '+ Tambah Pin' }}</span>
+                    <span>{{ interactionMode === 'pin' ? 'Klik di Model!' : 'Tambah Pin' }}</span>
                 </button>
 
                 <!-- Toggle Annotations -->

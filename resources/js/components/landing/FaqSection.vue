@@ -33,7 +33,7 @@ const faqs = [
 </script>
 
 <template>
-    <section class="relative py-28 sm:py-36 bg-[#07080b] border-t border-white/10">
+    <section class="relative bg-[#07080b] border-t border-white/10">
         <!-- Ambient Glow -->
         <div class="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[500px] w-full max-w-4xl rounded-full bg-indigo-600/5 blur-[160px]"></div>
 

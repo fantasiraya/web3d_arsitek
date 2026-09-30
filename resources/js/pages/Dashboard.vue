@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
     AlertTriangle,
@@ -40,6 +40,7 @@ import { dashboard } from '@/routes';
 import AppSidebar from '@/components/app/AppSidebar.vue';
 import AppHeader from '@/components/app/AppHeader.vue';
 import { useSidebar } from '@/composables/useSidebar';
+import { echo } from '@/lib/echo';
 
 interface ProjectClientItem {
     id: string;
@@ -107,13 +108,86 @@ const props = defineProps<{
 const page = usePage();
 const flashSuccess = computed(() => (page.props as any).flash?.success);
 
+// ── Local copy of ownedProjects agar bisa di-mutate realtime ──────────────
+// Diinisialisasi dari props, lalu diupdate via Reverb tanpa full reload
+const localOwnedProjects = ref<OwnedProject[]>([]);
+
+// ── Realtime: update status klien saat event ClientStatusUpdated diterima ──
+function handleClientStatusUpdated(payload: {
+    project_id: string;
+    client_id: string;
+    email: string;
+    status: string;
+    accepted_at: string | null;
+}) {
+    // Update di localOwnedProjects
+    const project = localOwnedProjects.value.find(p => p.id === payload.project_id);
+    if (project) {
+        const client = project.invited_clients.find(c => c.id === payload.client_id);
+        if (client) {
+            client.status = payload.status as 'pending' | 'accepted' | 'revoked';
+            client.accepted_at = payload.accepted_at;
+        }
+    }
+
+    // Juga update activeProjectForClients jika modal sedang terbuka untuk project itu
+    if (activeProjectForClients.value?.id === payload.project_id) {
+        const client = activeProjectForClients.value.invited_clients.find(c => c.id === payload.client_id);
+        if (client) {
+            client.status = payload.status as 'pending' | 'accepted' | 'revoked';
+            client.accepted_at = payload.accepted_at;
+        }
+    }
+}
+
+onMounted(() => {
+    // Sync local copy dari props awal
+    localOwnedProjects.value = [...(props.ownedProjects ?? [])];
+
+    // Subscribe ke private channel user (arsitek)
+    const userId = (page.props.auth as any)?.user?.id;
+    if (userId) {
+        echo.private(`App.Models.User.${userId}`)
+            .listen('.client.status.updated', handleClientStatusUpdated);
+    }
+});
+
+onBeforeUnmount(() => {
+    const userId = (page.props.auth as any)?.user?.id;
+    if (userId) {
+        echo.leave(`App.Models.User.${userId}`);
+    }
+});
+
+// Sync local copy saat Inertia props diperbarui (invite/revoke/page reload)
+watch(() => props.ownedProjects, (updated) => {
+    if (!updated) return;
+    // Merge: pertahankan status realtime yang sudah diupdate, update sisanya dari props
+    localOwnedProjects.value = updated.map(proj => {
+        const existing = localOwnedProjects.value.find(p => p.id === proj.id);
+        if (!existing) return proj;
+        // Gabungkan: clients dari props tapi status bisa sudah diupdate realtime
+        return {
+            ...proj,
+            invited_clients: proj.invited_clients.map(c => {
+                const existingClient = existing.invited_clients.find(ec => ec.id === c.id);
+                // Pakai status realtime jika sudah accepted, karena props mungkin belum refresh
+                if (existingClient && existingClient.status === 'accepted' && c.status === 'pending') {
+                    return { ...c, status: 'accepted', accepted_at: existingClient.accepted_at };
+                }
+                return c;
+            }),
+        };
+    });
+}, { deep: true });
+
 // Active Tab: 'architect' or 'client'
 const activeTab = ref<'architect' | 'client'>('architect');
 const searchQuery = ref('');
 
 // Filtered lists
 const filteredOwnedProjects = computed(() => {
-    const list = props.ownedProjects ?? [];
+    const list = localOwnedProjects.value;
     if (!searchQuery.value.trim()) return list;
     const query = searchQuery.value.toLowerCase();
     return list.filter(
@@ -280,7 +354,9 @@ const inviteForm = useForm({
 });
 
 function openClientModal(project: OwnedProject) {
-    activeProjectForClients.value = project;
+    // Pakai dari localOwnedProjects agar status realtime sudah terupdate
+    const localProject = localOwnedProjects.value.find(p => p.id === project.id) ?? project;
+    activeProjectForClients.value = localProject;
     inviteForm.reset();
     isClientModalOpen.value = true;
 }
@@ -291,8 +367,9 @@ function submitInviteClient() {
         preserveScroll: true,
         onSuccess: () => {
             inviteForm.reset();
-            // Refresh local reference from updated props
-            const updated = props.ownedProjects?.find((p) => p.id === activeProjectForClients.value?.id);
+            // Refresh dari localOwnedProjects dulu, fallback ke props
+            const updated = localOwnedProjects.value.find((p) => p.id === activeProjectForClients.value?.id)
+                ?? props.ownedProjects?.find((p) => p.id === activeProjectForClients.value?.id);
             if (updated) {
                 activeProjectForClients.value = updated;
             }
@@ -307,7 +384,8 @@ function revokeClient(client: ProjectClientItem) {
     router.delete(`/projects/${activeProjectForClients.value.id}/clients/${client.id}`, {
         preserveScroll: true,
         onSuccess: () => {
-            const updated = props.ownedProjects?.find((p) => p.id === activeProjectForClients.value?.id);
+            const updated = localOwnedProjects.value.find((p) => p.id === activeProjectForClients.value?.id)
+                ?? props.ownedProjects?.find((p) => p.id === activeProjectForClients.value?.id);
             if (updated) {
                 activeProjectForClients.value = updated;
             }
@@ -539,7 +617,7 @@ const { isSidebarOpen, isMobile } = useSidebar();
                                         : 'bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-neutral-300',
                                 ]"
                             >
-                                {{ ownedProjects?.length ?? 0 }}
+                                {{ localOwnedProjects.length }}
                             </span>
                         </button>
 
@@ -820,13 +898,13 @@ const { isSidebarOpen, isMobile } = useSidebar();
                                         class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all duration-300"
                                         size="sm"
                                     >
-                                        <CheckCircle2 class="mr-1.5 h-3.5 w-3.5" /> Terima Undangan & Buka Viewer
+                                        <CheckCircle2 class="mr-1.5 h-3.5 w-3.5" /> Terima Undangan & Buka
                                     </Button>
                                 </div>
                                 <div v-else>
                                     <Link :href="`/projects/${project.id}/viewer`">
                                         <Button class="w-full text-xs font-semibold bg-blue-500 hover:bg-blue-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300" size="sm">
-                                            <Box class="mr-1.5 h-3.5 w-3.5" /> Buka 3D Viewer & Beri Feedback
+                                            <Box class="mr-1.5 h-3.5 w-3.5" /> Buka & Beri Feedback
                                         </Button>
                                     </Link>
                                 </div>
@@ -1133,15 +1211,15 @@ const { isSidebarOpen, isMobile } = useSidebar();
                                     <div class="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
                                         <Badge
                                             v-if="client.status === 'accepted'"
-                                            class="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] py-0"
+                                            class="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] py-0 transition-all duration-500"
                                         >
-                                            Accepted
+                                            ✓ Accepted
                                         </Badge>
                                         <Badge
                                             v-else
-                                            class="bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] py-0"
+                                            class="bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] py-0 animate-pulse"
                                         >
-                                            Pending
+                                            ⏳ Pending
                                         </Badge>
                                         <span>{{ client.invited_at }}</span>
                                     </div>

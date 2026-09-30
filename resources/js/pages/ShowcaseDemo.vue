@@ -655,7 +655,7 @@ onBeforeUnmount(() => {
                     :class="interactionMode === 'pin' ? 'bg-emerald-500 text-black ring-2 ring-emerald-300' : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40'"
                 >
                     <Plus class="h-3.5 w-3.5" />
-                    <span>{{ interactionMode === 'pin' ? 'Klik di Mana Saja!' : '+ Tambah Pin' }}</span>
+                    <span>{{ interactionMode === 'pin' ? 'Klik di Mana Saja!' : 'Tambah Pin' }}</span>
                 </button>
                 <button type="button" @click="showAnnotations = !showAnnotations" class="rounded-full p-2 text-neutral-300 hover:bg-white/10 hover:text-white transition-colors">
                     <Eye class="h-4 w-4" :class="showAnnotations ? 'text-indigo-400' : 'text-neutral-500'" />

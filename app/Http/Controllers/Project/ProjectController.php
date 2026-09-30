@@ -9,6 +9,7 @@ use App\Domains\Project\Actions\RevokeClientAccessAction;
 use App\Domains\Project\Actions\UploadProjectFileAction;
 use App\Domains\Project\Models\Project;
 use App\Domains\Project\Models\ProjectClient;
+use App\Events\ClientStatusUpdated;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -189,6 +190,12 @@ class ProjectController extends Controller
             'status' => ProjectClient::STATUS_ACCEPTED,
             'accepted_at' => now(),
         ]);
+
+        // Broadcast realtime ke arsitek pemilik project
+        broadcast(new ClientStatusUpdated(
+            $invitation->fresh(),
+            $project->user_id,
+        ));
 
         return redirect()->route('projects.viewer', $project->id)
             ->with('success', 'Undangan diterima! Anda sekarang dapat meninjau dan memberi anotasi pada proyek ini.');

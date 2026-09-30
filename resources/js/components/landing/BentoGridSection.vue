@@ -3,7 +3,7 @@ import { ShieldCheck, Users, Zap, Sliders, Cpu, Radio, Sparkles, Lock, ArrowUpRi
 </script>
 
 <template>
-    <section id="features" class="relative py-28 sm:py-36 bg-[#050608] text-white">
+    <section id="features" class="relative py-20 sm:py-24 bg-[#050608] text-white">
         <!-- Ambient Background Glow -->
         <div class="pointer-events-none absolute bottom-1/4 left-1/2 -translate-x-1/2 h-96 w-full max-w-5xl bg-blue-600/5 blur-[160px]"></div>
 
@@ -20,9 +20,6 @@ import { ShieldCheck, Users, Zap, Sliders, Cpu, Radio, Sparkles, Lock, ArrowUpRi
                         Direkayasa untuk Keamanan.
                     </span>
                 </h2>
-                <p class="mt-4 text-sm sm:text-base text-neutral-400 max-w-xl mx-auto">
-                    Kombinasi teknologi backend Domain-Driven Design (DDD) dan frontend reaktif yang memberikan keandalan kelas enterprise.
-                </p>
             </div>
 
             <!-- Apple Pro Bento Grid -->
