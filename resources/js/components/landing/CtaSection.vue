@@ -5,7 +5,7 @@ import { register } from '@/routes';
 </script>
 
 <template>
-    <section class="relative py-28 sm:py-36 overflow-hidden bg-[#050608] text-white border-t border-white/10">
+    <section class="relative py-20 sm:py-24 overflow-hidden bg-[#050608] text-white border-t border-white/10">
         <!-- Intense Radial Glow behind CTA -->
         <div class="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[450px] w-full max-w-4xl rounded-full bg-gradient-to-r from-indigo-600/20 via-purple-600/20 to-blue-600/20 blur-[140px]"></div>
 

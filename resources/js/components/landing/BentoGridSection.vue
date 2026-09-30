@@ -12,12 +12,12 @@ import { ShieldCheck, Users, Zap, Sliders, Cpu, Radio, Sparkles, Lock, ArrowUpRi
             <div class="mx-auto max-w-3xl text-center">
                 <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-neutral-300">
                     <Cpu class="h-3 w-3 text-indigo-400" />
-                    <span>Fondasi Arsitektur Modern</span>
+                    <span>Dirancang untuk Alur Kerja Arsitek</span>
                 </div>
                 <h2 class="mt-4 text-3xl font-extrabold tracking-tight sm:text-5xl font-sans">
-                    Dibuat untuk Kecepatan. <br />
+                    Presentasi Desain Lebih Meyakinkan. <br />
                     <span class="bg-gradient-to-r from-neutral-200 via-neutral-400 to-neutral-500 bg-clip-text text-transparent">
-                        Direkayasa untuk Keamanan.
+                        Karya Tetap Aman di Tangan Anda.
                     </span>
                 </h2>
             </div>
@@ -32,24 +32,24 @@ import { ShieldCheck, Users, Zap, Sliders, Cpu, Radio, Sparkles, Lock, ArrowUpRi
                         <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400">
                             <Lock class="h-6 w-6" />
                         </div>
-                        <span class="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-mono font-medium text-emerald-300">
-                            P0 Security Protocol
+                        <span class="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
+                            Karya Terlindungi
                         </span>
                     </div>
 
                     <div class="mt-8 max-w-lg">
                         <h3 class="text-2xl font-bold text-white tracking-tight">
-                            Client Invitation by Email
+                            Undangan Klien via Email
                         </h3>
                         <p class="mt-3 text-sm leading-relaxed text-neutral-300">
-                            Hilangkan risiko bocornya desain ke pihak yang tidak bertanggung jawab. Setiap proyek diproteksi verifikasi email undangan. Klien wajib terautentikasi dan diverifikasi oleh <code class="text-emerald-300 font-mono text-xs">ProjectClientAccessMiddleware</code> sebelum model 3D dapat dirender.
+                            Desain Anda tidak akan beredar ke pihak yang tidak berkepentingan. Setiap proyek hanya bisa dibuka oleh klien yang Anda undang lewat email, dan identitas mereka dipastikan <span class="text-emerald-300 font-medium">terverifikasi</span> sebelum model 3D ditampilkan.
                         </p>
                     </div>
 
                     <div class="mt-8 flex flex-wrap items-center gap-3 text-xs text-neutral-400">
-                        <span class="rounded-xl border border-white/10 bg-black/40 px-3 py-1.5 font-mono">Bypass Dilarang Keras</span>
-                        <span class="rounded-xl border border-white/10 bg-black/40 px-3 py-1.5 font-mono">Google OAuth One-Tap</span>
-                        <span class="rounded-xl border border-white/10 bg-black/40 px-3 py-1.5 font-mono">Revoke Akses Seketika</span>
+                        <span class="rounded-xl border border-white/10 bg-black/40 px-3 py-1.5">Hanya Klien Undangan</span>
+                        <span class="rounded-xl border border-white/10 bg-black/40 px-3 py-1.5">Masuk dengan Akun Google</span>
+                        <span class="rounded-xl border border-white/10 bg-black/40 px-3 py-1.5">Cabut Akses Kapan Saja</span>
                     </div>
                 </div>
 
@@ -60,15 +60,15 @@ import { ShieldCheck, Users, Zap, Sliders, Cpu, Radio, Sparkles, Lock, ArrowUpRi
                             <Users class="h-6 w-6" />
                         </div>
                         <h3 class="mt-6 text-xl font-bold text-white tracking-tight">
-                            Dual-Capacity Identity
+                            Satu Akun, Dua Peran
                         </h3>
                         <p class="mt-2.5 text-xs leading-relaxed text-neutral-400">
-                            Satu akun merangkap dua peran: arsitek yang mengunggah proyek sendiri, sekaligus klien reviewer pada proyek rekan arsitek lain tanpa perlu switch akun.
+                            Presentasikan proyek Anda kepada klien, sekaligus beri masukan pada proyek rekan sesama arsitek. Cukup satu akun, tanpa berganti-ganti login.
                         </p>
                     </div>
 
                     <div class="mt-6 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-indigo-300 font-medium">
-                        <span>Tanpa Form Role Rumit</span>
+                        <span>Tanpa Pengaturan Rumit</span>
                         <ArrowUpRight class="h-4 w-4" />
                     </div>
                 </div>
@@ -80,16 +80,16 @@ import { ShieldCheck, Users, Zap, Sliders, Cpu, Radio, Sparkles, Lock, ArrowUpRi
                             <Zap class="h-6 w-6" />
                         </div>
                         <h3 class="mt-6 text-xl font-bold text-white tracking-tight">
-                            Draco Compression
+                            Model 3D Tetap Ringan
                         </h3>
-                        <p class="mt-2.5 text-xs leading-relaxed text-neutral-400">
-                            Pipeline otomatis di background worker mengompresi ukuran geometri hingga 85%. Rendering 60 FPS mulus di laptop klien maupun smartphone.
+                        <p class="mt-2.5 text-sm leading-relaxed text-neutral-400">
+                            Ukuran file model diperkecil otomatis hingga 85% tanpa mengurangi detail desain. Presentasi tetap lancar di laptop maupun smartphone klien, tanpa install aplikasi.
                         </p>
                     </div>
 
-                    <div class="mt-6 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-blue-300 font-mono">
-                        <span>gltf-pipeline Server Queue</span>
-                        <span>~85% Hemat</span>
+                    <div class="mt-6 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-blue-300 font-medium">
+                        <span>Diproses Otomatis</span>
+                        <span>~85% Lebih Ringan</span>
                     </div>
                 </div>
 
@@ -101,32 +101,32 @@ import { ShieldCheck, Users, Zap, Sliders, Cpu, Radio, Sparkles, Lock, ArrowUpRi
                         <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-500/20 border border-purple-500/30 text-purple-400">
                             <Radio class="h-6 w-6" />
                         </div>
-                        <span class="rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-mono font-medium text-purple-300">
-                            WebSocket & Raycast
+                        <span class="rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-300">
+                            Revisi Real-Time
                         </span>
                     </div>
 
                     <div class="mt-8 max-w-lg">
                         <h3 class="text-2xl font-bold text-white tracking-tight">
-                            Spatial Precision & Instant Messaging
+                            Revisi Tepat Sasaran, Diskusi Langsung
                         </h3>
                         <p class="mt-3 text-sm leading-relaxed text-neutral-300">
-                            Kalkulasi presisi titik normal dan koordinat $X, Y, Z$ saat pin ditancapkan. Terhubung langsung dengan Laravel Reverb WebSocket untuk sinkronisasi pesan chat dan perubahan status revisi secara real-time.
+                            Klien menandai langsung bagian model yang ingin diubah, entah dinding, jendela, atau material, lengkap dengan catatannya. Diskusi dan status revisi terupdate seketika, tanpa bolak-balik email atau WhatsApp.
                         </p>
                     </div>
 
                     <div class="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                         <div class="rounded-2xl border border-white/10 bg-black/40 p-3 text-center">
-                            <div class="font-bold text-white font-mono">THREE.Raycaster</div>
-                            <div class="text-[10px] text-neutral-400 mt-0.5">Deteksi Titik Geometri</div>
+                            <div class="font-bold text-white">Pin Komentar</div>
+                            <div class="text-[10px] text-neutral-400 mt-0.5">Tandai Bagian yang Direvisi</div>
                         </div>
                         <div class="rounded-2xl border border-white/10 bg-black/40 p-3 text-center">
-                            <div class="font-bold text-white font-mono">Laravel Reverb</div>
-                            <div class="text-[10px] text-neutral-400 mt-0.5">Broadcasting WebSocket</div>
+                            <div class="font-bold text-white">Chat Langsung</div>
+                            <div class="text-[10px] text-neutral-400 mt-0.5">Diskusi & Status Revisi</div>
                         </div>
                         <div class="rounded-2xl border border-white/10 bg-black/40 p-3 text-center col-span-2 sm:col-span-1">
-                            <div class="font-bold text-white font-mono">SVG Leader Lines</div>
-                            <div class="text-[10px] text-neutral-400 mt-0.5">Garis Anotasi Dinamis</div>
+                            <div class="font-bold text-white">Garis Penunjuk</div>
+                            <div class="text-[10px] text-neutral-400 mt-0.5">Catatan Terhubung ke Model</div>
                         </div>
                     </div>
                 </div>

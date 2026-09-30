@@ -4,6 +4,7 @@ use App\Domains\Comment\Controllers\CommentController;
 use App\Domains\Comment\Controllers\PinCommentController;
 use App\Domains\Chat\Controllers\ChatController;
 use App\Http\Controllers\Auth\GoogleAuthController;
+use App\Http\Controllers\UserSearchController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Project\ProjectController;
 use App\Http\Controllers\Project\ViewerController;
@@ -14,6 +15,9 @@ Route::inertia('/showcase', 'ShowcaseDemo')->name('showcase');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // User email search (for invite suggestions)
+    Route::get('/users/search', UserSearchController::class)->name('users.search');
 
     // Project management
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');

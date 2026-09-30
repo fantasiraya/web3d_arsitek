@@ -353,11 +353,71 @@ const inviteForm = useForm({
     email: '',
 });
 
+// ── Email suggest state ───────────────────────────────────
+interface UserSuggestion {
+    id: string;
+    name: string;
+    email: string;
+    initial: string;
+}
+const suggestions = ref<UserSuggestion[]>([]);
+const suggestLoading = ref(false);
+const suggestEmpty = ref(false);      // true saat query ≥ 2 char tapi 0 hasil
+const showSuggestions = ref(false);
+let suggestTimer: ReturnType<typeof setTimeout> | null = null;
+
+function onEmailInput() {
+    const val = inviteForm.email.trim();
+    showSuggestions.value = false;
+    suggestEmpty.value = false;
+
+    if (suggestTimer) clearTimeout(suggestTimer);
+
+    if (val.length < 2) {
+        suggestions.value = [];
+        return;
+    }
+
+    suggestTimer = setTimeout(async () => {
+        suggestLoading.value = true;
+        try {
+            const res = await fetch(`/users/search?email=${encodeURIComponent(val)}`, {
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (res.ok) {
+                const data = await res.json();
+                suggestions.value = data.data ?? [];
+                suggestEmpty.value = suggestions.value.length === 0;
+                showSuggestions.value = true;
+            }
+        } catch {
+            suggestions.value = [];
+        } finally {
+            suggestLoading.value = false;
+        }
+    }, 300);
+}
+
+function selectSuggestion(user: UserSuggestion) {
+    inviteForm.email = user.email;
+    showSuggestions.value = false;
+    suggestions.value = [];
+    suggestEmpty.value = false;
+}
+
+function closeSuggestions() {
+    // Delay sedikit agar klik item suggestion sempat terpanggil
+    setTimeout(() => { showSuggestions.value = false; }, 150);
+}
+
 function openClientModal(project: OwnedProject) {
     // Pakai dari localOwnedProjects agar status realtime sudah terupdate
     const localProject = localOwnedProjects.value.find(p => p.id === project.id) ?? project;
     activeProjectForClients.value = localProject;
     inviteForm.reset();
+    suggestions.value = [];
+    showSuggestions.value = false;
+    suggestEmpty.value = false;
     isClientModalOpen.value = true;
 }
 
@@ -367,6 +427,9 @@ function submitInviteClient() {
         preserveScroll: true,
         onSuccess: () => {
             inviteForm.reset();
+            suggestions.value = [];
+            showSuggestions.value = false;
+            suggestEmpty.value = false;
             // Refresh dari localOwnedProjects dulu, fallback ke props
             const updated = localOwnedProjects.value.find((p) => p.id === activeProjectForClients.value?.id)
                 ?? props.ownedProjects?.find((p) => p.id === activeProjectForClients.value?.id);
@@ -1164,22 +1227,67 @@ const { isSidebarOpen, isMobile } = useSidebar();
                     <form @submit.prevent="submitInviteClient" class="space-y-3 pt-2">
                         <div class="space-y-1.5">
                             <Label for="client_email">Email Klien</Label>
-                            <div class="flex gap-2">
-                                <Input
-                                    id="client_email"
-                                    type="email"
-                                    v-model="inviteForm.email"
-                                    placeholder="klien@gmail.com"
-                                    required
-                                    class="text-sm"
-                                />
-                                <Button
-                                    type="submit"
-                                    size="sm"
-                                    :disabled="inviteForm.processing || !inviteForm.email"
+                            <div class="relative">
+                                <div class="flex gap-2">
+                                    <Input
+                                        id="client_email"
+                                        type="email"
+                                        v-model="inviteForm.email"
+                                        placeholder="klien@gmail.com"
+                                        required
+                                        autocomplete="off"
+                                        class="text-sm"
+                                        @input="onEmailInput"
+                                        @blur="closeSuggestions"
+                                        @keydown.escape="showSuggestions = false"
+                                    />
+                                    <Button
+                                        type="submit"
+                                        size="sm"
+                                        :disabled="inviteForm.processing || !inviteForm.email"
+                                    >
+                                        <Send class="h-3.5 w-3.5 mr-1" /> Undang
+                                    </Button>
+                                </div>
+
+                                <!-- Suggestion dropdown -->
+                                <div
+                                    v-if="showSuggestions"
+                                    class="absolute left-0 right-10 top-full mt-1 z-50 rounded-xl border border-border bg-popover shadow-xl overflow-hidden"
                                 >
-                                    <Send class="h-3.5 w-3.5 mr-1" /> Undang
-                                </Button>
+                                    <!-- Loading -->
+                                    <div v-if="suggestLoading" class="flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground">
+                                        <svg class="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="40" stroke-dashoffset="10"/></svg>
+                                        Mencari...
+                                    </div>
+
+                                    <!-- No results -->
+                                    <div
+                                        v-else-if="suggestEmpty"
+                                        class="flex flex-col items-center gap-1 px-3 py-3 text-center"
+                                    >
+                                        <span class="text-xs font-medium text-muted-foreground">Pengguna tidak ditemukan</span>
+                                        <span class="text-[11px] text-muted-foreground/70">Email ini belum terdaftar — undangan tetap bisa dikirim</span>
+                                    </div>
+
+                                    <!-- Results -->
+                                    <button
+                                        v-else
+                                        v-for="user in suggestions"
+                                        :key="user.id"
+                                        type="button"
+                                        class="w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-accent transition-colors"
+                                        @mousedown.prevent="selectSuggestion(user)"
+                                    >
+                                        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+                                            {{ user.initial }}
+                                        </span>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="truncate font-medium text-foreground">{{ user.name }}</div>
+                                            <div class="truncate text-[11px] text-muted-foreground">{{ user.email }}</div>
+                                        </div>
+                                    </button>
+                                </div>
                             </div>
                             <p v-if="inviteForm.errors.email" class="text-xs text-rose-500">
                                 {{ inviteForm.errors.email }}
