@@ -381,6 +381,43 @@ const initThree = () => {
                     const m = child as THREE.Mesh;
                     m.castShadow = true;
                     m.receiveShadow = true;
+
+                    // Three.js only supports uv, uv1, uv2, uv3 (channels 0-3).
+                    // Remove any UV attributes beyond channel 3 to prevent
+                    // "uv7: undeclared identifier" shader compile errors.
+                    const geo = m.geometry;
+                    if (geo) {
+                        const UV_MAX = 3;
+                        for (let i = UV_MAX + 1; i <= 7; i++) {
+                            const attrName = i === 0 ? 'uv' : `uv${i}`;
+                            if (geo.hasAttribute(attrName)) {
+                                geo.deleteAttribute(attrName);
+                            }
+                        }
+
+                        // Also strip UV references from material maps that point
+                        // to unsupported channels, to avoid follow-up errors.
+                        const mats = Array.isArray(m.material) ? m.material : [m.material];
+                        mats.forEach(mat => {
+                            if (!mat) return;
+                            const anyMat = mat as any;
+                            const mapProps = [
+                                'map', 'normalMap', 'roughnessMap', 'metalnessMap',
+                                'aoMap', 'emissiveMap', 'alphaMap', 'lightMap',
+                                'displacementMap', 'bumpMap', 'clearcoatMap',
+                                'clearcoatNormalMap', 'clearcoatRoughnessMap',
+                                'sheenColorMap', 'sheenRoughnessMap', 'specularMap',
+                                'specularColorMap', 'specularIntensityMap',
+                                'transmissionMap', 'thicknessMap', 'iridescenceMap',
+                            ];
+                            mapProps.forEach(prop => {
+                                const tex = anyMat[prop] as THREE.Texture | null | undefined;
+                                if (tex && tex.channel !== undefined && tex.channel > UV_MAX) {
+                                    tex.channel = 0;
+                                }
+                            });
+                        });
+                    }
                 }
             });
 
