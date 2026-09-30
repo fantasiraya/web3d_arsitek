@@ -1,46 +1,63 @@
 <template>
-    <div class="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
-        <!-- Top Navigation Bar -->
-        <header class="flex h-14 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900/90 px-4 backdrop-blur-md z-20">
+    <div class="relative h-screen w-screen overflow-hidden bg-[#06070a] text-white flex flex-col select-none">
+
+        <!-- ── TOP APP BAR ── -->
+        <header class="relative z-30 flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-black/80 px-4 sm:px-6 backdrop-blur-2xl">
             <div class="flex items-center gap-3">
                 <Link
                     href="/dashboard"
-                    class="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700 hover:text-white"
+                    class="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10 hover:text-white"
                 >
                     <ArrowLeft class="h-3.5 w-3.5" />
                     <span>Dashboard</span>
                 </Link>
-                <div class="h-4 w-px bg-slate-700"></div>
-                <div>
-                    <h1 class="text-sm font-semibold text-white line-clamp-1">
-                        {{ project.title || '3D Architecture Viewer' }}
-                    </h1>
+
+                <div class="h-4 w-px bg-white/10 hidden sm:block"></div>
+
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold tracking-tight text-white line-clamp-1">{{ project.title || 'AETHER 3D Viewer' }}</span>
+                    <span class="rounded bg-rose-500/20 border border-rose-500/30 px-2 py-0.5 text-[10px] font-mono text-rose-300 hidden sm:inline">
+                        3D VIEWER
+                    </span>
                 </div>
             </div>
 
-            <div class="flex items-center gap-3">
-                <!-- Revision Badge (Reactive with comments.length) -->
+            <div class="flex items-center gap-2.5">
+                <!-- Revision Badge -->
                 <RevisionBadge :project="project" :current-count="comments.length" />
 
-                <!-- Comment count indicator -->
+                <!-- Pin count toggle -->
                 <button
+                    type="button"
                     @click="isDrawerOpen = !isDrawerOpen"
-                    class="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700"
+                    class="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
                 >
                     <MessageSquare class="h-3.5 w-3.5 text-rose-400" />
                     <span>{{ comments.length }} Pin</span>
                 </button>
+
+                <!-- Fullscreen -->
+                <button
+                    type="button"
+                    @click="toggleFullscreen"
+                    class="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
+                >
+                    <Minimize2 v-if="isFullscreen" class="h-3.5 w-3.5 text-rose-400" />
+                    <Maximize2 v-else class="h-3.5 w-3.5 text-neutral-300" />
+                    <span class="hidden sm:inline">{{ isFullscreen ? 'Keluar Penuh' : 'Layar Penuh' }}</span>
+                </button>
             </div>
         </header>
 
-        <!-- Main 3D Viewport Area -->
-        <div class="relative min-h-0 flex-1 overflow-hidden">
-            <!-- Three.js Canvas Container -->
+        <!-- ── MAIN VIEWPORT ── -->
+        <div class="relative flex-1 w-full overflow-hidden">
+
+            <!-- Three.js Canvas -->
             <div
                 ref="viewerContainer"
-                class="relative h-full w-full select-none"
+                class="absolute inset-0 h-full w-full"
                 :class="{
-                    'cursor-grab': interactionMode === 'rotate',
+                    'cursor-grab active:cursor-grabbing': interactionMode === 'rotate',
                     'cursor-move': interactionMode === 'pan',
                     'cursor-crosshair': interactionMode === 'pin',
                 }"
@@ -48,126 +65,147 @@
                 @pointerup="onPointerUp"
             ></div>
 
-            <!-- Loading & Error Overlays -->
+            <!-- Loading Overlay -->
             <div
                 v-if="isLoading"
-                class="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-xs text-sm text-white"
+                class="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/85 backdrop-blur-md text-center p-6"
             >
-                <div class="h-8 w-8 animate-spin rounded-full border-2 border-rose-500 border-t-transparent mb-3"></div>
-                <p class="font-medium">Memuat model 3D arsitektur...</p>
-                <p class="text-xs text-slate-400 mt-1">Mengoptimalkan tekstur dan geometri</p>
+                <div class="relative flex items-center justify-center">
+                    <div class="h-16 w-16 rounded-full border-2 border-rose-500/20 border-t-rose-500 animate-spin"></div>
+                    <Sparkles class="absolute h-6 w-6 text-rose-400 animate-pulse" />
+                </div>
+                <h3 class="mt-4 text-base font-semibold text-white">Memuat Model 3D Arsitektur...</h3>
+                <p class="mt-1 text-xs text-neutral-400 max-w-sm">Menguraikan geometri mesh, tekstur PBR, dan pencahayaan fotometrik.</p>
+                <div class="mt-4 h-1.5 w-48 rounded-full bg-white/10 overflow-hidden">
+                    <div class="h-full bg-rose-500 rounded-full transition-all duration-300" :style="{ width: `${loadingProgress || 5}%` }"></div>
+                </div>
             </div>
 
+            <!-- Error Overlay -->
             <div
                 v-if="modelError"
-                class="absolute inset-0 z-30 flex flex-col items-center justify-center p-6 text-center text-sm text-rose-300 bg-slate-950/90"
+                class="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/90 backdrop-blur-md text-center p-6"
             >
-                <div class="rounded-full bg-rose-500/20 p-3 text-rose-400 mb-3">
-                    <X class="h-6 w-6" />
+                <div class="rounded-full bg-rose-500/20 p-3 mb-3">
+                    <X class="h-6 w-6 text-rose-400" />
                 </div>
-                <p class="font-semibold text-base">{{ modelError }}</p>
-                <p class="text-xs text-slate-400 mt-1 max-w-sm">
-                    Pastikan file model .glb tersedia dan dapat diakses.
-                </p>
+                <p class="font-semibold text-base text-white">{{ modelError }}</p>
+                <p class="text-xs text-neutral-400 mt-1 max-w-sm">Pastikan file model .glb tersedia di storage.</p>
             </div>
 
-            <!-- Floating Viewport Control Toolbar -->
-            <div class="absolute top-4 left-4 z-20 flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-700/80 bg-slate-900/85 p-1.5 shadow-2xl backdrop-blur-md">
-                <!-- Rotate Mode Button -->
+            <!-- ── TOOLBAR TOP-LEFT: Controls ── -->
+            <div class="absolute top-4 left-4 z-20 flex flex-wrap items-center gap-1.5 rounded-2xl border border-white/15 bg-black/80 p-1.5 shadow-2xl backdrop-blur-xl">
+                <span class="text-[11px] font-mono text-neutral-400 px-2 hidden sm:inline">KONTROL:</span>
                 <button
+                    type="button"
                     @click="setInteractionMode('rotate')"
-                    :class="[
-                        'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition',
-                        interactionMode === 'rotate'
-                            ? 'bg-primary text-primary-foreground shadow-sm'
-                            : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-                    ]"
-                    title="Putar kamera secara dinamis (Orbit)"
+                    class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all"
+                    :class="interactionMode === 'rotate' ? 'bg-white text-black shadow-md font-semibold' : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white'"
                 >
                     <RotateCw class="h-3.5 w-3.5" />
                     <span>Putar</span>
                 </button>
-
-                <!-- Pan Mode Button -->
                 <button
+                    type="button"
                     @click="setInteractionMode('pan')"
-                    :class="[
-                        'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition',
-                        interactionMode === 'pan'
-                            ? 'bg-primary text-primary-foreground shadow-sm'
-                            : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-                    ]"
-                    title="Geser kamera ke kanan, kiri, atas, bawah (Pan)"
+                    class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all"
+                    :class="interactionMode === 'pan' ? 'bg-white text-black shadow-md font-semibold' : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white'"
                 >
                     <Hand class="h-3.5 w-3.5" />
                     <span>Geser</span>
                 </button>
+            </div>
 
-                <!-- Pin Mode Button (Tambah Pin) -->
+            <!-- ── TOOLBAR BOTTOM-CENTER ── -->
+            <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 rounded-full border border-white/15 bg-black/85 p-1.5 sm:p-2 shadow-2xl backdrop-blur-2xl max-w-[95vw]">
+
+                <!-- Reset/Pusatkan -->
                 <button
-                    @click="handleTambahPinButton"
-                    :class="[
-                        'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition',
-                        interactionMode === 'pin'
-                            ? 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-500/30'
-                            : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-                    ]"
-                    title="Tekan untuk menambah pin komentar pada objek 3D"
+                    type="button"
+                    @click="resetModelView"
+                    class="flex items-center gap-1.5 rounded-full px-3 py-1.5 sm:py-2 text-xs font-medium text-neutral-300 hover:bg-white/10 hover:text-white transition-all"
+                    title="Pusatkan kembali model 3D"
                 >
-                    <MapPin class="h-3.5 w-3.5 text-rose-400" />
-                    <span>Tambah Pin</span>
+                    <Focus class="h-3.5 w-3.5 text-rose-400" />
+                    <span>Pusatkan</span>
                 </button>
 
-                <div class="h-4 w-px bg-slate-700 my-auto"></div>
+                <!-- Fullscreen -->
+                <button
+                    type="button"
+                    @click="toggleFullscreen"
+                    class="flex items-center gap-1.5 rounded-full px-3 py-1.5 sm:py-2 text-xs font-medium text-neutral-300 hover:bg-white/10 hover:text-white transition-all"
+                >
+                    <Minimize2 v-if="isFullscreen" class="h-3.5 w-3.5 text-rose-400" />
+                    <Maximize2 v-else class="h-3.5 w-3.5 text-neutral-300" />
+                    <span class="hidden md:inline">{{ isFullscreen ? 'Keluar Penuh' : 'Layar Penuh' }}</span>
+                </button>
+
+                <div class="h-4 w-px bg-white/20 mx-0.5 hidden sm:block"></div>
+
+                <!-- Auto Orbit -->
+                <button
+                    type="button"
+                    @click="autoRotate = !autoRotate"
+                    class="rounded-full px-3 py-1.5 sm:py-2 text-xs font-medium transition-all"
+                    :class="autoRotate ? 'bg-purple-600 text-white' : 'text-neutral-400 hover:bg-white/10 hover:text-white'"
+                    title="Rotasi otomatis"
+                >
+                    <span>Auto-Orbit</span>
+                </button>
+
+                <!-- Tambah Pin -->
+                <button
+                    type="button"
+                    @click="handleTambahPinButton"
+                    class="flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-all shadow-md"
+                    :class="interactionMode === 'pin'
+                        ? 'bg-emerald-500 text-black ring-2 ring-emerald-300'
+                        : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40'"
+                >
+                    <Plus class="h-3.5 w-3.5" />
+                    <span>{{ interactionMode === 'pin' ? 'Klik di Model!' : '+ Tambah Pin' }}</span>
+                </button>
 
                 <!-- Toggle Annotations -->
                 <button
+                    type="button"
                     @click="showAnnotations = !showAnnotations"
-                    :class="[
-                        'flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium transition',
-                        showAnnotations ? 'text-slate-200 hover:bg-slate-800' : 'text-slate-500 hover:bg-slate-800',
-                    ]"
-                    :title="showAnnotations ? 'Sembunyikan garis & catatan' : 'Tampilkan garis & catatan'"
+                    class="rounded-full p-2 text-neutral-300 hover:bg-white/10 hover:text-white transition-colors"
+                    :title="showAnnotations ? 'Sembunyikan Pin' : 'Tampilkan Pin'"
                 >
-                    <Eye v-if="showAnnotations" class="h-3.5 w-3.5" />
-                    <EyeOff v-else class="h-3.5 w-3.5" />
-                </button>
-
-                <!-- Reset Camera -->
-                <button
-                    @click="frameModel"
-                    class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                    title="Pusatkan kembali model 3D di layar"
-                >
-                    <Maximize2 class="h-3.5 w-3.5" />
+                    <Eye class="h-4 w-4" :class="showAnnotations ? 'text-rose-400' : 'text-neutral-500'" />
                 </button>
             </div>
 
-            <!-- Revision Limit Alert Banner -->
+            <!-- Pin mode active banner -->
+            <div
+                v-if="interactionMode === 'pin'"
+                class="absolute top-[72px] left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-black shadow-2xl animate-pulse"
+            >
+                <MapPin class="h-3.5 w-3.5" />
+                <span>Mode Pin Aktif — Klik pada geometri model 3D untuk menambahkan catatan revisi!</span>
+            </div>
+
+            <!-- Revision limit warning -->
             <div
                 v-if="limitWarning"
-                class="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-xl border border-rose-500/60 bg-slate-900/95 px-4 py-2 text-xs text-rose-200 shadow-2xl backdrop-blur-md"
+                class="absolute top-[72px] left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full border border-rose-500/40 bg-black/90 px-4 py-2 text-xs text-rose-200 shadow-2xl backdrop-blur-2xl"
             >
                 <AlertTriangle class="h-4 w-4 text-rose-400 shrink-0 animate-bounce" />
                 <span>{{ limitWarning }}</span>
-                <button
-                    @click="limitWarning = ''"
-                    class="ml-2 rounded p-0.5 hover:bg-slate-800 text-rose-300"
-                >
+                <button @click="limitWarning = ''" class="ml-2 rounded p-0.5 hover:bg-white/10 text-rose-300">
                     <X class="h-3.5 w-3.5" />
                 </button>
             </div>
 
-            <!-- Help Hint Badge -->
-            <div class="absolute bottom-4 left-4 z-20 pointer-events-none hidden md:flex items-center gap-2 rounded-lg bg-slate-900/70 border border-slate-800/80 px-3 py-1.5 text-[11px] text-slate-400 backdrop-blur-xs">
-                <span>💡 <strong>Tips Kontrol:</strong> Klik Kiri Drag = Putar | Klik Kanan Drag = Geser (Pan) | Scroll = Zoom</span>
+            <!-- Tips hint -->
+            <div class="absolute bottom-4 left-4 z-20 pointer-events-none hidden md:flex items-center gap-2 rounded-full bg-black/60 border border-white/10 px-3 py-1.5 text-[11px] text-neutral-400 backdrop-blur-xl">
+                <span>💡 <strong class="text-neutral-300">Tips:</strong> Klik Kiri Drag = Putar | Klik Kanan Drag = Geser | Scroll = Zoom</span>
             </div>
 
-            <!-- SVG LEADER LINES OVERLAY -->
-            <svg
-                v-if="showAnnotations"
-                class="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible"
-            >
+            <!-- ── SVG LEADER LINES ── -->
+            <svg v-if="showAnnotations" class="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible">
                 <defs>
                     <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
                         <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.5" />
@@ -182,419 +220,218 @@
                     </linearGradient>
                 </defs>
 
-                <!-- Render Leader Lines for Existing Comments -->
                 <g v-for="(item, idx) in visibleProjectedComments" :key="'line-' + item.id">
-                    <!-- Surface contact point dot -->
-                    <circle
-                        :cx="item.screenX"
-                        :cy="item.screenY"
-                        r="5"
-                        fill="#ef4444"
-                        stroke="#ffffff"
-                        stroke-width="2"
-                        filter="url(#shadow)"
-                    />
-                    <!-- Outer pulsating wave on active pin -->
-                    <circle
-                        v-if="activeCommentId === item.id"
-                        :cx="item.screenX"
-                        :cy="item.screenY"
-                        r="5"
-                        fill="none"
-                        stroke="#f43f5e"
-                        stroke-width="1.5"
-                    >
+                    <circle :cx="item.screenX" :cy="item.screenY" r="5" fill="#ef4444" stroke="#ffffff" stroke-width="2" filter="url(#shadow)" />
+                    <circle v-if="activeCommentId === item.id" :cx="item.screenX" :cy="item.screenY" r="5" fill="none" stroke="#f43f5e" stroke-width="1.5">
                         <animate attributeName="r" from="5" to="16" dur="1.5s" repeatCount="indefinite" />
                         <animate attributeName="opacity" from="0.9" to="0" dur="1.5s" repeatCount="indefinite" />
                     </circle>
-
-                    <!-- Connected Leader Line (Pin Point -> Knee Corner -> Comment Box Anchor) -->
-                    <path
-                        :d="getLeaderLinePath(item.screenX, item.screenY, item.anchorX, item.anchorY, item.isRightSide)"
-                        fill="none"
-                        stroke="url(#lineGrad)"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-dasharray="4,3"
-                    />
-
-                    <!-- Anchor dot at the comment card edge -->
-                    <circle
-                        :cx="item.anchorX"
-                        :cy="item.anchorY"
-                        r="3.5"
-                        fill="#ef4444"
-                    />
+                    <path :d="getLeaderLinePath(item.screenX, item.screenY, item.anchorX, item.anchorY, item.isRightSide)" fill="none" stroke="url(#lineGrad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4,3" />
+                    <circle :cx="item.anchorX" :cy="item.anchorY" r="3.5" fill="#ef4444" />
                 </g>
 
-                <!-- Leader Line for Pending Pin Input -->
                 <g v-if="pendingPin && pendingPin.isVisible">
-                    <circle
-                        :cx="pendingPin.screenX"
-                        :cy="pendingPin.screenY"
-                        r="6"
-                        fill="#3b82f6"
-                        stroke="#ffffff"
-                        stroke-width="2"
-                        filter="url(#shadow)"
-                    />
-                    <circle
-                        :cx="pendingPin.screenX"
-                        :cy="pendingPin.screenY"
-                        r="6"
-                        fill="none"
-                        stroke="#3b82f6"
-                        stroke-width="2"
-                    >
+                    <circle :cx="pendingPin.screenX" :cy="pendingPin.screenY" r="6" fill="#3b82f6" stroke="#ffffff" stroke-width="2" filter="url(#shadow)" />
+                    <circle :cx="pendingPin.screenX" :cy="pendingPin.screenY" r="6" fill="none" stroke="#3b82f6" stroke-width="2">
                         <animate attributeName="r" from="6" to="18" dur="1.5s" repeatCount="indefinite" />
                         <animate attributeName="opacity" from="0.9" to="0" dur="1.5s" repeatCount="indefinite" />
                     </circle>
-                    <path
-                        :d="getLeaderLinePath(pendingPin.screenX, pendingPin.screenY, pendingPin.anchorX, pendingPin.anchorY, pendingPin.isRightSide)"
-                        fill="none"
-                        stroke="url(#pendingGrad)"
-                        stroke-width="2.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                    <circle
-                        :cx="pendingPin.anchorX"
-                        :cy="pendingPin.anchorY"
-                        r="4"
-                        fill="#3b82f6"
-                    />
+                    <path :d="getLeaderLinePath(pendingPin.screenX, pendingPin.screenY, pendingPin.anchorX, pendingPin.anchorY, pendingPin.isRightSide)" fill="none" stroke="url(#pendingGrad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                    <circle :cx="pendingPin.anchorX" :cy="pendingPin.anchorY" r="4" fill="#3b82f6" />
                 </g>
             </svg>
 
-            <!-- HTML CALLOUTS OVERLAY -->
-            <div
-                v-if="showAnnotations"
-                class="pointer-events-none absolute inset-0 z-10 overflow-hidden"
-            >
-                <!-- Render Existing Comment Callouts (Draggable & Editable) -->
+            <!-- ── HTML CALLOUT CARDS ── -->
+            <div v-if="showAnnotations" class="pointer-events-none absolute inset-0 z-10 overflow-hidden">
+
+                <!-- Existing comment cards (draggable) -->
                 <div
                     v-for="(item, idx) in visibleProjectedComments"
                     :key="'card-' + item.id"
-                    :style="{
-                        transform: `translate3d(${item.cardX}px, ${item.cardY}px, 0)`,
-                    }"
+                    :style="{ transform: `translate3d(${item.cardX}px, ${item.cardY}px, 0)` }"
                     class="pointer-events-auto absolute top-0 left-0 w-[280px] max-w-[85vw] touch-none"
                 >
                     <div
                         @click="activeCommentId = item.id"
                         :class="[
-                            'group rounded-xl border p-3 shadow-xl backdrop-blur-md transition-colors',
+                            'group rounded-2xl border p-3.5 shadow-2xl backdrop-blur-2xl transition-colors animate-fadeIn',
                             activeCommentId === item.id
-                                ? 'border-rose-500 bg-slate-900/95 ring-2 ring-rose-500/30'
-                                : 'border-slate-700/80 bg-slate-900/85 hover:border-slate-600 hover:bg-slate-900/95',
+                                ? 'border-rose-500/50 bg-black/95 ring-2 ring-rose-500/20'
+                                : 'border-white/15 bg-black/85 hover:border-white/25',
                         ]"
                     >
-                        <!-- Author & Pin Header + Drag Handle + Edit Trigger -->
+                        <!-- Header drag handle -->
                         <div
-                            class="flex items-center justify-between gap-2 border-b border-slate-800 pb-2 mb-2 select-none cursor-grab active:cursor-grabbing touch-none"
+                            class="flex items-center justify-between gap-2 border-b border-white/10 pb-2 mb-2 select-none cursor-grab active:cursor-grabbing touch-none"
                             @pointerdown="startDrag(item.id, $event)"
                             @touchstart="startTouchDrag(item.id, $event)"
-                            title="Tahan & geser untuk memindahkan kotak komentar"
                         >
                             <div class="flex items-center gap-1.5 min-w-0">
-                                <GripVertical class="h-4 w-4 text-slate-400 hover:text-slate-200 shrink-0" />
+                                <GripVertical class="h-4 w-4 text-neutral-500 hover:text-neutral-300 shrink-0" />
                                 <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-500/20 text-[10px] font-bold text-rose-400">
-                                    #{{ comments.length - idx }}
+                                    {{ comments.length - idx }}
                                 </span>
-                                <span class="text-xs font-semibold text-white truncate">
-                                    {{ item.user?.name ?? 'Reviewer' }}
-                                </span>
+                                <span class="text-xs font-semibold text-white truncate">{{ item.user?.name ?? 'Reviewer' }}</span>
                             </div>
-
                             <div class="flex items-center gap-1 shrink-0" @pointerdown.stop @touchstart.stop>
-                                <!-- Edit Button -->
-                                <button
-                                    v-if="canEditComment(item) && editingCommentId !== item.id && unpinningCommentId !== item.id"
-                                    @click.stop="startEditing(item, $event)"
-                                    class="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition"
-                                    title="Edit teks komentar ini"
-                                >
+                                <button v-if="canEditComment(item) && editingCommentId !== item.id && unpinningCommentId !== item.id" @click.stop="startEditing(item, $event)" class="rounded p-1 text-neutral-500 hover:bg-white/10 hover:text-white transition" title="Edit">
                                     <Pencil class="h-3 w-3" />
                                 </button>
-                                <!-- Unpin Button -->
-                                <button
-                                    v-if="canEditComment(item) && unpinningCommentId !== item.id"
-                                    @click.stop="promptUnpin(item.id, $event)"
-                                    class="rounded p-1 text-slate-400 hover:bg-rose-950/60 hover:text-rose-400 transition"
-                                    title="Lepas pin & hapus komentar dari database"
-                                >
+                                <button v-if="canEditComment(item) && unpinningCommentId !== item.id" @click.stop="promptUnpin(item.id, $event)" class="rounded p-1 text-neutral-500 hover:bg-rose-500/20 hover:text-rose-400 transition" title="Hapus pin">
                                     <PinOff class="h-3 w-3" />
                                 </button>
-                                <span class="text-[10px] text-slate-400">
-                                    Pin 3D
-                                </span>
                             </div>
                         </div>
 
-                        <!-- Unpin Confirmation Mode -->
-                        <div
-                            v-if="unpinningCommentId === item.id"
-                            class="rounded-lg bg-rose-950/50 border border-rose-500/40 p-2.5 text-xs space-y-2 touch-auto"
-                            @pointerdown.stop
-                            @touchstart.stop
-                        >
-                            <div class="flex items-center gap-1.5 text-rose-200 font-semibold">
-                                <PinOff class="h-3.5 w-3.5 text-rose-400 shrink-0" />
-                                <span>Lepas pin & hapus komentar?</span>
-                            </div>
-                            <p class="text-[11px] text-rose-200/75 leading-relaxed">
-                                Pin ini dan data komentarnya akan dihapus permanen dari database.
-                            </p>
-                            <p v-if="unpinError" class="text-[11px] font-medium text-rose-400">
-                                {{ unpinError }}
-                            </p>
-                            <div class="flex items-center justify-end gap-1.5 pt-1">
-                                <button
-                                    type="button"
-                                    @click.stop="cancelUnpin($event)"
-                                    class="rounded-md px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    type="button"
-                                    @click.stop="executeUnpin(item.id)"
-                                    :disabled="isUnpinning"
-                                    class="flex items-center gap-1 rounded-md bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-rose-500 disabled:opacity-50 transition"
-                                >
-                                    <Trash2 class="h-3 w-3" />
-                                    <span>{{ isUnpinning ? 'Menghapus...' : 'Ya, Unpin' }}</span>
+                        <!-- Unpin confirm -->
+                        <div v-if="unpinningCommentId === item.id" class="rounded-2xl bg-rose-950/50 border border-rose-500/30 p-2.5 text-xs space-y-2" @pointerdown.stop @touchstart.stop>
+                            <p class="flex items-center gap-1.5 text-rose-200 font-semibold"><PinOff class="h-3.5 w-3.5 text-rose-400" /> Hapus pin ini?</p>
+                            <p v-if="unpinError" class="text-rose-400 text-[11px]">{{ unpinError }}</p>
+                            <div class="flex justify-end gap-1.5">
+                                <button @click.stop="cancelUnpin($event)" class="rounded-lg px-2 py-1 text-neutral-300 hover:bg-white/10">Batal</button>
+                                <button @click.stop="executeUnpin(item.id)" :disabled="isUnpinning" class="flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1 font-semibold text-white hover:bg-rose-500 disabled:opacity-50">
+                                    <Trash2 class="h-3 w-3" />{{ isUnpinning ? 'Menghapus...' : 'Ya, Hapus' }}
                                 </button>
                             </div>
                         </div>
 
-                        <!-- Read Mode -->
+                        <!-- Read -->
                         <div v-else-if="editingCommentId !== item.id">
-                            <p class="text-xs text-slate-200 leading-relaxed break-words line-clamp-4">
-                                {{ item.content }}
-                            </p>
+                            <p class="text-xs text-neutral-200 leading-relaxed break-words line-clamp-4">{{ item.content }}</p>
                         </div>
 
-                        <!-- Edit Mode -->
-                        <div v-else class="space-y-2 touch-auto" @pointerdown.stop @touchstart.stop>
-                            <textarea
-                                v-model="editCommentText"
-                                rows="3"
-                                class="w-full resize-none rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
-                                placeholder="Edit feedback atau catatan revisi..."
-                                autofocus
-                            ></textarea>
-
-                            <p v-if="editCommentError" class="text-[11px] font-medium text-rose-400">
-                                {{ editCommentError }}
-                            </p>
-
-                            <div class="flex items-center justify-end gap-1.5 pt-0.5">
-                                <button
-                                    type="button"
-                                    @click.stop="cancelEditing($event)"
-                                    class="rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-white"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    type="button"
-                                    @click.stop="saveEditing(item.id)"
-                                    :disabled="isSavingEdit || !editCommentText.trim()"
-                                    class="flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-rose-500 disabled:opacity-50"
-                                >
-                                    <Check class="h-3 w-3" />
-                                    <span>{{ isSavingEdit ? 'Menyimpan...' : 'Simpan' }}</span>
+                        <!-- Edit -->
+                        <div v-else class="space-y-2" @pointerdown.stop @touchstart.stop>
+                            <textarea v-model="editCommentText" rows="3" class="w-full resize-none rounded-xl border border-white/15 bg-black/80 p-2 text-xs text-white placeholder-neutral-500 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500" autofocus></textarea>
+                            <p v-if="editCommentError" class="text-[11px] text-rose-400">{{ editCommentError }}</p>
+                            <div class="flex justify-end gap-1.5">
+                                <button @click.stop="cancelEditing($event)" class="rounded-lg px-2 py-1 text-neutral-400 hover:bg-white/10">Batal</button>
+                                <button @click.stop="saveEditing(item.id)" :disabled="isSavingEdit" class="flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-50">
+                                    <Check class="h-3 w-3" />{{ isSavingEdit ? 'Menyimpan...' : 'Simpan' }}
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- PENDING PIN COMMENT INPUT FORM (Draggable & Always Empty on Initial Drop) -->
+                <!-- Pending pin form (draggable) -->
                 <div
                     v-if="pendingPin && pendingPin.isVisible"
-                    :style="{
-                        transform: `translate3d(${pendingPin.cardX}px, ${pendingPin.cardY}px, 0)`,
-                    }"
+                    :style="{ transform: `translate3d(${pendingPin.cardX}px, ${pendingPin.cardY}px, 0)` }"
                     class="pointer-events-auto absolute top-0 left-0 w-[320px] max-w-[90vw] touch-none"
                 >
-                    <div class="rounded-xl border-2 border-blue-500 bg-slate-900/95 p-3.5 shadow-2xl backdrop-blur-md ring-4 ring-blue-500/20">
-                        <div
-                            class="flex items-center justify-between pb-2 border-b border-slate-800 select-none cursor-grab active:cursor-grabbing touch-none"
-                            @pointerdown="startDrag('pending', $event)"
-                            @touchstart="startTouchDrag('pending', $event)"
-                            title="Tahan & geser untuk memindahkan form pin"
-                        >
+                    <div class="rounded-2xl border-2 border-blue-500 bg-black/95 p-3.5 shadow-2xl backdrop-blur-2xl ring-4 ring-blue-500/20">
+                        <div class="flex items-center justify-between pb-2 border-b border-white/10 select-none cursor-grab active:cursor-grabbing" @pointerdown="startDrag('pending', $event)" @touchstart="startTouchDrag('pending', $event)">
                             <div class="flex items-center gap-1.5">
-                                <GripVertical class="h-4 w-4 text-blue-400 shrink-0" />
+                                <GripVertical class="h-4 w-4 text-blue-400" />
                                 <div class="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></div>
-                                <span class="text-xs font-semibold text-white">Tulis Komentar Pin</span>
-                                <span class="text-[10px] text-blue-400 font-normal hidden xs:inline">(Bisa digeser)</span>
+                                <span class="text-xs font-semibold text-white">Tulis Catatan Revisi</span>
                             </div>
-                            <button
-                                @click="cancelPendingPin"
-                                class="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
-                                title="Batalkan pin"
-                                @pointerdown.stop
-                                @touchstart.stop
-                            >
+                            <button @click="cancelPendingPin" class="rounded p-1 text-neutral-400 hover:bg-white/10 hover:text-white" @pointerdown.stop @touchstart.stop>
                                 <X class="h-4 w-4" />
                             </button>
                         </div>
-
-                        <form @submit.prevent="submitComment" class="mt-2.5 space-y-2.5 touch-auto" @pointerdown.stop @touchstart.stop>
-                            <textarea
-                                ref="newCommentInputRef"
-                                v-model="newCommentText"
-                                placeholder="Tulis feedback revisi atau catatan arsitektur untuk titik ini..."
-                                rows="3"
-                                required
-                                class="w-full resize-none rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            ></textarea>
-
-                            <p v-if="submitCommentError" class="text-[11px] font-medium text-rose-400">
-                                {{ submitCommentError }}
-                            </p>
-
-                            <div class="flex items-center justify-end gap-2 pt-1">
-                                <button
-                                    type="button"
-                                    @click="cancelPendingPin"
-                                    class="rounded-lg px-2.5 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-white"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    type="submit"
-                                    :disabled="isSubmittingComment || !newCommentText.trim()"
-                                    class="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
-                                >
-                                    <Send class="h-3 w-3" />
-                                    <span>{{ isSubmittingComment ? 'Menyimpan...' : 'Simpan Pin' }}</span>
+                        <form @submit.prevent="submitComment" class="mt-2.5 space-y-2.5" @pointerdown.stop @touchstart.stop>
+                            <textarea ref="newCommentInputRef" v-model="newCommentText" placeholder="Tulis feedback revisi atau catatan arsitektur..." rows="3" required class="w-full resize-none rounded-xl border border-white/15 bg-black/80 p-2 text-xs text-white placeholder-neutral-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+                            <p v-if="submitCommentError" class="text-[11px] text-rose-400">{{ submitCommentError }}</p>
+                            <div class="flex justify-end gap-2">
+                                <button type="button" @click="cancelPendingPin" class="rounded-lg px-2.5 py-1 text-xs text-neutral-400 hover:bg-white/10">Batal</button>
+                                <button type="submit" :disabled="isSubmittingComment || !newCommentText.trim()" class="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50">
+                                    <Send class="h-3 w-3" />{{ isSubmittingComment ? 'Menyimpan...' : 'Simpan Pin' }}
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Bottom Collapsible Comments Panel -->
-        <div
-            v-if="isDrawerOpen"
-            class="border-t border-slate-800 bg-slate-900 px-4 py-3 transition-all z-20 max-h-52 overflow-y-auto"
-        >
-            <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-2">
-                    <MessageSquare class="h-4 w-4 text-rose-400" />
-                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">
-                        Daftar Catatan Pin ({{ comments.length }})
-                    </h3>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button
-                        @click="handleTambahPinButton"
-                        class="flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-rose-500 shadow-sm"
-                        title="Tambah Pin Komentar"
-                    >
-                        <MapPin class="h-3 w-3" />
-                        <span>Tambah Pin</span>
-                    </button>
-                    <button
-                        @click="isDrawerOpen = false"
-                        class="text-xs text-slate-400 hover:text-white"
-                    >
-                        Sembunyikan
-                    </button>
-                </div>
-            </div>
-
-            <div v-if="comments.length === 0" class="py-4 text-center text-xs text-slate-500 space-y-2">
-                <p>Belum ada pin anotasi pada model ini. Klik pada objek 3D atau tombol di bawah untuk menambahkan catatan revisi.</p>
-                <button
-                    @click="handleTambahPinButton"
-                    class="inline-flex items-center gap-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition"
-                >
-                    <MapPin class="h-3.5 w-3.5" />
-                    <span>Tambah Pin Baru</span>
-                </button>
-            </div>
-
-            <div v-else class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                <div
-                    v-for="(comment, index) in comments"
-                    :key="comment.id"
-                    @click="focusComment(comment)"
-                    :class="[
-                        'group flex cursor-pointer flex-col justify-between rounded-lg border p-2.5 text-xs transition',
-                        activeCommentId === comment.id
-                            ? 'border-rose-500 bg-slate-800/90'
-                            : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-800/40',
-                    ]"
-                >
-                    <div>
-                        <div class="flex items-center justify-between font-medium">
-                            <span class="text-white line-clamp-1">{{ comment.user?.name ?? 'Reviewer' }}</span>
-                            <div class="flex items-center gap-1.5">
-                                <button
-                                    v-if="canEditComment(comment)"
-                                    @click.stop="focusAndEdit(comment)"
-                                    class="rounded p-0.5 text-slate-400 hover:text-white transition"
-                                    title="Edit komentar ini"
-                                >
-                                    <Pencil class="h-3 w-3" />
-                                </button>
-                                <button
-                                    v-if="canEditComment(comment)"
-                                    @click.stop="promptUnpinFromDrawer(comment)"
-                                    class="rounded p-0.5 text-slate-400 hover:text-rose-400 transition"
-                                    title="Lepas pin & hapus komentar dari database"
-                                >
-                                    <PinOff class="h-3 w-3" />
-                                </button>
-                                <span class="text-[10px] text-rose-400 font-semibold">#{{ comments.length - index }}</span>
-                            </div>
+            <!-- ── PANEL KANAN: Spatial Comments Thread (sama persis dengan Showcase) ── -->
+            <aside
+                v-if="isDrawerOpen"
+                class="absolute top-4 right-4 bottom-20 z-20 w-80 max-w-[90vw] rounded-3xl border border-white/15 bg-black/85 p-5 shadow-2xl backdrop-blur-2xl flex flex-col justify-between overflow-hidden"
+            >
+                <div class="flex flex-col min-h-0">
+                    <div class="flex items-center justify-between border-b border-white/10 pb-3 flex-shrink-0">
+                        <div class="flex items-center gap-2">
+                            <MessageSquare class="h-4 w-4 text-rose-400" />
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-white">
+                                Catatan Revisi ({{ comments.length }})
+                            </h3>
                         </div>
-                        <p class="mt-1 text-slate-300 line-clamp-2">{{ comment.content }}</p>
+                        <button type="button" @click="isDrawerOpen = false" class="text-neutral-400 hover:text-white transition-colors">
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
 
-                        <!-- Drawer inline unpin confirmation -->
+                    <!-- Scrollable comment list -->
+                    <div class="mt-4 space-y-2.5 overflow-y-auto pr-1 flex-1">
+                        <div v-if="comments.length === 0" class="py-6 text-center text-xs text-neutral-500 space-y-3">
+                            <p>Belum ada pin catatan. Klik tombol "+ Tambah Pin" dan klik pada model untuk menambahkan.</p>
+                            <button @click="handleTambahPinButton" class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/30 transition">
+                                <Plus class="h-3.5 w-3.5" />Tambah Pin Pertama
+                            </button>
+                        </div>
+
                         <div
-                            v-if="unpinningCommentId === comment.id"
-                            class="mt-2 rounded-md bg-rose-950/60 p-2 border border-rose-500/40 text-[11px] space-y-1.5"
-                            @click.stop
+                            v-for="comment in comments"
+                            :key="comment.id"
+                            @click="focusComment(comment)"
+                            class="rounded-2xl border p-3 cursor-pointer transition-all duration-200"
+                            :class="activeCommentId === comment.id
+                                ? 'border-rose-500/50 bg-rose-500/10 shadow-lg'
+                                : 'border-white/10 bg-white/[0.02] hover:bg-white/5'"
                         >
-                            <p class="text-rose-200 font-medium">Hapus permanen komentar pin ini?</p>
-                            <div class="flex items-center justify-end gap-1.5">
-                                <button
-                                    type="button"
-                                    @click.stop="cancelUnpin($event)"
-                                    class="rounded px-2 py-0.5 text-slate-300 hover:text-white transition"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    type="button"
-                                    @click.stop="executeUnpin(comment.id)"
-                                    :disabled="isUnpinning"
-                                    class="rounded bg-rose-600 px-2 py-0.5 font-medium text-white hover:bg-rose-500 disabled:opacity-50 transition"
-                                >
-                                    {{ isUnpinning ? 'Menghapus...' : 'Ya, Hapus' }}
-                                </button>
+                            <div class="flex items-center justify-between text-xs">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500/20 text-[10px] font-bold text-rose-400">
+                                        {{ comments.indexOf(comment) + 1 }}
+                                    </span>
+                                    <span class="font-semibold text-white truncate max-w-[130px]">{{ comment.user?.name ?? 'Reviewer' }}</span>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <button v-if="canEditComment(comment)" @click.stop="focusAndEdit(comment)" class="rounded p-0.5 text-neutral-500 hover:text-white transition" title="Edit">
+                                        <Pencil class="h-3 w-3" />
+                                    </button>
+                                    <button v-if="canEditComment(comment)" @click.stop="promptUnpinFromDrawer(comment)" class="rounded p-0.5 text-neutral-500 hover:text-rose-400 transition" title="Hapus pin">
+                                        <PinOff class="h-3 w-3" />
+                                    </button>
+                                </div>
+                            </div>
+                            <p class="mt-1.5 text-xs text-neutral-300 line-clamp-2">{{ comment.content }}</p>
+
+                            <!-- Inline unpin confirm in drawer -->
+                            <div v-if="unpinningCommentId === comment.id" class="mt-2 rounded-xl bg-rose-950/60 p-2 border border-rose-500/30 text-[11px] space-y-1.5" @click.stop>
+                                <p class="text-rose-200 font-medium">Hapus permanen pin ini?</p>
+                                <div class="flex justify-end gap-1.5">
+                                    <button @click.stop="cancelUnpin($event)" class="rounded px-2 py-0.5 text-neutral-300 hover:text-white">Batal</button>
+                                    <button @click.stop="executeUnpin(comment.id)" :disabled="isUnpinning" class="rounded bg-rose-600 px-2 py-0.5 text-white font-medium hover:bg-rose-500 disabled:opacity-50">
+                                        {{ isUnpinning ? 'Menghapus...' : 'Ya, Hapus' }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="mt-2 text-[10px] text-neutral-500 font-mono">
+                                ({{ comment.position_x.toFixed(1) }}, {{ comment.position_y.toFixed(1) }}, {{ comment.position_z.toFixed(1) }})
                             </div>
                         </div>
                     </div>
-                    <div class="mt-2 flex items-center justify-between text-[10px] text-slate-500">
-                        <span>({{ comment.position_x.toFixed(2) }}, {{ comment.position_y.toFixed(2) }}, {{ comment.position_z.toFixed(2) }})</span>
-                        <span class="text-rose-400 hover:underline">Lihat di 3D</span>
-                    </div>
                 </div>
-            </div>
+
+                <!-- Footer hint — sama persis Showcase -->
+                <div class="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs text-neutral-400 flex-shrink-0">
+                    <div class="flex items-center gap-1.5 text-rose-400 font-medium text-[11px] mb-1">
+                        <CheckCircle2 class="h-3.5 w-3.5" />
+                        <span>Raycasting Spasial 3D</span>
+                    </div>
+                    <p class="text-[10px] text-neutral-400 leading-tight">
+                        Klik "+ Tambah Pin" lalu klik titik mana saja pada geometri model 3D untuk menambahkan catatan revisi.
+                    </p>
+                </div>
+            </aside>
+
         </div>
     </div>
 </template>
-
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
@@ -602,17 +439,22 @@ import {
     AlertTriangle,
     ArrowLeft,
     Check,
+    CheckCircle2,
     Eye,
     EyeOff,
+    Focus,
     GripVertical,
     Hand,
     MapPin,
     Maximize2,
     MessageSquare,
+    Minimize2,
     Pencil,
     PinOff,
+    Plus,
     RotateCw,
     Send,
+    Sparkles,
     Trash2,
     X,
 } from '@lucide/vue';
@@ -684,6 +526,31 @@ const showAnnotations = ref(true);
 const isDrawerOpen = ref(true);
 const activeCommentId = ref<string | null>(null);
 const limitWarning = ref('');
+
+// ── Showcase-compatible state ──
+const autoRotate = ref(false);
+const isFullscreen = ref(false);
+const loadingProgress = ref(0);
+
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+        isFullscreen.value = true;
+    } else {
+        document.exitFullscreen().catch(() => {});
+        isFullscreen.value = false;
+    }
+}
+
+function handleFullscreenChange() {
+    isFullscreen.value = !!document.fullscreenElement;
+}
+
+function resetModelView() {
+    frameModel();
+}
+
+// Auto-rotate: sync with controls in render loop (handled in render())
 
 // Edit comment states
 const editingCommentId = ref<string | null>(null);
@@ -1529,7 +1396,11 @@ function render(): void {
         return;
     }
 
-    controls?.update();
+    if (controls) {
+        controls.autoRotate = autoRotate.value;
+        controls.autoRotateSpeed = 1.2;
+        controls.update();
+    }
     renderer.render(scene, camera);
     updateProjections();
     animationFrame = window.requestAnimationFrame(render);
@@ -1541,7 +1412,7 @@ function initializeViewer(): void {
     }
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x020617);
+    scene.background = new THREE.Color(0x06070a);
 
     // Studio Lighting
     scene.add(new THREE.AmbientLight(0xffffff, 1.8));
@@ -1588,6 +1459,7 @@ function initializeViewer(): void {
 onMounted(async () => {
     restoreViewerPreferences();
     initializeViewer();
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
     const proj = project.value;
     if (Array.isArray(proj?.comments) && proj.comments.length > 0) {
         comments.value = [...proj.comments];
@@ -1600,6 +1472,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
     onBoxDragEnd();
+    document.removeEventListener('fullscreenchange', handleFullscreenChange);
     if (animationFrame !== null) {
         window.cancelAnimationFrame(animationFrame);
     }
@@ -1611,8 +1484,13 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* Scoped adjustments for crisp WebGL rendering */
-canvas {
-    touch-action: none;
+canvas { touch-action: none; }
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn {
+    animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 </style>
