@@ -11,7 +11,8 @@ import {
     Moon,
     LogOut,
     User,
-    Settings
+    Settings,
+    ShieldCheck
 } from '@lucide/vue'
 import { useSidebar } from '@/composables/useSidebar'
 import { useAppearance } from '@/composables/useAppearance'
@@ -60,14 +61,6 @@ const handleClickOutside = (event: MouseEvent) => {
             >
                 <Menu class="h-5 w-5" :stroke-width="2" />
             </button>
-            
-            <nav class="hidden sm:flex items-center gap-2 text-xs font-mono text-slate-500 dark:text-[#6b7280]">
-                <Link href="/dashboard" class="hover:text-slate-900 dark:hover:text-[#f3f4f6] cursor-pointer transition-colors">Dashboard</Link>
-                <span class="text-slate-300 dark:text-white/20">/</span>
-                <span class="hover:text-slate-900 dark:hover:text-[#f3f4f6] cursor-pointer transition-colors">Proyek 3D</span>
-                <span class="text-slate-300 dark:text-white/20">/</span>
-                <span class="text-slate-900 dark:text-white font-semibold">Overview</span>
-            </nav>
         </div>
 
         <!-- Right: Telemetry, Global Search & CTA -->
@@ -132,16 +125,6 @@ const handleClickOutside = (event: MouseEvent) => {
                     <div class="w-8 h-8 rounded-full bg-slate-200 dark:bg-[#2e303d] border border-slate-300 dark:border-white/10 flex items-center justify-center text-xs font-semibold text-slate-700 dark:text-white">
                         {{ user?.name?.charAt(0).toUpperCase() || 'U' }}
                     </div>
-                    <div class="hidden md:block text-left leading-tight">
-                        <div class="text-xs font-medium text-slate-800 dark:text-white flex items-center gap-1">
-                            <span>{{ user?.name || 'User' }}</span>
-                            <ChevronDown 
-                                :class="['h-[15px] w-[15px] text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-all duration-200', showUserDropdown && 'rotate-180']" 
-                                :stroke-width="2" 
-                            />
-                        </div>
-                        <span class="text-[10px] font-mono text-sky-600 dark:text-[#38bdf8]">{{ user?.is_pro ? 'PRO TIER' : 'FREE TIER' }}</span>
-                    </div>
                 </div>
 
                 <!-- Dropdown Menu -->
@@ -197,11 +180,27 @@ const handleClickOutside = (event: MouseEvent) => {
                             </Link>
 
                             <Link 
-                                href="/settings"
+                                href="/settings/profile"
                                 class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 dark:text-[#f3f4f6] hover:bg-slate-50 dark:hover:bg-white/5 transition-all text-sm group"
                             >
                                 <Settings class="h-4 w-4 text-slate-400 dark:text-[#6b7280] group-hover:text-sky-600 dark:group-hover:text-[#38bdf8] transition-colors" :stroke-width="2" />
                                 <span>Pengaturan</span>
+                            </Link>
+
+                            <Link 
+                                href="/settings/appearance"
+                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 dark:text-[#f3f4f6] hover:bg-slate-50 dark:hover:bg-white/5 transition-all text-sm group"
+                            >
+                                <Sun class="h-4 w-4 text-slate-400 dark:text-[#6b7280] group-hover:text-sky-600 dark:group-hover:text-[#38bdf8] transition-colors" :stroke-width="2" />
+                                <span>Tampilan</span>
+                            </Link>
+
+                            <Link 
+                                href="/settings/security"
+                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 dark:text-[#f3f4f6] hover:bg-slate-50 dark:hover:bg-white/5 transition-all text-sm group"
+                            >
+                                <ShieldCheck class="h-4 w-4 text-slate-400 dark:text-[#6b7280] group-hover:text-sky-600 dark:group-hover:text-[#38bdf8] transition-colors" :stroke-width="2" />
+                                <span>Keamanan</span>
                             </Link>
 
                             <div class="my-2 border-t border-slate-100 dark:border-white/5"></div>

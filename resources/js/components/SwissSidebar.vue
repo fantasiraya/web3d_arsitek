@@ -176,6 +176,14 @@ function handleUserAction(id: string) {
     showUserPopup.value = false;
     if (id === 'logout') {
         router.post('/logout');
+    } else if (id === 'profile') {
+        router.visit('/settings/profile');
+    } else if (id === 'settings') {
+        router.visit('/settings/profile');
+    } else if (id === 'appearance') {
+        router.visit('/settings/appearance');
+    } else if (id === 'security') {
+        router.visit('/settings/security');
     }
 }
 
