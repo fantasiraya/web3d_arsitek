@@ -58,7 +58,7 @@ const { isSidebarOpen, isMobile } = useSidebar();
             <AppHeader />
 
             <!-- Konten halaman settings -->
-            <main class="flex-1 overflow-y-auto">
+            <main class="flex-1 overflow-y-auto p-6 lg:p-8">
                 <slot />
             </main>
         </div>
