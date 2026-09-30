@@ -65,6 +65,37 @@ class PinCommentController extends Controller
     }
 
     /**
+     * Toggle resolved status of a comment (open ↔ resolved).
+     */
+    public function toggleResolved(Request $request, string $projectId, string $commentId): JsonResponse|RedirectResponse
+    {
+        $project = Project::findOrFail($projectId);
+        $comment = Comment::where('project_id', $project->id)->findOrFail($commentId);
+
+        $currentUser = $request->user();
+        if ($currentUser->id !== $comment->user_id && $currentUser->id !== $project->user_id) {
+            abort(403, 'Anda tidak memiliki hak akses untuk mengubah status komentar ini.');
+        }
+
+        $newStatus = $comment->status === Comment::STATUS_RESOLVED
+            ? Comment::STATUS_OPEN
+            : Comment::STATUS_RESOLVED;
+
+        $comment->update(['status' => $newStatus]);
+
+        if ($request->wantsJson() && ! $request->header('X-Inertia')) {
+            return response()->json([
+                'message' => $newStatus === Comment::STATUS_RESOLVED
+                    ? 'Pin ditandai selesai.'
+                    : 'Pin dibuka kembali.',
+                'data' => ['id' => $comment->id, 'status' => $comment->status],
+            ]);
+        }
+
+        return back()->with('success', 'Status pin berhasil diperbarui.');
+    }
+
+    /**
      * Unpin (delete) a comment from the 3D model and database.
      */
     public function destroy(Request $request, string $projectId, string $commentId): JsonResponse|RedirectResponse

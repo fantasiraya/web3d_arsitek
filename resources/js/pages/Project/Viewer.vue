@@ -298,6 +298,23 @@
                         <!-- Read -->
                         <div v-else-if="editingCommentId !== item.id">
                             <p class="text-xs text-neutral-200 leading-relaxed break-words line-clamp-4">{{ item.content }}</p>
+                            <div class="mt-3 flex items-center justify-between text-[10px] pt-2 border-t border-white/10">
+                                <button
+                                    type="button"
+                                    @click.stop="toggleResolved(item.id)"
+                                    :disabled="togglingResolvedId === item.id"
+                                    class="font-medium transition-colors disabled:opacity-50"
+                                    :class="item.status === 'resolved' ? 'text-emerald-400 hover:text-emerald-300' : 'text-amber-400 hover:text-amber-300'"
+                                >
+                                    {{ togglingResolvedId === item.id ? 'Menyimpan...' : item.status === 'resolved' ? '✓ Selesai (Resolved)' : '○ Tandai Selesai' }}
+                                </button>
+                                <span
+                                    class="text-[9px] font-mono px-1.5 py-0.5 rounded"
+                                    :class="item.status === 'resolved' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'"
+                                >
+                                    {{ item.status === 'resolved' ? 'RESOLVED' : 'OPEN' }}
+                                </span>
+                            </div>
                         </div>
 
                         <!-- Edit -->
@@ -410,6 +427,25 @@
                                 </div>
                             </div>
 
+                            <!-- Tandai Selesai di drawer -->
+                            <div class="mt-2 flex items-center justify-between">
+                                <button
+                                    type="button"
+                                    @click.stop="toggleResolved(comment.id)"
+                                    :disabled="togglingResolvedId === comment.id"
+                                    class="text-[10px] font-medium transition-colors disabled:opacity-50"
+                                    :class="comment.status === 'resolved' ? 'text-emerald-400 hover:text-emerald-300' : 'text-amber-400 hover:text-amber-300'"
+                                >
+                                    {{ togglingResolvedId === comment.id ? 'Menyimpan...' : comment.status === 'resolved' ? '✓ Selesai' : '○ Tandai Selesai' }}
+                                </button>
+                                <span
+                                    class="text-[9px] font-mono px-1.5 py-0.5 rounded"
+                                    :class="comment.status === 'resolved' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'"
+                                >
+                                    {{ comment.status === 'resolved' ? 'RESOLVED' : 'OPEN' }}
+                                </span>
+                            </div>
+
                             <div class="mt-2 text-[10px] text-neutral-500 font-mono">
                                 ({{ comment.position_x.toFixed(1) }}, {{ comment.position_y.toFixed(1) }}, {{ comment.position_z.toFixed(1) }})
                             </div>
@@ -476,6 +512,7 @@ interface Comment {
     position_x: number;
     position_y: number;
     position_z: number;
+    status?: string;
     user?: {
         id?: string;
         name: string;
@@ -487,6 +524,7 @@ interface ProjectedComment {
     id: string;
     user_id?: string;
     content: string;
+    status?: string;
     user?: { id?: string; name: string };
     screenX: number;
     screenY: number;
@@ -923,6 +961,42 @@ function promptUnpinFromDrawer(comment: Comment) {
     promptUnpin(comment.id);
 }
 
+// Toggle resolved status — save to DB
+const togglingResolvedId = ref<string | null>(null);
+
+async function toggleResolved(commentId: string): Promise<void> {
+    if (togglingResolvedId.value) return;
+    togglingResolvedId.value = commentId;
+
+    try {
+        const response = await fetch(
+            `/projects/${project.value.id}/comments/${commentId}/resolve`,
+            {
+                method: 'PATCH',
+                headers: {
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            }
+        );
+
+        if (response.ok) {
+            const data = await response.json();
+            const target = comments.value.find(c => c.id === commentId);
+            if (target) {
+                target.status = data.data?.status;
+            }
+            updateProjections();
+        }
+    } catch (err) {
+        console.error('Failed to toggle resolved:', err);
+    } finally {
+        togglingResolvedId.value = null;
+    }
+}
+
 
 
 // Three.js variables
@@ -1243,6 +1317,7 @@ function updateProjections(): void {
             id: c.id,
             user_id: c.user_id,
             content: c.content,
+            status: c.status,
             user: c.user,
             screenX,
             screenY,
