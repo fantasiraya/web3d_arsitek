@@ -238,7 +238,7 @@ function closeMobileMenu() {
                                 <div class="popup-divider" />
 
                                 <!-- Menu items -->
-                                <Link href="/settings/profile" class="popup-item" @click="closeUserPopup">
+                                <Link href="/admin/settings/profile" class="popup-item" @click="closeUserPopup">
                                     <User class="popup-icon-svg" />
                                     <div class="popup-item-text">
                                         <span class="popup-item-label">Profil Saya</span>
@@ -246,15 +246,7 @@ function closeMobileMenu() {
                                     </div>
                                 </Link>
 
-                                <Link href="/settings/profile" class="popup-item" @click="closeUserPopup">
-                                    <Settings class="popup-icon-svg" />
-                                    <div class="popup-item-text">
-                                        <span class="popup-item-label">Pengaturan Akun</span>
-                                        <span class="popup-item-desc">Keamanan & preferensi</span>
-                                    </div>
-                                </Link>
-
-                                <Link href="/settings/appearance" class="popup-item" @click="closeUserPopup">
+                                <Link href="/admin/settings/appearance" class="popup-item" @click="closeUserPopup">
                                     <Palette class="popup-icon-svg" />
                                     <div class="popup-item-text">
                                         <span class="popup-item-label">Tampilan</span>
@@ -262,7 +254,7 @@ function closeMobileMenu() {
                                     </div>
                                 </Link>
 
-                                <Link href="/settings/security" class="popup-item" @click="closeUserPopup">
+                                <Link href="/admin/settings/security" class="popup-item" @click="closeUserPopup">
                                     <ShieldCheck class="popup-icon-svg" />
                                     <div class="popup-item-text">
                                         <span class="popup-item-label">Keamanan</span>

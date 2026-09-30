@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\ProjectController;
 use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Settings\SecurityController as SettingsSecurityController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified', 'super_admin'])->prefix('admin')->name('admin.')->group(function () {
@@ -34,4 +35,19 @@ Route::middleware(['auth', 'verified', 'super_admin'])->prefix('admin')->name('a
 
     // Audit Logs
     Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+
+    // Admin Settings (profile, appearance, security) — pakai AdminLayout
+    Route::get('/settings/profile', function (\Illuminate\Http\Request $request) {
+        return \Inertia\Inertia::render('admin/settings/Profile', [
+            'mustVerifyEmail' => $request->user() instanceof \Illuminate\Contracts\Auth\MustVerifyEmail,
+            'status' => $request->session()->get('status'),
+        ]);
+    })->name('settings.profile');
+
+    Route::get('/settings/appearance', function () {
+        return \Inertia\Inertia::render('admin/settings/Appearance');
+    })->name('settings.appearance');
+
+    Route::get('/settings/security', [SettingsSecurityController::class, 'editAdmin'])
+        ->name('settings.security');
 });

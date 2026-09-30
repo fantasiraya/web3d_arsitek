@@ -1,7 +1,12 @@
 <script setup lang="ts">
+/**
+ * Admin wrapper untuk halaman Profile Settings.
+ * Menggunakan AdminLayout sebagai shell, konten identik dengan settings/Profile.vue
+ */
 import { Form, Head, usePage } from '@inertiajs/vue3';
 import { Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import DeleteUser from '@/components/DeleteUser.vue';
 import Heading from '@/components/Heading.vue';
@@ -10,6 +15,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { send } from '@/routes/verification';
+
+defineOptions({ layout: AdminLayout });
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
@@ -20,7 +27,7 @@ const user = computed(() => page.props.auth.user);
 
     <h1 class="sr-only">Profile settings</h1>
 
-    <div class="flex flex-col space-y-6">
+    <div class="flex flex-col space-y-6 max-w-xl">
         <Heading
             variant="small"
             title="Profile"
@@ -82,9 +89,7 @@ const user = computed(() => page.props.auth.user);
             </div>
 
             <div class="flex items-center gap-4">
-                <Button :disabled="processing" data-test="update-profile-button"
-                    >Save</Button
-                >
+                <Button :disabled="processing">Save</Button>
             </div>
         </Form>
     </div>
