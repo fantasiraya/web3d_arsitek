@@ -189,7 +189,7 @@ const handleClickOutside = (event: MouseEvent) => {
                         <!-- Menu Items -->
                         <div class="p-2">
                             <Link 
-                                href="/profile"
+                                href="/settings/profile"
                                 class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 dark:text-[#f3f4f6] hover:bg-slate-50 dark:hover:bg-white/5 transition-all text-sm group"
                             >
                                 <User class="h-4 w-4 text-slate-400 dark:text-[#6b7280] group-hover:text-sky-600 dark:group-hover:text-[#38bdf8] transition-colors" :stroke-width="2" />

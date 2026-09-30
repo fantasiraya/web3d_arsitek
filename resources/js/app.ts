@@ -2,10 +2,8 @@ import '../css/app.css';
 
 import { createInertiaApp } from '@inertiajs/vue3';
 import { initializeTheme } from '@/composables/useAppearance';
-import AppLayout from '@/layouts/AppLayout.vue';
-import AppSwissLayout from '@/layouts/AppSwissLayout.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
-import SettingsLayout from '@/layouts/settings/Layout.vue';
+import UnifiedLayout from '@/layouts/UnifiedLayout.vue';
 import { initializeFlashToast } from '@/lib/flashToast';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
@@ -22,8 +20,9 @@ void createInertiaApp({
             case name.startsWith('auth/'):
                 return AuthLayout;
 
+            // Settings pages: pakai UnifiedLayout (adaptif admin/user), tanpa inner tab nav
             case name.startsWith('settings/'):
-                return [AppSwissLayout, SettingsLayout];
+                return UnifiedLayout;
 
             default:
                 return;
