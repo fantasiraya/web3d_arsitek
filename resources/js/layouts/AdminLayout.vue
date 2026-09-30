@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { Head, Link, usePage, router } from '@inertiajs/vue3';
 import { useAppearance } from '@/composables/useAppearance';
 import {
-    Activity,
     ArrowLeft,
     CheckCircle2,
     ChevronLeft,
+    ChevronUp,
     CreditCard,
     FolderKanban,
     Layers,
@@ -14,23 +14,17 @@ import {
     LogOut,
     Menu,
     Moon,
+    Palette,
+    Settings,
     ShieldAlert,
     ShieldCheck,
     Sun,
+    User,
     Users,
     X,
 } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { logout } from '@/routes';
 
 defineProps<{
     title?: string;
@@ -41,6 +35,34 @@ const flashSuccess = computed(() => (page.props as any).flash?.success);
 const authUser = computed(() => (page.props as any).auth?.user);
 
 const currentUrl = computed(() => page.url);
+
+// User popup state
+const showUserPopup = ref(false);
+
+function toggleUserPopup(e: MouseEvent) {
+    e.stopPropagation();
+    showUserPopup.value = !showUserPopup.value;
+}
+
+function closeUserPopup() {
+    showUserPopup.value = false;
+}
+
+function handleLogout() {
+    closeUserPopup();
+    router.post('/logout');
+}
+
+// Close popup when clicking outside
+function handleClickOutside(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    if (!target.closest('.user-section')) {
+        showUserPopup.value = false;
+    }
+}
+
+onMounted(() => document.addEventListener('click', handleClickOutside));
+onUnmounted(() => document.removeEventListener('click', handleClickOutside));
 
 const navItems = [
     { title: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
@@ -161,27 +183,102 @@ function closeMobileMenu() {
                     </Link>
 
                     <div class="user-section">
-                        <div class="user-info">
-                            <div class="user-avatar">
-                                {{ authUser?.name?.charAt(0) ?? 'A' }}
+                        <!-- User pill — klik untuk buka popup -->
+                        <button
+                            class="user-pill"
+                            :class="{ active: showUserPopup }"
+                            @click="toggleUserPopup"
+                            :title="isCollapsed ? `${authUser?.name} — klik untuk menu` : ''"
+                        >
+                            <div class="user-info">
+                                <div class="user-avatar">
+                                    {{ authUser?.name?.charAt(0) ?? 'A' }}
+                                </div>
+                                <Transition name="slide-fade">
+                                    <div v-if="!isCollapsed" class="user-text">
+                                        <div class="user-name">{{ authUser?.name }}</div>
+                                        <div class="user-email">{{ authUser?.email }}</div>
+                                    </div>
+                                </Transition>
                             </div>
                             <Transition name="slide-fade">
-                                <div v-if="!isCollapsed" class="user-text">
-                                    <div class="user-name">{{ authUser?.name }}</div>
-                                    <div class="user-email">{{ authUser?.email }}</div>
-                                </div>
+                                <ChevronUp
+                                    v-if="!isCollapsed"
+                                    class="h-4 w-4 text-muted-foreground transition-transform duration-200 shrink-0"
+                                    :class="{ 'rotate-180': showUserPopup }"
+                                />
                             </Transition>
-                        </div>
+                        </button>
 
-                        <Link 
-                            :href="logout()" 
-                            method="post" 
-                            as="button" 
-                            class="logout-btn"
-                            :title="isCollapsed ? 'Log out' : ''"
+                        <!-- Popup -->
+                        <Transition
+                            enter-active-class="transition-all duration-200 ease-out"
+                            enter-from-class="opacity-0 scale-95 translate-y-2"
+                            enter-to-class="opacity-100 scale-100 translate-y-0"
+                            leave-active-class="transition-all duration-150 ease-in"
+                            leave-from-class="opacity-100 scale-100 translate-y-0"
+                            leave-to-class="opacity-0 scale-95 translate-y-2"
                         >
-                            <LogOut class="h-4 w-4" />
-                        </Link>
+                            <div
+                                v-if="showUserPopup"
+                                class="user-popup"
+                                :class="{ 'popup-collapsed': isCollapsed }"
+                                @click.stop
+                            >
+                                <!-- Header user info -->
+                                <div class="popup-header">
+                                    <div class="popup-avatar">{{ authUser?.name?.charAt(0) ?? 'A' }}</div>
+                                    <div class="popup-user-info">
+                                        <span class="popup-name">{{ authUser?.name }}</span>
+                                        <span class="popup-email">{{ authUser?.email }}</span>
+                                    </div>
+                                    <span class="popup-role-pill">Super Admin</span>
+                                </div>
+
+                                <div class="popup-divider" />
+
+                                <!-- Menu items -->
+                                <Link href="/settings/profile" class="popup-item" @click="closeUserPopup">
+                                    <User class="popup-icon-svg" />
+                                    <div class="popup-item-text">
+                                        <span class="popup-item-label">Profil Saya</span>
+                                        <span class="popup-item-desc">Edit data & foto profil</span>
+                                    </div>
+                                </Link>
+
+                                <Link href="/settings/profile" class="popup-item" @click="closeUserPopup">
+                                    <Settings class="popup-icon-svg" />
+                                    <div class="popup-item-text">
+                                        <span class="popup-item-label">Pengaturan Akun</span>
+                                        <span class="popup-item-desc">Keamanan & preferensi</span>
+                                    </div>
+                                </Link>
+
+                                <Link href="/settings/appearance" class="popup-item" @click="closeUserPopup">
+                                    <Palette class="popup-icon-svg" />
+                                    <div class="popup-item-text">
+                                        <span class="popup-item-label">Tampilan</span>
+                                        <span class="popup-item-desc">Mode gelap & preferensi UI</span>
+                                    </div>
+                                </Link>
+
+                                <Link href="/settings/security" class="popup-item" @click="closeUserPopup">
+                                    <ShieldCheck class="popup-icon-svg" />
+                                    <div class="popup-item-text">
+                                        <span class="popup-item-label">Keamanan</span>
+                                        <span class="popup-item-desc">Password & autentikasi</span>
+                                    </div>
+                                </Link>
+
+                                <div class="popup-divider" />
+
+                                <!-- Logout -->
+                                <button class="popup-item popup-logout" @click="handleLogout">
+                                    <LogOut class="popup-icon-svg" />
+                                    <span class="popup-item-label">Keluar dari Akun</span>
+                                </button>
+                            </div>
+                        </Transition>
                     </div>
                 </div>
             </div>
@@ -521,18 +618,33 @@ function closeMobileMenu() {
 .user-section {
     padding-top: 0.5rem;
     border-top: 1px solid hsl(var(--sidebar-border) / 0.6);
+    position: relative;
+}
+
+/* Pill button */
+.user-pill {
+    width: 100%;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
+    gap: 0.5rem;
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.625rem;
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.17s ease;
+    text-align: left;
+}
+.user-pill:hover { background: hsl(var(--sidebar-accent) / 0.5); }
+.user-pill.active {
+    background: hsl(var(--sidebar-accent));
+    border-color: hsl(var(--sidebar-border));
 }
 
-.admin-wrapper.sidebar-collapsed .user-section {
-    flex-direction: column;
-    gap: 0.5rem;
-    padding-left: 0;
-    padding-right: 0;
+.admin-wrapper.sidebar-collapsed .user-pill {
+    justify-content: center;
+    padding: 0.5rem 0;
 }
 
 .user-info {
@@ -564,7 +676,7 @@ function closeMobileMenu() {
 
 .user-name {
     font-size: 0.75rem;
-    font-weight: 500;
+    font-weight: 600;
     color: hsl(var(--sidebar-foreground));
     white-space: nowrap;
     overflow: hidden;
@@ -579,20 +691,169 @@ function closeMobileMenu() {
     text-overflow: ellipsis;
 }
 
-.logout-btn {
-    color: hsl(var(--muted-foreground));
-    padding: 0.25rem;
-    border-radius: 0.375rem;
-    transition: color 0.15s;
-    flex-shrink: 0;
-    background: transparent;
-    border: none;
-    cursor: pointer;
+/* ── Popup ── */
+.user-popup {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: hsl(0 0% 100%);
+    border: 1px solid hsl(0 0% 89.8%);
+    border-radius: 0.75rem;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
+    z-index: 200;
+    overflow: hidden;
+    min-width: 220px;
 }
 
-.logout-btn:hover {
-    color: hsl(var(--destructive));
+.dark .user-popup {
+    background: hsl(0 0% 7%);
+    border-color: hsl(0 0% 14.9%);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
 }
+
+.user-popup.popup-collapsed {
+    left: calc(var(--admin-sidebar-collapsed-w) + 8px);
+    right: auto;
+    width: 256px;
+    bottom: 0.5rem;
+}
+
+.popup-header {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.875rem 1rem;
+    background: hsl(0 0% 96.1%);
+    border-bottom: 1px solid hsl(0 0% 89.8%);
+}
+.dark .popup-header {
+    background: hsl(0 0% 10%);
+    border-bottom-color: hsl(0 0% 14.9%);
+}
+
+.popup-avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.625rem;
+    background: hsl(var(--primary) / 0.15);
+    color: hsl(var(--primary));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+.popup-user-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+
+.popup-name {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: hsl(0 0% 3.9%);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.dark .popup-name { color: hsl(0 0% 98%); }
+
+.popup-email {
+    font-size: 0.6875rem;
+    color: hsl(0 0% 45.1%);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.dark .popup-email { color: hsl(0 0% 63.9%); }
+
+.popup-role-pill {
+    font-size: 0.625rem;
+    font-weight: 700;
+    color: hsl(var(--primary));
+    background: hsl(var(--primary) / 0.1);
+    border: 1px solid hsl(var(--primary) / 0.25);
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.popup-divider {
+    height: 1px;
+    background: hsl(0 0% 89.8%);
+    margin: 0.25rem 0;
+}
+.dark .popup-divider { background: hsl(0 0% 14.9%); }
+
+.popup-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    background: transparent;
+    border: none;
+    color: hsl(0 0% 20%);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+    text-decoration: none;
+}
+.dark .popup-item { color: hsl(0 0% 80%); }
+
+.popup-item:hover {
+    background: hsl(0 0% 94%);
+    color: hsl(0 0% 3.9%);
+}
+.dark .popup-item:hover {
+    background: hsl(0 0% 14.9%);
+    color: hsl(0 0% 98%);
+}
+
+.popup-logout { color: hsl(0 84.2% 50%); }
+.dark .popup-logout { color: hsl(0 84% 60%); }
+
+.popup-logout:hover {
+    background: hsl(0 84.2% 50% / 0.08);
+    color: hsl(0 84.2% 45%);
+}
+.dark .popup-logout:hover {
+    background: hsl(0 84% 60% / 0.1);
+    color: hsl(0 84% 65%);
+}
+
+.popup-icon-svg {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+.popup-item-text {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.popup-item-label {
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+
+.popup-item-desc {
+    font-size: 0.6875rem;
+    color: hsl(0 0% 45.1%);
+    margin-top: 1px;
+}
+.dark .popup-item-desc { color: hsl(0 0% 63.9%); }
 
 /* Toggle FAB */
 .sidebar-toggle-fab {
