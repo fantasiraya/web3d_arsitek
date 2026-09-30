@@ -46,6 +46,23 @@
                     <Maximize2 v-else class="h-3.5 w-3.5 text-neutral-300" />
                     <span class="hidden sm:inline">{{ isFullscreen ? 'Keluar Penuh' : 'Layar Penuh' }}</span>
                 </button>
+
+                <!-- Chat toggle -->
+                <button
+                    type="button"
+                    @click="isChatOpen = !isChatOpen; isDrawerOpen = false"
+                    class="relative flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
+                    :class="isChatOpen && 'border-indigo-500/50 bg-indigo-500/10 text-indigo-300'"
+                >
+                    <MessageCircle class="h-3.5 w-3.5" :class="isChatOpen ? 'text-indigo-400' : 'text-indigo-300'" />
+                    <span class="hidden sm:inline">Chat</span>
+                    <span
+                        v-if="chatUnread > 0"
+                        class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 text-[9px] font-bold text-white"
+                    >
+                        {{ chatUnread > 9 ? '9+' : chatUnread }}
+                    </span>
+                </button>
             </div>
         </header>
 
@@ -465,6 +482,14 @@
                 </div>
             </aside>
 
+            <!-- ── CHAT PANEL (realtime) ── -->
+            <ChatPanel
+                ref="chatPanelRef"
+                :project-id="project.id"
+                :visible="isChatOpen"
+                @close="isChatOpen = false"
+            />
+
         </div>
     </div>
 </template>
@@ -483,6 +508,7 @@ import {
     Hand,
     MapPin,
     Maximize2,
+    MessageCircle,
     MessageSquare,
     Minimize2,
     Pencil,
@@ -499,6 +525,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useRaycast } from '@/composables/useRaycast';
 import RevisionBadge from '@/components/RevisionBadge.vue';
+import ChatPanel from '@/components/ChatPanel.vue';
 import {
     index as commentIndex,
     store as storeComment,
@@ -564,6 +591,11 @@ const showAnnotations = ref(true);
 const isDrawerOpen = ref(true);
 const activeCommentId = ref<string | null>(null);
 const limitWarning = ref('');
+
+// ── Chat state ──────────────────────────────────────────
+const isChatOpen = ref(false);
+const chatPanelRef = ref<InstanceType<typeof ChatPanel> | null>(null);
+const chatUnread = computed(() => chatPanelRef.value?.unreadCount ?? 0);
 
 // ── Showcase-compatible state ──
 const autoRotate = ref(false);

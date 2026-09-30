@@ -2,6 +2,7 @@
 
 use App\Domains\Comment\Controllers\CommentController;
 use App\Domains\Comment\Controllers\PinCommentController;
+use App\Domains\Chat\Controllers\ChatController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Project\ProjectController;
@@ -34,6 +35,13 @@ Route::middleware(['auth', 'project.access'])->delete('/projects/{project}/comme
 Route::middleware(['auth', 'project.access'])->get('/projects/{project}/viewer', [ViewerController::class, 'show'])->name('projects.viewer');
 
 Route::middleware(['auth', 'project.access'])->get('/projects/{project}/comments', [CommentController::class, 'index'])->name('projects.comments.index');
+
+// ── Chat realtime routes ──
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/projects/{project}/chat', [ChatController::class, 'index'])->name('projects.chat.index');
+    Route::post('/projects/{project}/chat', [ChatController::class, 'store'])->name('projects.chat.store');
+    Route::patch('/projects/{project}/chat/read', [ChatController::class, 'markRead'])->name('projects.chat.read');
+});
 
 Route::middleware('guest')->group(function () {
     Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('google.redirect');
