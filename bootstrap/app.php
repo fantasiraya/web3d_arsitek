@@ -49,6 +49,25 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
 
+        // ── Render HTTP errors sebagai halaman Inertia Error.vue ──────────────
+        $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response, \Throwable $exception, Request $request) {
+            $status = $response->getStatusCode();
+
+            // Hanya tangani 404, 403, 500 sebagai Inertia page
+            if (
+                in_array($status, [404, 403, 500, 503])
+                && ! $request->is('api/*')
+                && ! $request->expectsJson()
+                && ! $request->header('X-Inertia')
+            ) {
+                return \Inertia\Inertia::render('Error', ['status' => $status])
+                    ->toResponse($request)
+                    ->setStatusCode($status);
+            }
+
+            return $response;
+        });
+
         $exceptions->render(function (PostTooLargeException $e, Request $request) {
             $message = 'Ukuran file terlalu besar! Melebihi batas upload server. Silakan pilih file dengan ukuran lebih kecil.';
 
