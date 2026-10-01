@@ -41,6 +41,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AdminLayout from '@/layouts/AdminLayout.vue';
+import { usePageLoading } from '@/composables/usePageLoading';
+import SkeletonStatCards from '@/components/skeletons/SkeletonStatCards.vue';
+import SkeletonTable from '@/components/skeletons/SkeletonTable.vue';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface UserItem {
     id: string;
@@ -86,6 +90,7 @@ const props = defineProps<{
 }>();
 
 const searchInput = ref(props.filters.search || '');
+const { isLoading } = usePageLoading(80);
 const planFilter = ref(props.filters.plan || '');
 const statusFilter = ref(props.filters.status || '');
 
@@ -180,6 +185,28 @@ function toggleUserStatus(user: UserItem) {
 
 <template>
     <AdminLayout title="Manajemen Pengguna">
+        <!-- ── SKELETON ── -->
+        <template v-if="isLoading">
+            <div class="space-y-6">
+                <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div class="space-y-2"><Skeleton class="h-8 w-52" /><Skeleton class="h-4 w-72 max-w-full" /></div>
+                </div>
+                <SkeletonStatCards :count="4" />
+                <div class="flex items-center gap-3">
+                    <Skeleton class="h-10 flex-1 max-w-sm rounded-xl" />
+                    <Skeleton class="h-10 w-24 rounded-xl" />
+                    <Skeleton class="h-10 w-10 rounded-xl" />
+                </div>
+                <SkeletonTable :rows="8" :cols="5" />
+                <div class="flex items-center justify-between">
+                    <Skeleton class="h-4 w-40" />
+                    <div class="flex gap-2"><Skeleton v-for="i in 4" :key="i" class="h-9 w-9 rounded-lg" /></div>
+                </div>
+            </div>
+        </template>
+
+        <!-- ── REAL CONTENT ── -->
+        <template v-else>
         <div class="space-y-6">
             <!-- Header -->
             <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -572,6 +599,7 @@ function toggleUserStatus(user: UserItem) {
                 </form>
             </DialogContent>
         </Dialog>
+        </template><!-- end v-else -->
     </AdminLayout>
 </template>
 

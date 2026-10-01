@@ -22,6 +22,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import AdminLayout from '@/layouts/AdminLayout.vue';
+import { usePageLoading } from '@/composables/usePageLoading';
+import SkeletonStatCards from '@/components/skeletons/SkeletonStatCards.vue';
+import SkeletonTable from '@/components/skeletons/SkeletonTable.vue';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface Stats {
     total_users: number;
@@ -72,6 +76,8 @@ const customFrom = ref(props.filters.from || '');
 const customTo = ref(props.filters.to || '');
 const showCustomRange = ref(props.filters.filter === 'custom');
 
+const { isLoading } = usePageLoading(80);
+
 function applyFilter(filterName: string) {
     selectedFilter.value = filterName;
     if (filterName === 'custom') {
@@ -121,6 +127,24 @@ function getPolylinePoints(data: number[], height: number, width: number): strin
 
 <template>
     <AdminLayout title="Admin Dashboard">
+        <!-- ── SKELETON ── -->
+        <template v-if="isLoading">
+            <div class="space-y-8">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="space-y-2"><Skeleton class="h-8 w-64" /><Skeleton class="h-4 w-96 max-w-full" /></div>
+                    <div class="flex gap-2"><Skeleton v-for="i in 4" :key="i" class="h-9 w-20 rounded-lg" /></div>
+                </div>
+                <SkeletonStatCards :count="4" />
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Skeleton class="h-64 rounded-2xl" />
+                    <Skeleton class="h-64 rounded-2xl" />
+                </div>
+                <SkeletonTable :rows="5" :cols="5" />
+            </div>
+        </template>
+
+        <!-- ── REAL CONTENT ── -->
+        <template v-else>
         <div class="space-y-8">
             <!-- Header with Title & Date Filters -->
             <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -450,6 +474,7 @@ function getPolylinePoints(data: number[], height: number, width: number): strin
                 </Card>
             </div>
         </div>
+        </template><!-- end v-else -->
     </AdminLayout>
 </template>
 

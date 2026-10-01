@@ -45,6 +45,10 @@ import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'vue-sonner';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { useConfirm } from '@/composables/useConfirm';
+import { usePageLoading } from '@/composables/usePageLoading';
+import SkeletonStatCards from '@/components/skeletons/SkeletonStatCards.vue';
+import SkeletonProjectGrid from '@/components/skeletons/SkeletonProjectGrid.vue';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProjectClientItem {
     id: string;
@@ -542,6 +546,7 @@ function formatBytes(bytes: number): string {
 // Sidebar state
 const { isSidebarOpen, isMobile } = useSidebar();
 const { confirm } = useConfirm();
+const { isLoading } = usePageLoading(80);
 
 </script>
 
@@ -574,6 +579,31 @@ const { confirm } = useConfirm();
 
             <!-- Main Content Workspace -->
             <main class="flex-1 p-6 lg:p-8 space-y-6 w-full relative z-10">
+
+                <!-- ── SKELETON STATE ── -->
+                <template v-if="isLoading">
+                    <!-- Header skeleton -->
+                    <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div class="space-y-2">
+                            <Skeleton class="h-8 w-64" />
+                            <Skeleton class="h-4 w-96 max-w-full" />
+                        </div>
+                        <Skeleton class="h-10 w-36 rounded-full" />
+                    </div>
+                    <!-- Stat cards skeleton -->
+                    <SkeletonStatCards :count="4" />
+                    <!-- Tabs skeleton -->
+                    <div class="flex gap-3 border-b border-slate-200 dark:border-white/15 pb-2">
+                        <Skeleton class="h-10 w-48 rounded-xl" />
+                        <Skeleton class="h-10 w-52 rounded-xl" />
+                        <div class="ml-auto"><Skeleton class="h-9 w-48 rounded-xl" /></div>
+                    </div>
+                    <!-- Project grid skeleton -->
+                    <SkeletonProjectGrid :count="3" />
+                </template>
+
+                <!-- ── REAL CONTENT ── -->
+                <template v-else>
                 <!-- Flash Message -->
                 <div
                     v-if="flashSuccess"
@@ -1412,6 +1442,7 @@ const { confirm } = useConfirm();
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+                </template><!-- end v-else real content -->
             </main>
         </div>
     </div>

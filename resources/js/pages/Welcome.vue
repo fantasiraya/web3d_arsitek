@@ -8,6 +8,11 @@ import InteractiveShowcaseSection from '@/components/landing/InteractiveShowcase
 import PricingSection from '@/components/landing/PricingSection.vue';
 import FaqSection from '@/components/landing/FaqSection.vue';
 import CtaSection from '@/components/landing/CtaSection.vue';
+import SkeletonHero from '@/components/skeletons/SkeletonHero.vue';
+import { Skeleton } from '@/components/ui/skeleton';
+import { usePageLoading } from '@/composables/usePageLoading';
+
+const { isLoading } = usePageLoading(80);
 </script>
 
 <template>
@@ -25,25 +30,41 @@ import CtaSection from '@/components/landing/CtaSection.vue';
     </Head>
 
     <LandingLayout>
-        <!-- Act 1: Monumental Hero Section with Villa Showcase Window -->
-        <HeroSection />
+        <!-- Skeleton loading state saat navigasi ke halaman ini -->
+        <template v-if="isLoading">
+            <SkeletonHero />
+            <!-- Skeleton bento grid -->
+            <div class="max-w-7xl mx-auto px-4 py-16 space-y-4">
+                <div class="flex flex-col items-center gap-3 mb-8">
+                    <Skeleton class="h-5 w-32 rounded-full" />
+                    <Skeleton class="h-10 w-80" />
+                    <Skeleton class="h-5 w-64" />
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <Skeleton v-for="i in 6" :key="i" class="h-48 rounded-2xl" />
+                </div>
+            </div>
+            <!-- Skeleton pricing -->
+            <div class="max-w-7xl mx-auto px-4 py-16 space-y-6">
+                <div class="flex flex-col items-center gap-3 mb-8">
+                    <Skeleton class="h-5 w-24 rounded-full" />
+                    <Skeleton class="h-10 w-64" />
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <Skeleton v-for="i in 3" :key="i" class="h-80 rounded-2xl" />
+                </div>
+            </div>
+        </template>
 
-        <!-- Act 2: Scrollytelling 4-Step Product Journey (Pinned Sticky 100vh Viewport) -->
-        <ScrollyExperienceSection />
-
-        <!-- Act 3: Apple Pro Bento Grid (Security, Dual-Capacity, Draco, WebSocket) -->
-        <BentoGridSection />
-
-        <!-- Act 5: Interactive 3D Spatial Annotation Simulator -->
-        <InteractiveShowcaseSection />
-
-        <!-- Act 6: Tiered Apple Store-style Pricing Comparison -->
-        <PricingSection />
-
-        <!-- Act 7: Frequently Asked Questions (Apple-style Accordion) -->
-        <FaqSection />
-
-        <!-- Act 8: Monumental Closing CTA -->
-        <CtaSection />
+        <!-- Konten asli -->
+        <template v-else>
+            <HeroSection />
+            <ScrollyExperienceSection />
+            <BentoGridSection />
+            <InteractiveShowcaseSection />
+            <PricingSection />
+            <FaqSection />
+            <CtaSection />
+        </template>
     </LandingLayout>
 </template>

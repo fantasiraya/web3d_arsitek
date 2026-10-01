@@ -21,6 +21,9 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'vue-sonner';
 import { useConfirm } from '@/composables/useConfirm';
+import { usePageLoading } from '@/composables/usePageLoading';
+import SkeletonProjectGrid from '@/components/skeletons/SkeletonProjectGrid.vue';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ─── Types ───────────────────────────────────────────────
 interface ProjectClientItem {
@@ -55,6 +58,7 @@ const props = defineProps<{
 // ─── Layout ──────────────────────────────────────────────
 const { isSidebarOpen, isMobile } = useSidebar();
 const { confirm } = useConfirm();
+const { isLoading } = usePageLoading(80);
 const page = usePage();
 const flashSuccess = computed(() => (page.props as any).flash?.success);
 
@@ -188,6 +192,19 @@ async function revokeClient(client: ProjectClientItem) {
 
             <main class="flex-1 p-6 lg:p-8 space-y-6">
 
+                <!-- ── SKELETON ── -->
+                <template v-if="isLoading">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div class="space-y-2"><Skeleton class="h-8 w-40" /><Skeleton class="h-4 w-56" /></div>
+                        <Skeleton class="h-10 w-36 rounded-full" />
+                    </div>
+                    <Skeleton class="h-10 w-80 max-w-full rounded-xl" />
+                    <SkeletonProjectGrid :count="3" />
+                </template>
+
+                <!-- ── REAL CONTENT ── -->
+                <template v-else>
+
                 <!-- Page header -->
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
@@ -318,7 +335,7 @@ async function revokeClient(client: ProjectClientItem) {
                         </div>
                     </div>
                 </div>
-
+                </template><!-- end v-else -->
             </main>
         </div>
     </div>

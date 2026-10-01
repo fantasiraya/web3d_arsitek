@@ -15,6 +15,10 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'vue-sonner';
 import { useConfirm } from '@/composables/useConfirm';
+import { usePageLoading } from '@/composables/usePageLoading';
+import SkeletonStatCards from '@/components/skeletons/SkeletonStatCards.vue';
+import SkeletonTable from '@/components/skeletons/SkeletonTable.vue';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ─── Types ───────────────────────────────────────────────
 interface Client {
@@ -53,6 +57,7 @@ const props = defineProps<{
 // ─── Layout ──────────────────────────────────────────────
 const { isSidebarOpen, isMobile } = useSidebar();
 const { confirm } = useConfirm();
+const { isLoading } = usePageLoading(80);
 
 // ─── Search ──────────────────────────────────────────────
 const searchInput = ref(props.search);
@@ -99,6 +104,28 @@ async function revokeClient(client: Client) {
             <AppHeader />
 
             <main class="flex-1 p-6 lg:p-8 space-y-6">
+
+                <!-- ── SKELETON ── -->
+                <template v-if="isLoading">
+                    <div class="space-y-2">
+                        <Skeleton class="h-8 w-36" />
+                        <Skeleton class="h-4 w-64" />
+                    </div>
+                    <SkeletonStatCards :count="4" />
+                    <Skeleton class="h-10 w-80 max-w-full rounded-xl" />
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2">
+                            <SkeletonTable :rows="6" :cols="4" />
+                        </div>
+                        <div class="space-y-3">
+                            <Skeleton class="h-4 w-40" />
+                            <Skeleton v-for="i in 4" :key="i" class="h-24 w-full rounded-xl" />
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ── REAL CONTENT ── -->
+                <template v-else>
 
                 <!-- Page header -->
                 <div>
@@ -286,6 +313,7 @@ async function revokeClient(client: Client) {
                     </div>
 
                 </div>
+                </template><!-- end v-else -->
             </main>
         </div>
     </div>
