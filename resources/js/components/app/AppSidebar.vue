@@ -157,7 +157,7 @@ onUnmounted(() => {
                 <Link 
                     href="/projects"
                     :class="[
-                        'group flex items-center justify-between px-3 py-2 rounded-xl transition-all',
+                        'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all',
                         isActiveRoute('projects')
                             ? 'bg-slate-100 dark:bg-white/[0.06] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 shadow-sm'
                             : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
@@ -165,8 +165,13 @@ onUnmounted(() => {
                     ]"
                     :title="!isSidebarOpen ? 'Proyek 3D' : ''"
                 >
+                    <div v-if="isActiveRoute('projects')" class="absolute left-0 top-2 bottom-2 w-1 bg-sky-500 dark:bg-[#38bdf8] rounded-r-full"></div>
                     <div class="flex items-center gap-3 min-w-0">
-                        <Box class="h-[19px] w-[19px] text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
+                        <Box
+                            class="h-[19px] w-[19px] shrink-0 transition-colors"
+                            :class="isActiveRoute('projects') ? 'text-sky-600 dark:text-[#38bdf8]' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
+                            :stroke-width="2"
+                        />
                         <Transition
                             enter-active-class="transition-opacity duration-200 delay-75"
                             enter-from-class="opacity-0"
@@ -240,16 +245,24 @@ onUnmounted(() => {
                 </a>
 
                 <!-- Tim & Klien -->
-                <a 
-                    href="#" 
+                <Link 
+                    href="/teams"
                     :class="[
-                        'group flex items-center justify-between px-3 py-2 rounded-xl text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all',
+                        'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all',
+                        isActiveRoute('teams')
+                            ? 'bg-slate-100 dark:bg-white/[0.06] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 shadow-sm'
+                            : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
                         !isSidebarOpen && 'justify-center'
                     ]"
                     :title="!isSidebarOpen ? 'Tim & Klien' : ''"
                 >
+                    <div v-if="isActiveRoute('teams')" class="absolute left-0 top-2 bottom-2 w-1 bg-sky-500 dark:bg-[#38bdf8] rounded-r-full"></div>
                     <div class="flex items-center gap-3 min-w-0">
-                        <Users class="h-[19px] w-[19px] text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
+                        <Users
+                            class="h-[19px] w-[19px] shrink-0 transition-colors"
+                            :class="isActiveRoute('teams') ? 'text-sky-600 dark:text-[#38bdf8]' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
+                            :stroke-width="2"
+                        />
                         <Transition
                             enter-active-class="transition-opacity duration-200 delay-75"
                             enter-from-class="opacity-0"
@@ -261,17 +274,7 @@ onUnmounted(() => {
                             <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">Tim & Klien</span>
                         </Transition>
                     </div>
-                    <Transition
-                        enter-active-class="transition-opacity duration-200 delay-100"
-                        enter-from-class="opacity-0"
-                        enter-to-class="opacity-100"
-                        leave-active-class="transition-opacity duration-150"
-                        leave-from-class="opacity-100"
-                        leave-to-class="opacity-0"
-                    >
-                        <span v-if="isSidebarOpen" class="text-[10px] font-mono text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-400/20 shrink-0 font-semibold">1 Invite</span>
-                    </Transition>
-                </a>
+                </Link>
             </div>
 
             <!-- Konfigurasi Group -->

@@ -5,6 +5,8 @@ use App\Domains\Comment\Controllers\PinCommentController;
 use App\Domains\Chat\Controllers\ChatController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\UserSearchController;
+use App\Http\Controllers\ProjectsPageController;
+use App\Http\Controllers\TeamsPageController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Project\ProjectController;
 use App\Http\Controllers\Project\ViewerController;
@@ -18,6 +20,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // User email search (for invite suggestions)
     Route::get('/users/search', UserSearchController::class)->name('users.search');
+
+    // Proyek 3D page
+    Route::get('/projects', [ProjectsPageController::class, 'index'])->name('projects.index');
+
+    // Tim & Klien page
+    Route::get('/teams', [TeamsPageController::class, 'index'])->name('teams.index');
 
     // Project management
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
