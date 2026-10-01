@@ -25,6 +25,12 @@ void createInertiaApp({
             case name.startsWith('Teams/'):
                 return null;
 
+            case name === 'auth/Login':
+            case name === 'auth/Register':
+                // Login & Register pakai LandingLayout via defineOptions di page component
+                // Kembalikan undefined agar page-level defineOptions yang menang
+                return undefined;
+
             case name.startsWith('auth/'):
                 return AuthLayout;
 
