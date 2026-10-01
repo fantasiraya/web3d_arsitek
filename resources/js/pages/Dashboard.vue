@@ -41,6 +41,10 @@ import AppSidebar from '@/components/app/AppSidebar.vue';
 import AppHeader from '@/components/app/AppHeader.vue';
 import { useSidebar } from '@/composables/useSidebar';
 import { echo } from '@/lib/echo';
+import { Toaster } from '@/components/ui/sonner';
+import { toast } from 'vue-sonner';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import { useConfirm } from '@/composables/useConfirm';
 
 interface ProjectClientItem {
     id: string;
@@ -483,22 +487,35 @@ function submitInviteClient() {
     });
 }
 
-function revokeClient(client: ProjectClientItem) {
+async function revokeClient(client: ProjectClientItem) {
     if (!activeProjectForClients.value) return;
-    if (!confirm(`Cabut akses untuk klien ${client.email}?`)) return;
+
+    const ok = await confirm({
+        title: 'Cabut Akses Klien?',
+        description: `Akses ${client.email} akan dicabut. Mereka tidak bisa lagi membuka viewer atau memberi pin komentar pada proyek ini.`,
+        confirmText: 'Ya, Cabut Akses',
+        cancelText: 'Batal',
+        variant: 'destructive',
+        icon: 'trash',
+    });
+
+    if (!ok) return;
 
     router.delete(`/projects/${activeProjectForClients.value.id}/clients/${client.id}`, {
         preserveScroll: true,
         onSuccess: () => {
+            toast.success(`Akses klien ${client.email} berhasil dicabut.`);
             const updated = localOwnedProjects.value.find((p) => p.id === activeProjectForClients.value?.id)
                 ?? props.ownedProjects?.find((p) => p.id === activeProjectForClients.value?.id);
             if (updated) {
                 activeProjectForClients.value = updated;
             }
         },
+        onError: () => {
+            toast.error('Gagal mencabut akses klien. Coba lagi.');
+        },
     });
 }
-
 // Action: Accept Client Invitation
 function acceptInvitation(project: ClientProject) {
     router.post(`/projects/${project.id}/accept-invitation`, {}, {
@@ -524,6 +541,7 @@ function formatBytes(bytes: number): string {
 
 // Sidebar state
 const { isSidebarOpen, isMobile } = useSidebar();
+const { confirm } = useConfirm();
 
 </script>
 
@@ -1397,4 +1415,8 @@ const { isSidebarOpen, isMobile } = useSidebar();
             </main>
         </div>
     </div>
+
+    <!-- Global confirm dialog + toast (satu instance, di-share seluruh halaman) -->
+    <ConfirmDialog />
+    <Toaster position="top-right" :duration="4000" rich-colors close-button />
 </template>
