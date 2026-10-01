@@ -6,6 +6,7 @@ use App\Domains\Auth\Models\User;
 use App\Domains\Project\Models\Project;
 use App\Domains\Project\Models\ProjectClient;
 use App\Domains\Project\Notifications\ClientInvitationNotification;
+use App\Events\ClientInvitationReceived;
 use Illuminate\Support\Facades\Notification;
 
 class InviteClientAction
@@ -19,19 +20,28 @@ class InviteClientAction
         $client = ProjectClient::updateOrCreate(
             [
                 'project_id' => $project->id,
-                'email' => $email,
+                'email'      => $email,
             ],
             [
                 'invited_by' => $inviter->id,
-                'user_id' => $existingUser?->id,
-                'status' => ProjectClient::STATUS_PENDING,
+                'user_id'    => $existingUser?->id,
+                'status'     => ProjectClient::STATUS_PENDING,
                 'invited_at' => now(),
             ]
         );
 
-        // Send notification
+        // Send email notification
         Notification::route('mail', $email)
             ->notify(new ClientInvitationNotification($project, $inviter));
+
+        // Broadcast realtime hanya jika klien sudah punya akun terdaftar
+        if ($existingUser !== null) {
+            broadcast(new ClientInvitationReceived(
+                $client->fresh(),
+                $project->load('user'),
+                $existingUser->id,
+            ));
+        }
 
         return $client;
     }

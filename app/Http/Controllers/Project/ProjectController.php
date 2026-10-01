@@ -164,8 +164,22 @@ class ProjectController extends Controller
             abort(404, 'Data klien tidak ditemukan pada proyek ini.');
         }
 
+        // Simpan data sebelum dihapus untuk broadcast
+        $clientUserId  = $client->user_id;
+        $invitationId  = $client->id;
+        $projectId     = $project->id;
+
         $this->revokeClientAccessAction->execute($client);
         $client->delete();
+
+        // Broadcast realtime ke klien agar project langsung hilang dari dashboardnya
+        if ($clientUserId !== null) {
+            broadcast(new \App\Events\ClientAccessRevoked(
+                $projectId,
+                $invitationId,
+                $clientUserId,
+            ));
+        }
 
         return back()->with('success', 'Akses klien berhasil dicabut.');
     }

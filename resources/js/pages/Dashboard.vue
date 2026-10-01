@@ -109,8 +109,10 @@ const page = usePage();
 const flashSuccess = computed(() => (page.props as any).flash?.success);
 
 // ── Local copy of ownedProjects agar bisa di-mutate realtime ──────────────
-// Diinisialisasi dari props, lalu diupdate via Reverb tanpa full reload
 const localOwnedProjects = ref<OwnedProject[]>([]);
+
+// ── Local copy of clientProjects untuk realtime update tab Kolaborasi ──────
+const localClientProjects = ref<ClientProject[]>([]);
 
 // ── Realtime: update status klien saat event ClientStatusUpdated diterima ──
 function handleClientStatusUpdated(payload: {
@@ -140,15 +142,40 @@ function handleClientStatusUpdated(payload: {
     }
 }
 
+// ── Realtime: proyek kolaborasi baru muncul saat arsitek mengundang ────────
+function handleInvitationReceived(payload: ClientProject) {
+    // Cegah duplikat jika sudah ada
+    const alreadyExists = localClientProjects.value.some(
+        p => p.invitation_id === payload.invitation_id
+    );
+    if (alreadyExists) return;
+
+    // Prepend proyek baru ke atas list
+    localClientProjects.value.unshift(payload);
+
+    // Switch otomatis ke tab client agar user langsung melihat undangan baru
+    activeTab.value = 'client';
+}
+
+// ── Realtime: proyek langsung hilang saat akses dicabut arsitek ────────────
+function handleAccessRevoked(payload: { project_id: string; invitation_id: string }) {
+    localClientProjects.value = localClientProjects.value.filter(
+        p => p.invitation_id !== payload.invitation_id
+    );
+}
+
 onMounted(() => {
     // Sync local copy dari props awal
     localOwnedProjects.value = [...(props.ownedProjects ?? [])];
+    localClientProjects.value = [...(props.clientProjects ?? [])];
 
-    // Subscribe ke private channel user (arsitek)
+    // Subscribe ke private channel user — satu channel untuk semua event user ini
     const userId = (page.props.auth as any)?.user?.id;
     if (userId) {
         echo.private(`App.Models.User.${userId}`)
-            .listen('.client.status.updated', handleClientStatusUpdated);
+            .listen('.client.status.updated', handleClientStatusUpdated)
+            .listen('.invitation.received', handleInvitationReceived)
+            .listen('.access.revoked', handleAccessRevoked);
     }
 });
 
@@ -181,6 +208,22 @@ watch(() => props.ownedProjects, (updated) => {
     });
 }, { deep: true });
 
+// Sync clientProjects dari props saat Inertia reload
+watch(() => props.clientProjects, (updated) => {
+    if (!updated) return;
+    // Merge: tambahkan item baru dari props, pertahankan yang sudah ada via realtime
+    const existingIds = new Set(localClientProjects.value.map(p => p.invitation_id));
+    const newItems = updated.filter(p => !existingIds.has(p.invitation_id));
+    if (newItems.length > 0) {
+        localClientProjects.value.push(...newItems);
+    }
+    // Update status item yang sudah ada
+    localClientProjects.value = localClientProjects.value.map(local => {
+        const fresh = updated.find(p => p.invitation_id === local.invitation_id);
+        return fresh ?? local;
+    });
+}, { deep: true });
+
 // Active Tab: 'architect' or 'client'
 const activeTab = ref<'architect' | 'client'>('architect');
 const searchQuery = ref('');
@@ -198,7 +241,7 @@ const filteredOwnedProjects = computed(() => {
 });
 
 const filteredClientProjects = computed(() => {
-    const list = props.clientProjects ?? [];
+    const list = localClientProjects.value;
     if (!searchQuery.value.trim()) return list;
     const query = searchQuery.value.toLowerCase();
     return list.filter(
@@ -612,7 +655,7 @@ const { isSidebarOpen, isMobile } = useSidebar();
                             </div>
                         </div>
                         <div class="mt-3 flex items-baseline gap-2">
-                            <span class="text-2xl font-extrabold text-slate-900 dark:text-white">{{ stats?.client_count ?? 0 }}</span>
+                            <span class="text-2xl font-extrabold text-slate-900 dark:text-white">{{ localClientProjects.length }}</span>
                             <span class="text-xs text-slate-400 dark:text-neutral-400">proyek kolaborasi</span>
                         </div>
                         <p class="mt-3 text-xs text-slate-400 dark:text-neutral-400">
@@ -703,7 +746,7 @@ const { isSidebarOpen, isMobile } = useSidebar();
                                         : 'bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-neutral-300',
                                 ]"
                             >
-                                {{ clientProjects?.length ?? 0 }}
+                                {{ localClientProjects.length }}
                             </span>
                         </button>
                     </div>
