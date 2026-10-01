@@ -6,8 +6,9 @@
  * 1. Mount → fetch histori 50 pesan terakhir
  * 2. Subscribe private channel via Laravel Echo (Reverb)
  * 3. Listen event 'message.sent' → append ke list secara realtime
- * 4. Kirim pesan → POST ke /projects/{id}/chat
- * 5. Unmount → leave channel
+ * 4. Whisper 'typing' saat user mengetik → lawan bicara melihat "... sedang mengetik"
+ * 5. Kirim pesan → POST ke /projects/{id}/chat
+ * 6. Unmount → leave channel
  */
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
@@ -36,23 +37,32 @@ interface ChatMsg {
 
 // ─── State ───────────────────────────────────────────────
 const page = usePage();
-const currentUserId = computed(() => (page.props.auth as any)?.user?.id as string);
+const currentUserId   = computed(() => (page.props.auth as any)?.user?.id   as string);
 const currentUserName = computed(() => (page.props.auth as any)?.user?.name as string);
 
-const messages = ref<ChatMsg[]>([]);
-const newMessage = ref('');
-const isLoading = ref(false);
-const isSending = ref(false);
-const sendError = ref('');
+const messages    = ref<ChatMsg[]>([]);
+const newMessage  = ref('');
+const isLoading   = ref(false);
+const isSending   = ref(false);
+const sendError   = ref('');
 const messagesEndRef = ref<HTMLDivElement | null>(null);
-const inputRef = ref<HTMLTextAreaElement | null>(null);
-const unreadCount = ref(0);
-const isConnected = ref(false);
+const inputRef       = ref<HTMLTextAreaElement | null>(null);
+const unreadCount    = ref(0);
+const isConnected    = ref(false);
+
+// ─── Typing indicator state ───────────────────────────────
+// Nama orang yang sedang mengetik (dari lawan bicara)
+const typingName   = ref<string | null>(null);
+let typingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+// Timer untuk berhenti whisper setelah user berhenti ketik
+let stopTypingTimer: ReturnType<typeof setTimeout> | null = null;
+let isWhispering = false;
 
 // ─── Scroll to bottom ────────────────────────────────────
-async function scrollToBottom() {
+async function scrollToBottom(force = false) {
     await nextTick();
-    messagesEndRef.value?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.value?.scrollIntoView({ behavior: force ? 'auto' : 'smooth' });
 }
 
 // ─── Fetch history ───────────────────────────────────────
@@ -68,7 +78,7 @@ async function fetchMessages() {
         if (res.ok) {
             const data = await res.json();
             messages.value = data.data ?? [];
-            await scrollToBottom();
+            await scrollToBottom(true);
         }
     } catch (e) {
         console.error('[ChatPanel] fetch error:', e);
@@ -103,12 +113,15 @@ function subscribeChannel() {
             isConnected.value = true;
         })
         .listen('.message.sent', (data: ChatMsg) => {
-            // Hindari duplikat jika pesan sudah ada (sent by self via POST)
             if (messages.value.some(m => m.id === data.id)) return;
 
             messages.value.push(data);
 
-            // Kalau panel tertutup, tambah unread count
+            // Saat pesan masuk dari lawan bicara, hapus typing indicator
+            if (data.sender_id !== currentUserId.value) {
+                clearTypingIndicator();
+            }
+
             if (!props.visible) {
                 unreadCount.value++;
             } else {
@@ -118,10 +131,65 @@ function subscribeChannel() {
                 }
             }
         })
+        // Whisper: terima typing event dari lawan bicara
+        .listenForWhisper('typing', (data: { userId: string; name: string; isTyping: boolean }) => {
+            // Abaikan whisper dari diri sendiri
+            if (data.userId === currentUserId.value) return;
+
+            if (data.isTyping) {
+                typingName.value = data.name;
+
+                // Auto-clear setelah 3 detik jika tidak ada update lagi
+                if (typingTimeout) clearTimeout(typingTimeout);
+                typingTimeout = setTimeout(clearTypingIndicator, 3000);
+
+                scrollToBottom();
+            } else {
+                clearTypingIndicator();
+            }
+        })
         .error((err: any) => {
             console.error('[ChatPanel] channel error:', err);
             isConnected.value = false;
         });
+}
+
+function clearTypingIndicator() {
+    typingName.value = null;
+    if (typingTimeout) { clearTimeout(typingTimeout); typingTimeout = null; }
+}
+
+// ─── Whisper: kirim typing event ke lawan bicara ─────────
+function whisperTyping(isTyping: boolean) {
+    if (!channel) return;
+    channel.whisper('typing', {
+        userId:   currentUserId.value,
+        name:     currentUserName.value,
+        isTyping,
+    });
+}
+
+// ─── Handle input: kirim whisper saat mengetik ───────────
+function onInput() {
+    if (!isWhispering && newMessage.value.trim()) {
+        isWhispering = true;
+        whisperTyping(true);
+    }
+
+    // Reset stop-typing timer setiap kali user ketik
+    if (stopTypingTimer) clearTimeout(stopTypingTimer);
+
+    if (!newMessage.value.trim()) {
+        // Input kosong → langsung stop typing
+        isWhispering = false;
+        whisperTyping(false);
+        return;
+    }
+
+    stopTypingTimer = setTimeout(() => {
+        isWhispering = false;
+        whisperTyping(false);
+    }, 2000); // stop typing setelah 2 detik tidak ketik
 }
 
 // ─── Send message ─────────────────────────────────────────
@@ -129,10 +197,16 @@ async function sendMessage() {
     const text = newMessage.value.trim();
     if (!text || isSending.value) return;
 
+    // Hentikan typing indicator saat pesan dikirim
+    if (stopTypingTimer) clearTimeout(stopTypingTimer);
+    if (isWhispering) {
+        isWhispering = false;
+        whisperTyping(false);
+    }
+
     isSending.value = true;
     sendError.value = '';
 
-    // Optimistic UI — tambah ke list sebelum respons server
     const tempId = `temp-${Date.now()}`;
     const optimistic: ChatMsg = {
         id: tempId,
@@ -160,16 +234,12 @@ async function sendMessage() {
 
         if (res.ok) {
             const data = await res.json();
-            // Ganti optimistic message dengan data server yang sesungguhnya
             const idx = messages.value.findIndex(m => m.id === tempId);
-            if (idx !== -1) {
-                messages.value[idx] = data.data;
-            }
+            if (idx !== -1) messages.value[idx] = data.data;
         } else {
-            // Rollback optimistic jika gagal
             messages.value = messages.value.filter(m => m.id !== tempId);
             sendError.value = 'Gagal mengirim pesan. Coba lagi.';
-            newMessage.value = text; // kembalikan teks
+            newMessage.value = text;
         }
     } catch {
         messages.value = messages.value.filter(m => m.id !== tempId);
@@ -180,7 +250,7 @@ async function sendMessage() {
     }
 }
 
-// ─── Keyboard submit (Ctrl+Enter atau Enter) ─────────────
+// ─── Keyboard submit ──────────────────────────────────────
 function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -188,7 +258,7 @@ function onKeydown(e: KeyboardEvent) {
     }
 }
 
-// ─── Format time ─────────────────────────────────────────
+// ─── Format time/date ────────────────────────────────────
 function formatTime(iso: string | null): string {
     if (!iso) return '';
     return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
@@ -205,21 +275,13 @@ function formatDate(iso: string | null): string {
     return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
 }
 
-// Grouping: tampilkan tanggal divider
-interface GroupedMessages {
-    date: string;
-    messages: ChatMsg[];
-}
+interface GroupedMessages { date: string; messages: ChatMsg[]; }
 const groupedMessages = computed<GroupedMessages[]>(() => {
     const groups: GroupedMessages[] = [];
     let currentDate = '';
-
     for (const msg of messages.value) {
         const date = formatDate(msg.created_at);
-        if (date !== currentDate) {
-            currentDate = date;
-            groups.push({ date, messages: [] });
-        }
+        if (date !== currentDate) { currentDate = date; groups.push({ date, messages: [] }); }
         groups[groups.length - 1].messages.push(msg);
     }
     return groups;
@@ -241,16 +303,18 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    // Kirim stop-typing saat komponen unmount
+    if (isWhispering) whisperTyping(false);
+    if (stopTypingTimer) clearTimeout(stopTypingTimer);
+    if (typingTimeout)   clearTimeout(typingTimeout);
     channel?.stopListening('.message.sent');
     echo.leave(`project.${props.projectId}.chat`);
 });
 
-// Expose unread count ke parent
 defineExpose({ unreadCount });
 </script>
 
 <template>
-    <!-- Panel overlay -->
     <Transition
         enter-active-class="transition-all duration-300 ease-out"
         enter-from-class="opacity-0 translate-x-8 scale-95"
@@ -268,36 +332,29 @@ defineExpose({ unreadCount });
                 <div class="flex items-center gap-2">
                     <MessageCircle class="h-4 w-4 text-indigo-400" />
                     <span class="text-xs font-bold uppercase tracking-wider text-white">Chat Proyek</span>
-                    <!-- Connection indicator -->
                     <span
                         class="flex h-2 w-2 rounded-full"
                         :class="isConnected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'"
                         :title="isConnected ? 'Terhubung' : 'Menghubungkan...'"
                     ></span>
                 </div>
-                <button
-                    type="button"
-                    @click="emit('close')"
-                    class="text-neutral-400 hover:text-white transition-colors"
-                >
+                <button type="button" @click="emit('close')" class="text-neutral-400 hover:text-white transition-colors">
                     <X class="h-4 w-4" />
                 </button>
             </div>
 
             <!-- Messages area -->
             <div class="flex-1 overflow-y-auto px-3 py-3 space-y-1 min-h-0">
-                <!-- Loading skeleton -->
+                <!-- Loading -->
                 <div v-if="isLoading" class="flex flex-col items-center justify-center h-full gap-2 text-neutral-500 text-xs">
                     <Loader2 class="h-5 w-5 animate-spin text-indigo-400" />
                     <span>Memuat pesan...</span>
                 </div>
 
-                <!-- Empty state -->
-                <div v-else-if="messages.length === 0" class="flex flex-col items-center justify-center h-full gap-2 text-center px-4">
+                <!-- Empty -->
+                <div v-else-if="messages.length === 0 && !typingName" class="flex flex-col items-center justify-center h-full gap-2 text-center px-4">
                     <MessageCircle class="h-8 w-8 text-neutral-600" />
-                    <p class="text-xs text-neutral-500 leading-relaxed">
-                        Belum ada pesan. Mulai diskusi dengan mengetik di bawah.
-                    </p>
+                    <p class="text-xs text-neutral-500 leading-relaxed">Belum ada pesan. Mulai diskusi dengan mengetik di bawah.</p>
                 </div>
 
                 <!-- Grouped messages -->
@@ -310,22 +367,16 @@ defineExpose({ unreadCount });
                             <div class="flex-1 h-px bg-white/10"></div>
                         </div>
 
-                        <!-- Messages in group -->
+                        <!-- Messages -->
                         <div
                             v-for="msg in group.messages"
                             :key="msg.id"
                             class="flex flex-col mb-2"
                             :class="msg.sender_id === currentUserId ? 'items-end' : 'items-start'"
                         >
-                            <!-- Sender name (only for incoming) -->
-                            <span
-                                v-if="msg.sender_id !== currentUserId"
-                                class="text-[10px] font-medium text-neutral-400 mb-0.5 ml-1"
-                            >
+                            <span v-if="msg.sender_id !== currentUserId" class="text-[10px] font-medium text-neutral-400 mb-0.5 ml-1">
                                 {{ msg.sender.name }}
                             </span>
-
-                            <!-- Bubble -->
                             <div
                                 class="max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed break-words"
                                 :class="[
@@ -334,38 +385,57 @@ defineExpose({ unreadCount });
                                         : 'bg-white/10 text-neutral-200 rounded-tl-sm',
                                     msg.id.startsWith('temp-') ? 'opacity-70' : 'opacity-100',
                                 ]"
-                            >
-                                {{ msg.message }}
-                            </div>
-
-                            <!-- Time + read receipt -->
+                            >{{ msg.message }}</div>
                             <div class="flex items-center gap-1 mt-0.5 mx-1">
-                                <span class="text-[9px] font-mono text-neutral-600">
-                                    {{ formatTime(msg.created_at) }}
-                                </span>
-                                <!-- Read receipt (hanya untuk pesan sendiri) -->
+                                <span class="text-[9px] font-mono text-neutral-600">{{ formatTime(msg.created_at) }}</span>
                                 <span
                                     v-if="msg.sender_id === currentUserId"
                                     class="text-[9px]"
                                     :class="msg.read_at ? 'text-indigo-400' : 'text-neutral-600'"
                                     :title="msg.read_at ? 'Dibaca' : 'Terkirim'"
-                                >
-                                    {{ msg.read_at ? '✓✓' : '✓' }}
-                                </span>
+                                >{{ msg.read_at ? '✓✓' : '✓' }}</span>
                             </div>
                         </div>
                     </div>
                 </template>
 
-                <!-- Scroll anchor -->
+                <!-- ── Typing Indicator (WhatsApp style) ── -->
+                <Transition
+                    enter-active-class="transition-all duration-200 ease-out"
+                    enter-from-class="opacity-0 translate-y-1"
+                    enter-to-class="opacity-100 translate-y-0"
+                    leave-active-class="transition-all duration-150 ease-in"
+                    leave-from-class="opacity-100 translate-y-0"
+                    leave-to-class="opacity-0 translate-y-1"
+                >
+                    <div v-if="typingName" class="flex flex-col items-start mb-2">
+                        <span class="text-[10px] font-medium text-neutral-400 mb-0.5 ml-1">{{ typingName }}</span>
+                        <div class="flex items-center gap-1 bg-white/10 rounded-2xl rounded-tl-sm px-3 py-2.5">
+                            <!-- Tiga titik bounce — identik WhatsApp -->
+                            <span class="flex gap-[3px] items-center h-3">
+                                <span
+                                    class="block h-1.5 w-1.5 rounded-full bg-neutral-400"
+                                    style="animation: typingBounce 1.2s ease-in-out infinite; animation-delay: 0ms"
+                                ></span>
+                                <span
+                                    class="block h-1.5 w-1.5 rounded-full bg-neutral-400"
+                                    style="animation: typingBounce 1.2s ease-in-out infinite; animation-delay: 200ms"
+                                ></span>
+                                <span
+                                    class="block h-1.5 w-1.5 rounded-full bg-neutral-400"
+                                    style="animation: typingBounce 1.2s ease-in-out infinite; animation-delay: 400ms"
+                                ></span>
+                            </span>
+                        </div>
+                    </div>
+                </Transition>
+
                 <div ref="messagesEndRef"></div>
             </div>
 
             <!-- Error -->
             <div v-if="sendError" class="px-3 pb-1">
-                <p class="text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-2 py-1">
-                    {{ sendError }}
-                </p>
+                <p class="text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-2 py-1">{{ sendError }}</p>
             </div>
 
             <!-- Input area -->
@@ -379,6 +449,7 @@ defineExpose({ unreadCount });
                         class="flex-1 resize-none rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs text-white placeholder-neutral-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 transition-all max-h-24 overflow-y-auto"
                         style="field-sizing: content;"
                         @keydown="onKeydown"
+                        @input="onInput"
                     ></textarea>
                     <button
                         type="button"
@@ -396,3 +467,10 @@ defineExpose({ unreadCount });
         </div>
     </Transition>
 </template>
+
+<style scoped>
+@keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0);    opacity: 0.4; }
+    30%            { transform: translateY(-4px); opacity: 1;   }
+}
+</style>
