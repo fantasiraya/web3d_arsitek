@@ -3,6 +3,7 @@
 use App\Domains\Comment\Controllers\CommentController;
 use App\Domains\Comment\Controllers\PinCommentController;
 use App\Domains\Chat\Controllers\ChatController;
+use App\Domains\Project\Controllers\CameraPresetController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\UserSearchController;
 use App\Http\Controllers\ProjectsPageController;
@@ -47,6 +48,13 @@ Route::middleware(['auth', 'project.access'])->delete('/projects/{project}/comme
 Route::middleware(['auth', 'project.access'])->get('/projects/{project}/viewer', [ViewerController::class, 'show'])->name('projects.viewer');
 
 Route::middleware(['auth', 'project.access'])->get('/projects/{project}/comments', [CommentController::class, 'index'])->name('projects.comments.index');
+
+// ── Camera Presets ──
+Route::middleware(['auth', 'project.access'])->group(function () {
+    Route::get('/projects/{project}/camera-presets', [CameraPresetController::class, 'index'])->name('projects.camera-presets.index');
+    Route::post('/projects/{project}/camera-presets', [CameraPresetController::class, 'store'])->name('projects.camera-presets.store');
+    Route::delete('/projects/{project}/camera-presets/{preset}', [CameraPresetController::class, 'destroy'])->name('projects.camera-presets.destroy');
+});
 
 // ── Chat realtime routes ──
 Route::middleware(['auth', 'verified'])->group(function () {

@@ -131,6 +131,26 @@
                     <Hand class="h-3.5 w-3.5" />
                     <span>Geser</span>
                 </button>
+
+                <div class="h-4 w-px bg-white/15 mx-0.5"></div>
+
+                <!-- Tombol preset kamera -->
+                <button
+                    type="button"
+                    @click="isPresetPanelOpen = !isPresetPanelOpen; isChatOpen = false; isDrawerOpen = false"
+                    class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all"
+                    :class="isPresetPanelOpen
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white'"
+                    title="Preset Sudut Kamera"
+                >
+                    <Bookmark class="h-3.5 w-3.5" :class="isPresetPanelOpen ? 'text-amber-400' : ''" />
+                    <span>Preset</span>
+                    <span v-if="cameraPresets.length > 0" class="ml-0.5 text-[10px] font-mono px-1 rounded"
+                          :class="isPresetPanelOpen ? 'bg-amber-500/20 text-amber-300' : 'bg-white/10 text-neutral-400'">
+                        {{ cameraPresets.length }}
+                    </span>
+                </button>
             </div>
 
             <!-- ── TOOLBAR BOTTOM-CENTER ── -->
@@ -482,6 +502,101 @@
                 </div>
             </aside>
 
+            <!-- ── CAMERA PRESET PANEL ── -->
+            <Transition
+                enter-active-class="transition-all duration-300 ease-out"
+                enter-from-class="opacity-0 -translate-x-4 scale-95"
+                enter-to-class="opacity-100 translate-x-0 scale-100"
+                leave-active-class="transition-all duration-200 ease-in"
+                leave-from-class="opacity-100 translate-x-0 scale-100"
+                leave-to-class="opacity-0 -translate-x-4 scale-95"
+            >
+                <div
+                    v-if="isPresetPanelOpen"
+                    class="absolute top-16 left-4 z-30 w-72 max-w-[90vw] rounded-2xl border border-white/15 bg-black/90 backdrop-blur-2xl shadow-2xl overflow-hidden"
+                >
+                    <!-- Header -->
+                    <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                        <div class="flex items-center gap-2">
+                            <Bookmark class="h-4 w-4 text-amber-400" />
+                            <span class="text-xs font-bold uppercase tracking-wider text-white">Preset Kamera</span>
+                            <span class="text-[10px] font-mono text-neutral-500">{{ cameraPresets.length }}/8</span>
+                        </div>
+                        <button type="button" @click="isPresetPanelOpen = false" class="text-neutral-400 hover:text-white transition-colors">
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
+
+                    <!-- Preset list -->
+                    <div class="max-h-52 overflow-y-auto">
+                        <div v-if="cameraPresets.length === 0" class="flex flex-col items-center justify-center py-6 gap-2 text-center px-4">
+                            <Bookmark class="h-7 w-7 text-neutral-700" />
+                            <p class="text-xs text-neutral-500 leading-relaxed">
+                                Belum ada preset. Atur sudut kamera lalu simpan sebagai preset.
+                            </p>
+                        </div>
+                        <button
+                            v-for="preset in cameraPresets"
+                            :key="preset.id"
+                            type="button"
+                            class="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-white/5 transition-colors group border-b border-white/5 last:border-0"
+                            @click="applyPreset(preset)"
+                        >
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20">
+                                    <Bookmark class="h-3 w-3 text-amber-400" />
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-xs font-medium text-white truncate">{{ preset.name }}</p>
+                                    <p class="text-[10px] font-mono text-neutral-600 truncate">
+                                        {{ preset.position.x.toFixed(1) }}, {{ preset.position.y.toFixed(1) }}, {{ preset.position.z.toFixed(1) }}
+                                    </p>
+                                </div>
+                            </div>
+                            <!-- Hapus — hanya owner -->
+                            <button
+                                v-if="isOwner"
+                                type="button"
+                                class="shrink-0 opacity-0 group-hover:opacity-100 rounded p-1 text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                                :disabled="isDeletingPresetId === preset.id"
+                                title="Hapus preset"
+                                @click.stop="deletePreset(preset.id)"
+                            >
+                                <Trash2 class="h-3 w-3" />
+                            </button>
+                        </button>
+                    </div>
+
+                    <!-- Save new preset — hanya owner -->
+                    <div v-if="isOwner" class="border-t border-white/10 p-3 space-y-2">
+                        <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wider">Simpan sudut saat ini sebagai preset</p>
+                        <div class="flex gap-2">
+                            <input
+                                ref="presetInputRef"
+                                v-model="newPresetName"
+                                type="text"
+                                placeholder="Nama preset..."
+                                maxlength="80"
+                                class="flex-1 h-8 rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white placeholder:text-neutral-600 focus:border-amber-500/50 focus:outline-none focus:ring-1 focus:ring-amber-500/20"
+                                @keydown.enter="savePreset"
+                            />
+                            <button
+                                type="button"
+                                :disabled="isSavingPreset || !newPresetName.trim() || cameraPresets.length >= 8"
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400 hover:bg-amber-500/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                title="Simpan preset"
+                                @click="savePreset"
+                            >
+                                <BookmarkPlus v-if="!isSavingPreset" class="h-3.5 w-3.5" />
+                                <span v-else class="h-3.5 w-3.5 block rounded-full border-2 border-amber-400/30 border-t-amber-400 animate-spin"></span>
+                            </button>
+                        </div>
+                        <p v-if="presetError" class="text-[10px] text-rose-400">{{ presetError }}</p>
+                        <p v-if="cameraPresets.length >= 8" class="text-[10px] text-neutral-600">Maks 8 preset tercapai.</p>
+                    </div>
+                </div>
+            </Transition>
+
             <!-- ── CHAT PANEL (realtime) ── -->
             <ChatPanel
                 ref="chatPanelRef"
@@ -499,6 +614,8 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import {
     AlertTriangle,
     ArrowLeft,
+    Bookmark,
+    BookmarkPlus,
     Check,
     CheckCircle2,
     Eye,
@@ -596,6 +713,118 @@ const limitWarning = ref('');
 const isChatOpen = ref(false);
 const chatPanelRef = ref<InstanceType<typeof ChatPanel> | null>(null);
 const chatUnread = computed(() => chatPanelRef.value?.unreadCount ?? 0);
+
+// ── Camera Preset state ──────────────────────────────────
+interface CameraPreset {
+    id: string;
+    name: string;
+    position: { x: number; y: number; z: number };
+    target:   { x: number; y: number; z: number };
+    sort_order: number;
+    created_by: string;
+}
+
+const cameraPresets       = ref<CameraPreset[]>([]);
+const isPresetPanelOpen   = ref(false);
+const isSavingPreset      = ref(false);
+const isDeletingPresetId  = ref<string | null>(null);
+const newPresetName       = ref('');
+const presetError         = ref('');
+const presetInputRef      = ref<HTMLInputElement | null>(null);
+
+// Apakah user adalah arsitek pemilik project
+const isOwner = computed(() => {
+    const uid = (page.props.auth as any)?.user?.id;
+    return uid && project.value.user_id === uid;
+});
+
+// Lerp target — sama polanya dengan framing model
+let presetLerpTarget: { pos: THREE.Vector3; tgt: THREE.Vector3 } | null = null;
+
+async function loadCameraPresets(): Promise<void> {
+    try {
+        const res = await fetch(`/projects/${project.value.id}/camera-presets`, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        if (res.ok) {
+            const data = await res.json();
+            cameraPresets.value = data.data ?? [];
+        }
+    } catch (err) {
+        console.error('[CameraPresets] load error:', err);
+    }
+}
+
+function applyPreset(preset: CameraPreset): void {
+    if (!camera || !controls) return;
+    presetLerpTarget = {
+        pos: new THREE.Vector3(preset.position.x, preset.position.y, preset.position.z),
+        tgt: new THREE.Vector3(preset.target.x,   preset.target.y,   preset.target.z),
+    };
+}
+
+async function savePreset(): Promise<void> {
+    if (!camera || !controls || !newPresetName.value.trim()) return;
+
+    isSavingPreset.value = true;
+    presetError.value = '';
+
+    const payload = {
+        name:       newPresetName.value.trim(),
+        position_x: camera.position.x,
+        position_y: camera.position.y,
+        position_z: camera.position.z,
+        target_x:   controls.target.x,
+        target_y:   controls.target.y,
+        target_z:   controls.target.z,
+    };
+
+    try {
+        const res = await fetch(`/projects/${project.value.id}/camera-presets`, {
+            method: 'POST',
+            headers: {
+                'Content-Type':   'application/json',
+                Accept:           'application/json',
+                'X-CSRF-TOKEN':   (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            cameraPresets.value.push(data.data);
+            newPresetName.value = '';
+        } else {
+            presetError.value = data.message ?? 'Gagal menyimpan preset.';
+        }
+    } catch {
+        presetError.value = 'Koneksi error saat menyimpan preset.';
+    } finally {
+        isSavingPreset.value = false;
+    }
+}
+
+async function deletePreset(presetId: string): Promise<void> {
+    isDeletingPresetId.value = presetId;
+    try {
+        const res = await fetch(`/projects/${project.value.id}/camera-presets/${presetId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+        if (res.ok) {
+            cameraPresets.value = cameraPresets.value.filter(p => p.id !== presetId);
+        }
+    } catch {
+        // silent fail
+    } finally {
+        isDeletingPresetId.value = null;
+    }
+}
 
 // ── Showcase-compatible state ──
 const autoRotate = ref(false);
@@ -1506,6 +1735,19 @@ function render(): void {
     if (controls) {
         controls.autoRotate = autoRotate.value;
         controls.autoRotateSpeed = 1.2;
+
+        // Smooth lerp ke preset kamera yang dipilih
+        if (presetLerpTarget) {
+            camera.position.lerp(presetLerpTarget.pos, 0.06);
+            controls.target.lerp(presetLerpTarget.tgt, 0.06);
+            // Selesai saat jarak < 0.05
+            if (camera.position.distanceTo(presetLerpTarget.pos) < 0.05) {
+                camera.position.copy(presetLerpTarget.pos);
+                controls.target.copy(presetLerpTarget.tgt);
+                presetLerpTarget = null;
+            }
+        }
+
         controls.update();
     }
     renderer.render(scene, camera);
@@ -1566,6 +1808,7 @@ function initializeViewer(): void {
 onMounted(async () => {
     restoreViewerPreferences();
     initializeViewer();
+    loadCameraPresets();
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     const proj = project.value;
     if (Array.isArray(proj?.comments) && proj.comments.length > 0) {
