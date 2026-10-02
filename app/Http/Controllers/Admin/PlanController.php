@@ -18,11 +18,82 @@ class PlanController extends Controller
 
     public function index(): Response
     {
-        $plans = Plan::withCount('subscriptions')->get();
+        $plans = Plan::withCount('subscriptions')
+            ->orderBy('sort_order')
+            ->get();
+
+        // Payment settings
+        $paymentSettings = \App\Domains\SystemConfig\Models\SystemSetting::whereIn('key', [
+            'payment_gateway_enabled',
+            'bank_name',
+            'bank_account_number',
+            'bank_account_holder',
+            'midtrans_is_production',
+            'admin_whatsapp',
+            'whatsapp_template',
+        ])->pluck('value', 'key');
 
         return Inertia::render('Admin/Plans/Index', [
-            'plans' => $plans,
+            'plans'           => $plans,
+            'paymentSettings' => $paymentSettings,
         ]);
+    }
+
+    /**
+     * Update tampilan/pricing plan (display_name, tagline, harga, benefits, dll)
+     */
+    public function updatePricing(Request $request, Plan $plan): RedirectResponse
+    {
+        $validated = $request->validate([
+            'display_name' => ['required', 'string', 'max:100'],
+            'tagline'      => ['nullable', 'string', 'max:255'],
+            'badge_text'   => ['nullable', 'string', 'max:80'],
+            'cta_text'     => ['required', 'string', 'max:80'],
+            'cta_url'      => ['required', 'string', 'max:255'],
+            'is_featured'  => ['required', 'boolean'],
+            'price_monthly' => ['required', 'string', 'max:50'],
+            'price_annual'  => ['required', 'string', 'max:50'],
+            'period_label'  => ['required', 'string', 'max:50'],
+            'benefits'      => ['required', 'array', 'min:1'],
+            'benefits.*'    => ['required', 'string', 'max:255'],
+            'sort_order'    => ['required', 'integer', 'min:0'],
+        ]);
+
+        $plan->update($validated);
+
+        return back()->with('success', "Tampilan paket {$plan->display_name} berhasil diperbarui.");
+    }
+
+    /**
+     * Update payment gateway settings
+     */
+    public function updatePaymentSettings(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'payment_gateway_enabled' => ['required', 'boolean'],
+            'bank_name'               => ['nullable', 'string', 'max:100'],
+            'bank_account_number'     => ['nullable', 'string', 'max:50'],
+            'bank_account_holder'     => ['nullable', 'string', 'max:150'],
+            'midtrans_is_production'  => ['required', 'boolean'],
+            'midtrans_server_key'     => ['nullable', 'string', 'max:255'],
+            'midtrans_client_key'     => ['nullable', 'string', 'max:255'],
+            'admin_whatsapp'          => ['nullable', 'string', 'max:20'],
+            'whatsapp_template'       => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        foreach ($validated as $key => $value) {
+            \App\Domains\SystemConfig\Models\SystemSetting::where('key', $key)
+                ->update(['value' => (string) $value]);
+        }
+
+        // Clear settings cache agar perubahan langsung aktif
+        \Illuminate\Support\Facades\Cache::forget(\App\Domains\SystemConfig\Repositories\SystemSettingRepository::CACHE_KEY);
+
+        $status = $validated['payment_gateway_enabled']
+            ? 'Payment Gateway (Midtrans) diaktifkan.'
+            : 'Mode pembayaran manual (transfer bank) diaktifkan.';
+
+        return back()->with('success', $status);
     }
 
     public function update(Request $request, Plan $plan): RedirectResponse

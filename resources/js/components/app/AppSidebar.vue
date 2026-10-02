@@ -4,10 +4,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { 
     LayoutDashboard, 
     Box, 
-    MessageSquare, 
-    Zap, 
     Users, 
-    CreditCard, 
     Settings, 
     BookOpen, 
     Server,
@@ -26,6 +23,26 @@ const user = computed(() => page.props.auth?.user)
 
 // Get stats for badges
 const stats = computed(() => page.props.stats)
+
+// Hitung total storage dari semua project milik user (real data)
+const storageUsedBytes = computed(() => {
+    const projects = (page.props as any).ownedProjects ?? [];
+    return projects.reduce((sum: number, p: any) => sum + (p.file_size_bytes ?? 0), 0);
+});
+
+const storageUsedMb = computed(() =>
+    (storageUsedBytes.value / (1024 * 1024)).toFixed(1)
+);
+
+// Batas storage berdasarkan plan (100MB free, 500MB pro)
+const storageMaxMb = computed(() => {
+    const isPro = (page.props.auth?.user as any)?.is_pro;
+    return isPro ? 500 : 100;
+});
+
+const storagePercent = computed(() =>
+    Math.min(100, (storageUsedBytes.value / (storageMaxMb.value * 1024 * 1024)) * 100)
+);
 
 // User dropdown state
 const showUserDropdown = ref(false)
@@ -197,53 +214,6 @@ onUnmounted(() => {
                     </Transition>
                 </Link>
 
-                <!-- Spatial Review -->
-                <a 
-                    href="#" 
-                    :class="[
-                        'group flex items-center justify-between px-3 py-2 rounded-xl text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all',
-                        !isSidebarOpen && 'justify-center'
-                    ]"
-                    :title="!isSidebarOpen ? 'Spatial Review' : ''"
-                >
-                    <div class="flex items-center gap-3 min-w-0">
-                        <MessageSquare class="h-[19px] w-[19px] text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
-                        <Transition
-                            enter-active-class="transition-opacity duration-200 delay-75"
-                            enter-from-class="opacity-0"
-                            enter-to-class="opacity-100"
-                            leave-active-class="transition-opacity duration-150"
-                            leave-from-class="opacity-100"
-                            leave-to-class="opacity-0"
-                        >
-                            <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">Spatial Review</span>
-                        </Transition>
-                    </div>
-                    <span v-if="isSidebarOpen" class="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"></span>
-                </a>
-
-                <!-- Pipeline Draco -->
-                <a 
-                    href="#" 
-                    :class="[
-                        'group flex items-center gap-3 px-3 py-2 rounded-xl text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all',
-                        !isSidebarOpen && 'justify-center'
-                    ]"
-                    :title="!isSidebarOpen ? 'Pipeline Draco' : ''"
-                >
-                    <Zap class="h-[19px] w-[19px] text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
-                    <Transition
-                        enter-active-class="transition-opacity duration-200 delay-75"
-                        enter-from-class="opacity-0"
-                        enter-to-class="opacity-100"
-                        leave-active-class="transition-opacity duration-150"
-                        leave-from-class="opacity-100"
-                        leave-to-class="opacity-0"
-                    >
-                        <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">Pipeline Draco</span>
-                    </Transition>
-                </a>
-
                 <!-- Tim & Klien -->
                 <Link 
                     href="/teams"
@@ -275,21 +245,6 @@ onUnmounted(() => {
                         </Transition>
                     </div>
                 </Link>
-            </div>
-
-            <!-- Konfigurasi Group -->
-            <div v-if="isSidebarOpen" class="space-y-1">
-                <div class="px-3 pb-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-400 dark:text-[#6b7280]/80 font-semibold">Konfigurasi</div>
-                
-                <a href="#" class="group flex items-center gap-3 px-3 py-2 rounded-xl text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all">
-                    <CreditCard class="h-[19px] w-[19px] text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
-                    <span class="text-[13px] tracking-tight font-medium">Tagihan & Kuota</span>
-                </a>
-
-                <a href="#" class="group flex items-center gap-3 px-3 py-2 rounded-xl text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all">
-                    <Settings class="h-[19px] w-[19px] text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white transition-colors shrink-0" :stroke-width="2" />
-                    <span class="text-[13px] tracking-tight font-medium">Pengaturan</span>
-                </a>
             </div>
 
             <!-- Support Group -->
@@ -327,14 +282,24 @@ onUnmounted(() => {
             >
                 <div v-if="isSidebarOpen" class="p-3 rounded-xl bg-white dark:bg-[#13141a]/70 border border-slate-200 dark:border-white/5 space-y-2">
                     <div class="flex items-center justify-between text-xs">
-                        <span class="text-slate-500 dark:text-[#9ca3af] font-medium">Draco Storage</span>
-                        <span class="font-mono text-sky-600 dark:text-[#38bdf8] text-[11px] font-semibold">30.5 / 100 MB</span>
+                        <span class="text-slate-500 dark:text-[#9ca3af] font-medium">Storage Proyek</span>
+                        <span class="font-mono text-sky-600 dark:text-[#38bdf8] text-[11px] font-semibold">
+                            {{ storageUsedMb }} / {{ storageMaxMb }} MB
+                        </span>
                     </div>
                     <div class="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
-                        <div class="h-full bg-gradient-to-r from-sky-500 dark:from-[#38bdf8] to-sky-300 dark:to-[#8ed5ff] rounded-full w-[30.5%]"></div>
+                        <div
+                            class="h-full rounded-full transition-all duration-500"
+                            :class="storagePercent >= 90
+                                ? 'bg-gradient-to-r from-rose-500 to-rose-400'
+                                : storagePercent >= 70
+                                    ? 'bg-gradient-to-r from-amber-500 to-amber-400'
+                                    : 'bg-gradient-to-r from-sky-500 dark:from-[#38bdf8] to-sky-300 dark:to-[#8ed5ff]'"
+                            :style="{ width: `${storagePercent}%` }"
+                        ></div>
                     </div>
                     <div class="flex items-center justify-between text-[10px] font-mono text-slate-400 dark:text-[#6b7280]">
-                        <span>Proyek: {{ stats?.owned_count || 0 }} / 20 kuota</span>
+                        <span>Proyek: {{ stats?.owned_count || 0 }} / {{ stats?.max_projects >= 999 ? '∞' : stats?.max_projects }} kuota</span>
                         <span class="text-sky-600 dark:text-[#38bdf8] hover:underline cursor-pointer font-semibold">Upgrade</span>
                     </div>
                 </div>

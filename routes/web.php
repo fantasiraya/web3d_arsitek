@@ -8,12 +8,13 @@ use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\UserSearchController;
 use App\Http\Controllers\ProjectsPageController;
 use App\Http\Controllers\TeamsPageController;
+use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Project\ProjectController;
 use App\Http\Controllers\Project\ViewerController;
 use Illuminate\Support\Facades\Route;
 
-Route::inertia('/', 'Welcome')->name('home');
+Route::get('/', \App\Http\Controllers\WelcomeController::class)->name('home');
 Route::inertia('/showcase', 'ShowcaseDemo')->name('showcase');
 
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -67,3 +68,14 @@ Route::middleware('guest')->group(function () {
     Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('google.redirect');
     Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('google.callback');
 });
+
+// ── Checkout routes — specific routes HARUS sebelum wildcard {plan} ──
+// Midtrans webhook — tidak butuh auth/CSRF
+Route::post('/checkout/midtrans/notification', [CheckoutController::class, 'notification'])
+    ->name('checkout.notification')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+// Halaman pending transfer
+Route::get('/checkout/pending/{transaction}', [CheckoutController::class, 'pending'])->name('checkout.pending');
+// Wildcard plan — harus paling terakhir
+Route::get('/checkout/{plan}', [CheckoutController::class, 'show'])->name('checkout.show');
+Route::middleware(['auth'])->post('/checkout/{plan}/order', [CheckoutController::class, 'order'])->name('checkout.order');

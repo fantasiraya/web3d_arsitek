@@ -28,10 +28,14 @@ Route::middleware(['auth', 'verified', 'super_admin'])->prefix('admin')->name('a
     // Subscriptions Management
     Route::get('/subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
     Route::post('/subscriptions/change-plan', [SubscriptionController::class, 'changePlan'])->name('subscriptions.change');
+    Route::post('/subscriptions/manual-activate', [SubscriptionController::class, 'manualActivate'])->name('subscriptions.manual');
+    Route::patch('/subscriptions/transactions/{transaction}/confirm', [SubscriptionController::class, 'confirmTransfer'])->name('subscriptions.confirm');
 
     // Plans Management
     Route::get('/plans', [PlanController::class, 'index'])->name('plans.index');
     Route::patch('/plans/{plan}', [PlanController::class, 'update'])->name('plans.update');
+    Route::patch('/plans/{plan}/pricing', [PlanController::class, 'updatePricing'])->name('plans.pricing');
+    Route::patch('/payment-settings', [PlanController::class, 'updatePaymentSettings'])->name('payment-settings.update');
 
     // Audit Logs
     Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');

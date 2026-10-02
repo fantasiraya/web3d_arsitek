@@ -13,27 +13,28 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { usePageLoading } from '@/composables/usePageLoading';
 
 const { isLoading } = usePageLoading(80);
+
+// Plans dari DB via WelcomeController
+interface PlanItem {
+    id: string; slug: string; display_name: string; tagline: string;
+    badge_text: string; cta_text: string; cta_url: string;
+    is_featured: boolean; price_monthly: string; price_annual: string;
+    period_label: string; benefits: string[];
+}
+const props = defineProps<{ plans?: PlanItem[] }>();
 </script>
 
 <template>
     <Head title="AETHER 3D — Apple-Style Architectural Showcase & Presentation Platform">
-        <meta
-            name="description"
-            content="Platform SaaS Web 3D untuk arsitek mempresentasikan desain ke klien secara fotorealistik dengan anotasi pin spasial presisi, batas revisi transparan, dan akses aman berbasis email."
-        />
+        <meta name="description" content="Platform SaaS Web 3D untuk arsitek mempresentasikan desain ke klien secara fotorealistik dengan anotasi pin spasial presisi, batas revisi transparan, dan akses aman berbasis email." />
         <meta property="og:title" content="AETHER 3D — Apple-Style Architectural Showcase" />
-        <meta
-            property="og:description"
-            content="Presentasikan model 3D arsitektur fotorealistik di browser, tanpa software berat, terproteksi kuota revisi dan keamanan akses email."
-        />
+        <meta property="og:description" content="Presentasikan model 3D arsitektur fotorealistik di browser, tanpa software berat, terproteksi kuota revisi dan keamanan akses email." />
         <meta property="og:image" content="/images/aether_villa_hero.jpg" />
     </Head>
 
     <LandingLayout>
-        <!-- Skeleton loading state saat navigasi ke halaman ini -->
         <template v-if="isLoading">
             <SkeletonHero />
-            <!-- Skeleton bento grid -->
             <div class="max-w-7xl mx-auto px-4 py-16 space-y-4">
                 <div class="flex flex-col items-center gap-3 mb-8">
                     <Skeleton class="h-5 w-32 rounded-full" />
@@ -44,7 +45,6 @@ const { isLoading } = usePageLoading(80);
                     <Skeleton v-for="i in 6" :key="i" class="h-48 rounded-2xl" />
                 </div>
             </div>
-            <!-- Skeleton pricing -->
             <div class="max-w-7xl mx-auto px-4 py-16 space-y-6">
                 <div class="flex flex-col items-center gap-3 mb-8">
                     <Skeleton class="h-5 w-24 rounded-full" />
@@ -56,13 +56,13 @@ const { isLoading } = usePageLoading(80);
             </div>
         </template>
 
-        <!-- Konten asli -->
         <template v-else>
             <HeroSection />
             <ScrollyExperienceSection />
             <BentoGridSection />
             <InteractiveShowcaseSection />
-            <PricingSection />
+            <!-- Pass plans dari DB; PricingSection fallback ke hardcoded jika kosong -->
+            <PricingSection :plans="props.plans" />
             <FaqSection />
             <CtaSection />
         </template>

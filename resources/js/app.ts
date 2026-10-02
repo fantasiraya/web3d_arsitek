@@ -23,6 +23,7 @@ void createInertiaApp({
             case name.startsWith('Project/'):
             case name.startsWith('Projects/'):
             case name.startsWith('Teams/'):
+            case name.startsWith('Checkout/'):
                 return null;
 
             case name === 'auth/Login':

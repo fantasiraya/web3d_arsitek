@@ -1,70 +1,48 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { Check, Sparkles, ArrowRight } from '@lucide/vue';
 import { Link } from '@inertiajs/vue3';
-import { register } from '@/routes';
 
 const isAnnual = ref(true);
 
-const plans = [
+// ─── Props dari DB (Welcome.vue pass dari WelcomeController) ──
+interface PlanItem {
+    id: string; slug: string; display_name: string; tagline: string;
+    badge_text: string; cta_text: string; cta_url: string;
+    is_featured: boolean; price_monthly: string; price_annual: string;
+    period_label: string; benefits: string[];
+}
+
+const props = defineProps<{ plans?: PlanItem[] }>();
+
+// Fallback hardcoded jika DB belum ada data
+const fallbackPlans = [
     {
-        name: 'Free Tier',
-        slug: 'free',
+        id: 'free', slug: 'free', display_name: 'Free Tier', is_featured: false,
+        badge_text: 'Coba Gratis', cta_text: 'Mulai Sekarang', cta_url: '/register',
         tagline: 'Ideal untuk arsitek individual yang baru mencoba platform',
-        priceMonthly: 'Rp 0',
-        priceAnnual: 'Rp 0',
-        period: 'selamanya',
-        featured: false,
-        badge: 'Coba Gratis',
-        cta: 'Mulai Sekarang',
-        features: [
-            'Batas maksimal 1 proyek aktif',
-            'Batas kuota 3x revisi klien per proyek',
-            'Undangan klien via email (terproteksi)',
-            '3D WebGL Viewer & Spatial Pin Comment',
-            'Maksimal ukuran file 25 MB',
-            'Google OAuth One-Tap Login'
-        ]
+        price_monthly: 'Rp 0', price_annual: 'Rp 0', period_label: 'selamanya',
+        benefits: ['Batas maksimal 1 proyek aktif','Batas kuota 3x revisi klien per proyek','Undangan klien via email (terproteksi)','3D WebGL Viewer & Spatial Pin Comment','Maksimal ukuran file 25 MB','Google OAuth One-Tap Login'],
     },
     {
-        name: 'Pro Architect',
-        slug: 'pro',
+        id: 'pro', slug: 'pro', display_name: 'Pro Architect', is_featured: true,
+        badge_text: 'Paling Populer', cta_text: 'Upgrade ke Pro', cta_url: '/register?plan=pro',
         tagline: 'Untuk studio arsitektur aktif & konsultan profesional',
-        priceMonthly: 'Rp 149.000',
-        priceAnnual: 'Rp 119.000',
-        period: 'per bulan',
-        featured: true,
-        badge: 'Paling Populer',
-        cta: 'Upgrade ke Pro',
-        features: [
-            'Batas kuota hingga 20 proyek aktif',
-            'Kustomisasi batas revisi klien (hingga unlimited)',
-            'Fitur In-App Real-time Chat Arsitek ↔ Klien',
-            'Prioritas pemrosesan kompresi Draco 3D',
-            'Ukuran file hingga 100 MB per proyek',
-            'Penyimpanan berkecepatan tinggi Cloudflare R2',
-            'Pembayaran otomatis Midtrans (QRIS, VA, Kartu)'
-        ]
+        price_monthly: 'Rp 149.000', price_annual: 'Rp 119.000', period_label: 'per bulan',
+        benefits: ['Batas kuota hingga 20 proyek aktif','Kustomisasi batas revisi klien (hingga unlimited)','Fitur In-App Real-time Chat Arsitek ↔ Klien','Prioritas pemrosesan kompresi Draco 3D','Ukuran file hingga 100 MB per proyek','Penyimpanan berkecepatan tinggi','Pembayaran otomatis (QRIS, VA, Kartu)'],
     },
     {
-        name: 'Enterprise Studio',
-        slug: 'enterprise',
+        id: 'enterprise', slug: 'enterprise', display_name: 'Enterprise Studio', is_featured: false,
+        badge_text: 'Custom Team', cta_text: 'Konsultasi Tim', cta_url: '/register?plan=enterprise',
         tagline: 'Untuk biro konsultan arsitektur berskala besar',
-        priceMonthly: 'Hubungi Kami',
-        priceAnnual: 'Hubungi Kami',
-        period: 'kebutuhan tim',
-        featured: false,
-        badge: 'Custom Team',
-        cta: 'Konsultasi Tim',
-        features: [
-            'Kuota proyek tanpa batas (Unlimited)',
-            'Custom Domain & Whitelabel Branding',
-            'Single Sign-On (SSO) & Audit Logs',
-            'Manajemen izin peran tingkat lanjut',
-            'Dukungan dedicated SLA & prioritas teknis'
-        ]
-    }
+        price_monthly: 'Hubungi Kami', price_annual: 'Hubungi Kami', period_label: 'kebutuhan tim',
+        benefits: ['Kuota proyek tanpa batas (Unlimited)','Custom Domain & Whitelabel Branding','Single Sign-On (SSO) & Audit Logs','Manajemen izin peran tingkat lanjut','Dukungan dedicated SLA & prioritas teknis'],
+    },
 ];
+
+const plans = computed(() =>
+    (props.plans && props.plans.length > 0) ? props.plans : fallbackPlans
+);
 </script>
 
 <template>
@@ -119,24 +97,24 @@ const plans = [
                     v-for="plan in plans"
                     :key="plan.slug"
                     class="relative flex flex-col justify-between rounded-[32px] p-8 transition-all duration-300 backdrop-blur-2xl"
-                    :class="plan.featured
+                    :class="plan.is_featured
                         ? 'border-2 border-indigo-500/80 bg-gradient-to-b from-indigo-950/40 via-black/80 to-black shadow-[0_0_60px_rgba(99,102,241,0.25)] md:-translate-y-2'
                         : 'border border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]'"
                 >
                     <!-- Featured Pill -->
-                    <div v-if="plan.featured" class="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                    <div v-if="plan.is_featured" class="absolute -top-3.5 left-1/2 -translate-x-1/2">
                         <span class="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 px-3.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-lg shadow-indigo-500/40">
                             <Sparkles class="h-3 w-3" />
-                            {{ plan.badge }}
+                            {{ plan.badge_text }}
                         </span>
                     </div>
 
                     <div>
                         <!-- Plan Header -->
                         <div class="flex items-center justify-between">
-                            <h3 class="text-xl font-bold tracking-tight text-white">{{ plan.name }}</h3>
-                            <span v-if="!plan.featured" class="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-medium text-neutral-400">
-                                {{ plan.badge }}
+                            <h3 class="text-xl font-bold tracking-tight text-white">{{ plan.display_name }}</h3>
+                            <span v-if="!plan.is_featured" class="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-medium text-neutral-400">
+                                {{ plan.badge_text }}
                             </span>
                         </div>
                         <p class="mt-2 text-xs leading-relaxed text-neutral-400">{{ plan.tagline }}</p>
@@ -144,9 +122,9 @@ const plans = [
                         <!-- Price Tag -->
                         <div class="mt-6 flex items-baseline gap-1.5">
                             <span class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white font-mono">
-                                {{ isAnnual ? plan.priceAnnual : plan.priceMonthly }}
+                                {{ isAnnual ? plan.price_annual : plan.price_monthly }}
                             </span>
-                            <span class="text-xs text-neutral-400">/ {{ plan.period }}</span>
+                            <span class="text-xs text-neutral-400">/ {{ plan.period_label }}</span>
                         </div>
 
                         <!-- Features Divider -->
@@ -154,7 +132,7 @@ const plans = [
 
                         <!-- Feature List -->
                         <ul class="space-y-3 text-xs text-neutral-300">
-                            <li v-for="feature in plan.features" :key="feature" class="flex items-start gap-2.5">
+                            <li v-for="feature in (plan.benefits ?? [])" :key="feature" class="flex items-start gap-2.5">
                                 <Check class="h-4 w-4 shrink-0 text-indigo-400 mt-0.5" />
                                 <span class="leading-normal">{{ feature }}</span>
                             </li>
@@ -164,13 +142,13 @@ const plans = [
                     <!-- Action Button -->
                     <div class="mt-8 pt-4">
                         <Link
-                            :href="register()"
+                            :href="plan.cta_url"
                             class="flex w-full items-center justify-center gap-2 rounded-full py-3 text-xs font-semibold transition-all duration-300"
-                            :class="plan.featured
+                            :class="plan.is_featured
                                 ? 'bg-white text-black shadow-lg shadow-white/20 hover:bg-neutral-100 hover:scale-[1.02]'
                                 : 'border border-white/15 bg-white/5 text-white hover:bg-white/15 hover:border-white/30'"
                         >
-                            <span>{{ plan.cta }}</span>
+                            <span>{{ plan.cta_text }}</span>
                             <ArrowRight class="h-3.5 w-3.5" />
                         </Link>
                     </div>
