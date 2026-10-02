@@ -8,6 +8,7 @@ use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\UserSearchController;
 use App\Http\Controllers\ProjectsPageController;
 use App\Http\Controllers\TeamsPageController;
+use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Project\ProjectController;
@@ -28,6 +29,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Tim & Klien page
     Route::get('/teams', [TeamsPageController::class, 'index'])->name('teams.index');
+
+    // Riwayat pembelian paket
+    Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');
 
     // Project management
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');

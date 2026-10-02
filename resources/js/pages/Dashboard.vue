@@ -6,6 +6,7 @@ import {
     Box,
     CheckCircle2,
     Clock,
+    CreditCard,
     ExternalLink,
     FileText,
     FileUp,
@@ -14,6 +15,7 @@ import {
     Layers,
     Pencil,
     Plus,
+    Receipt,
     Send,
     ShieldCheck,
     Sparkles,
@@ -98,6 +100,26 @@ interface Stats {
     subscription_status: 'free' | 'pro';
 }
 
+interface Transaction {
+    id: string;
+    order_id: string;
+    plan_name: string;
+    billing_type: string;
+    amount: string;
+    payment_type: string;
+    status: string;
+    created_at: string;
+    paid_at: string | null;
+}
+
+interface TransactionPage {
+    data: Transaction[];
+    total: number;
+    current_page: number;
+    last_page: number;
+    per_page: number;
+}
+
 const props = defineProps<{
     auth?: {
         user?: {
@@ -111,6 +133,7 @@ const props = defineProps<{
     ownedProjects?: OwnedProject[];
     clientProjects?: ClientProject[];
     stats?: Stats;
+    transactions?: TransactionPage;
 }>();
 
 const page = usePage();
@@ -232,8 +255,8 @@ watch(() => props.clientProjects, (updated) => {
     });
 }, { deep: true });
 
-// Active Tab: 'architect' or 'client'
-const activeTab = ref<'architect' | 'client'>('architect');
+// Active Tab: 'architect' | 'client' | 'billing'
+const activeTab = ref<'architect' | 'client' | 'billing'>('architect');
 const searchQuery = ref('');
 
 // Filtered lists
@@ -543,6 +566,40 @@ function formatBytes(bytes: number): string {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+// ── Billing helpers ───────────────────────────────────────
+function txStatusColor(status: string) {
+    const map: Record<string, string> = {
+        pending:    'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 border-amber-200 dark:border-amber-500/25',
+        settlement: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/25',
+        cancel:     'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300 border-rose-200 dark:border-rose-500/25',
+        expire:     'bg-neutral-100 text-neutral-500 dark:bg-neutral-500/15 dark:text-neutral-400 border-neutral-200 dark:border-neutral-500/25',
+    };
+    return map[status] ?? 'bg-muted text-muted-foreground border-border';
+}
+
+function txStatusLabel(status: string) {
+    const map: Record<string, string> = {
+        pending:    'Menunggu',
+        settlement: 'Lunas',
+        cancel:     'Dibatalkan',
+        expire:     'Kadaluarsa',
+    };
+    return map[status] ?? status;
+}
+
+function txPaymentLabel(type: string) {
+    const map: Record<string, string> = {
+        bank_transfer: 'Transfer Bank',
+        midtrans:      'Payment Gateway',
+        manual:        'Aktivasi Manual',
+    };
+    return map[type] ?? type;
+}
+
+function goTxPage(page: number) {
+    router.get('/dashboard', { tx_page: page }, { preserveState: true, preserveScroll: true });
+}
+
 // Sidebar state
 const { isSidebarOpen, isMobile } = useSidebar();
 const { confirm } = useConfirm();
@@ -797,10 +854,34 @@ const { isLoading } = usePageLoading(80);
                                 {{ localClientProjects.length }}
                             </span>
                         </button>
+
+                        <!-- Tab 3: Riwayat Pembelian -->
+                        <button
+                            @click="activeTab = 'billing'"
+                            :class="[
+                                'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all duration-300 border',
+                                activeTab === 'billing'
+                                    ? 'bg-slate-900 dark:bg-white text-white dark:text-black shadow-sm dark:shadow-[0_0_25px_rgba(255,255,255,0.2)] border-slate-900 dark:border-white'
+                                    : 'text-slate-500 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-neutral-100 border-slate-200 dark:border-white/15',
+                            ]"
+                        >
+                            <Receipt class="h-4 w-4" />
+                            <span>Riwayat Pembelian</span>
+                            <span
+                                :class="[
+                                    'ml-1 rounded-full px-2 py-0.5 text-xs font-semibold',
+                                    activeTab === 'billing'
+                                        ? 'bg-white/20 dark:bg-black/10 text-white dark:text-black'
+                                        : 'bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-neutral-300',
+                                ]"
+                            >
+                                {{ transactions?.total ?? 0 }}
+                            </span>
+                        </button>
                     </div>
 
-                    <!-- Search box -->
-                    <div class="w-full sm:w-64">
+                    <!-- Search box (sembunyikan di tab billing) -->
+                    <div class="w-full sm:w-64" v-if="activeTab !== 'billing'">
                         <Input
                             v-model="searchQuery"
                             placeholder="Cari judul proyek..."

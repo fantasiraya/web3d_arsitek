@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domains\Billing\Models\Transaction;
 use App\Domains\Billing\Services\SubscriptionLimitService;
 use App\Domains\Project\Models\Project;
 use App\Domains\Project\Models\ProjectClient;
@@ -125,6 +126,33 @@ class DashboardController extends Controller
             ];
         }
 
+        // 4. Riwayat transaksi pembelian paket milik user
+        $txPage = (int) $request->query('tx_page', 1);
+        $txPerPage = 8;
+
+        $rawTransactions = Transaction::where('user_id', $user->id)
+            ->latest()
+            ->get()
+            ->map(function (Transaction $t) {
+                $snap = $t->snap_response ?? [];
+                return [
+                    'id'           => $t->id,
+                    'order_id'     => $t->order_id,
+                    'plan_name'    => $snap['plan_slug'] ?? '—',
+                    'billing_type' => $snap['billing_type'] ?? '—',
+                    'amount'       => 'Rp ' . number_format((float) $t->amount, 0, ',', '.'),
+                    'payment_type' => $t->payment_type,
+                    'status'       => $t->status,
+                    'created_at'   => $t->created_at?->format('d M Y, H:i'),
+                    'paid_at'      => $t->paid_at?->format('d M Y, H:i'),
+                ];
+            });
+
+        $txTotal      = $rawTransactions->count();
+        $txLastPage   = (int) max(1, ceil($txTotal / $txPerPage));
+        $txPage       = max(1, min($txPage, $txLastPage));
+        $txData       = $rawTransactions->forPage($txPage, $txPerPage)->values();
+
         return Inertia::render('Dashboard', [
             'auth' => [
                 'user' => [
@@ -148,6 +176,13 @@ class DashboardController extends Controller
                 'plan_name' => $plan->name,
                 'has_custom_override' => $hasCustomOverride,
                 'limit_warning' => $limitWarning,
+            ],
+            'transactions' => [
+                'data'         => $txData,
+                'total'        => $txTotal,
+                'current_page' => $txPage,
+                'last_page'    => $txLastPage,
+                'per_page'     => $txPerPage,
             ],
         ]);
     }
