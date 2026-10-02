@@ -151,6 +151,23 @@
                         {{ cameraPresets.length }}
                     </span>
                 </button>
+
+                <div class="h-4 w-px bg-white/15 mx-0.5"></div>
+
+                <!-- Tombol Clipping -->
+                <button
+                    type="button"
+                    @click="isClipPanelOpen = !isClipPanelOpen; isPresetPanelOpen = false; isChatOpen = false; isDrawerOpen = false"
+                    class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all"
+                    :class="isClipPanelOpen || clippingEnabled
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                        : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white'"
+                    title="Sectioning / Clipping Tool"
+                >
+                    <Scissors class="h-3.5 w-3.5" :class="clippingEnabled ? 'text-cyan-400' : ''" />
+                    <span>Potong</span>
+                    <span v-if="clippingEnabled" class="ml-0.5 h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                </button>
             </div>
 
             <!-- ── TOOLBAR BOTTOM-CENTER ── -->
@@ -597,6 +614,124 @@
                 </div>
             </Transition>
 
+            <!-- ── CLIPPING / SECTIONING PANEL ── -->
+            <Transition
+                enter-active-class="transition-all duration-300 ease-out"
+                enter-from-class="opacity-0 -translate-x-4 scale-95"
+                enter-to-class="opacity-100 translate-x-0 scale-100"
+                leave-active-class="transition-all duration-200 ease-in"
+                leave-from-class="opacity-100 translate-x-0 scale-100"
+                leave-to-class="opacity-0 -translate-x-4 scale-95"
+            >
+                <div
+                    v-if="isClipPanelOpen"
+                    class="absolute top-16 left-4 z-30 w-72 max-w-[90vw] rounded-2xl border border-white/15 bg-black/90 backdrop-blur-2xl shadow-2xl overflow-hidden"
+                >
+                    <!-- Header -->
+                    <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                        <div class="flex items-center gap-2">
+                            <Scissors class="h-4 w-4 text-cyan-400" />
+                            <span class="text-xs font-bold uppercase tracking-wider text-white">Sectioning Tool</span>
+                            <span v-if="clippingEnabled" class="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                        </div>
+                        <button type="button" @click="isClipPanelOpen = false" class="text-neutral-400 hover:text-white transition-colors">
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
+
+                    <div class="p-4 space-y-4">
+
+                        <!-- Enable toggle -->
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-semibold text-white">Aktifkan Potongan</p>
+                                <p class="text-[11px] text-neutral-500 mt-0.5">Tampilkan interior tanpa mengubah model</p>
+                            </div>
+                            <button
+                                type="button"
+                                @click="clippingEnabled = !clippingEnabled"
+                                class="relative h-6 w-11 rounded-full transition-all duration-200 focus:outline-none"
+                                :class="clippingEnabled ? 'bg-cyan-500' : 'bg-white/15'"
+                            >
+                                <span
+                                    class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200"
+                                    :class="clippingEnabled ? 'left-[22px]' : 'left-0.5'"
+                                ></span>
+                            </button>
+                        </div>
+
+                        <!-- Axis selector -->
+                        <div class="space-y-1.5">
+                            <p class="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Arah Potongan</p>
+                            <div class="flex gap-1.5">
+                                <button
+                                    v-for="ax in (['x', 'y', 'z'] as const)"
+                                    :key="ax"
+                                    type="button"
+                                    @click="clippingAxis = ax"
+                                    class="flex-1 h-8 rounded-lg text-xs font-mono font-semibold uppercase transition-all"
+                                    :class="clippingAxis === ax
+                                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                                        : 'bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white border border-transparent'"
+                                >
+                                    {{ ax === 'x' ? '← X →' : ax === 'y' ? '↑ Y ↓' : '↙ Z ↗' }}
+                                </button>
+                            </div>
+                            <p class="text-[10px] text-neutral-600">
+                                {{ clippingAxis === 'y' ? 'Potongan horizontal — tampilkan lantai per lantai' :
+                                   clippingAxis === 'x' ? 'Potongan vertikal kiri-kanan' :
+                                   'Potongan vertikal depan-belakang' }}
+                            </p>
+                        </div>
+
+                        <!-- Slider posisi -->
+                        <div class="space-y-2" :class="!clippingEnabled && 'opacity-40 pointer-events-none'">
+                            <div class="flex items-center justify-between">
+                                <p class="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Posisi Bidang</p>
+                                <span class="text-[11px] font-mono text-cyan-400">{{ clippingValue.toFixed(2) }}m</span>
+                            </div>
+                            <input
+                                type="range"
+                                :min="clippingRange.min"
+                                :max="clippingRange.max"
+                                :step="clippingRange.step"
+                                v-model.number="clippingValue"
+                                class="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-white/10 accent-cyan-500"
+                            />
+                            <div class="flex justify-between text-[10px] font-mono text-neutral-600">
+                                <span>{{ clippingRange.min.toFixed(1) }}m</span>
+                                <span>{{ clippingRange.max.toFixed(1) }}m</span>
+                            </div>
+                        </div>
+
+                        <!-- Flip direction -->
+                        <div class="flex items-center justify-between" :class="!clippingEnabled && 'opacity-40 pointer-events-none'">
+                            <p class="text-xs text-neutral-400">Balik arah potongan</p>
+                            <button
+                                type="button"
+                                @click="clippingFlip = !clippingFlip"
+                                class="relative h-6 w-11 rounded-full transition-all duration-200"
+                                :class="clippingFlip ? 'bg-cyan-500' : 'bg-white/15'"
+                            >
+                                <span
+                                    class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200"
+                                    :class="clippingFlip ? 'left-[22px]' : 'left-0.5'"
+                                ></span>
+                            </button>
+                        </div>
+
+                        <!-- Reset button -->
+                        <button
+                            type="button"
+                            @click="resetClipping"
+                            class="w-full h-8 rounded-xl border border-white/10 bg-white/5 text-xs text-neutral-400 hover:bg-white/10 hover:text-white transition-all"
+                        >
+                            Reset Potongan
+                        </button>
+                    </div>
+                </div>
+            </Transition>
+
             <!-- ── CHAT PANEL (realtime) ── -->
             <ChatPanel
                 ref="chatPanelRef"
@@ -632,6 +767,7 @@ import {
     PinOff,
     Plus,
     RotateCw,
+    Scissors,
     Send,
     Sparkles,
     Trash2,
@@ -684,6 +820,12 @@ interface ViewerPreferences {
     drawerOpen: boolean;
     showAnnotations: boolean;
     boxOffsets: Record<string, { dx: number; dy: number }>;
+    clipping: {
+        enabled: boolean;
+        axis: 'x' | 'y' | 'z';
+        value: number;
+        flip: boolean;
+    };
 }
 
 const page = usePage();
@@ -708,6 +850,20 @@ const showAnnotations = ref(true);
 const isDrawerOpen = ref(true);
 const activeCommentId = ref<string | null>(null);
 const limitWarning = ref('');
+
+// ── Clipping / Sectioning state ──────────────────────────
+const clippingEnabled  = ref(false);
+const clippingAxis     = ref<'x' | 'y' | 'z'>('y');
+const clippingValue    = ref(3.5);   // posisi bidang potong (unit world)
+const clippingFlip     = ref(false); // arah potongan dibalik
+const isClipPanelOpen  = ref(false);
+
+// Range slider per axis (bisa disesuaikan setelah model load)
+const clippingRange = ref<{ min: number; max: number; step: number }>({
+    min:  -10,
+    max:   20,
+    step:  0.1,
+});
 
 // ── Chat state ──────────────────────────────────────────
 const isChatOpen = ref(false);
@@ -903,6 +1059,15 @@ function restoreViewerPreferences(): void {
                 Object.entries(preferences.boxOffsets).filter(([, offset]) => isValidBoxOffset(offset))
             );
         }
+
+        // Restore clipping state
+        if (preferences.clipping && typeof preferences.clipping === 'object') {
+            const c = preferences.clipping;
+            if (typeof c.enabled === 'boolean') clippingEnabled.value = c.enabled;
+            if (c.axis === 'x' || c.axis === 'y' || c.axis === 'z') clippingAxis.value = c.axis;
+            if (typeof c.value === 'number' && Number.isFinite(c.value)) clippingValue.value = c.value;
+            if (typeof c.flip === 'boolean') clippingFlip.value = c.flip;
+        }
     } catch {
         // Ignore unavailable or malformed browser storage.
     }
@@ -914,6 +1079,12 @@ function persistViewerPreferences(): void {
             drawerOpen: isDrawerOpen.value,
             showAnnotations: showAnnotations.value,
             boxOffsets: userBoxOffsets.value,
+            clipping: {
+                enabled: clippingEnabled.value,
+                axis:    clippingAxis.value,
+                value:   clippingValue.value,
+                flip:    clippingFlip.value,
+            },
         };
 
         window.localStorage.setItem(viewerPreferencesKey(), JSON.stringify(preferences));
@@ -923,6 +1094,77 @@ function persistViewerPreferences(): void {
 }
 
 watch([isDrawerOpen, showAnnotations, userBoxOffsets], persistViewerPreferences, { deep: true });
+
+// Watch clipping state — persist + apply ke renderer segera
+watch([clippingEnabled, clippingAxis, clippingValue, clippingFlip], () => {
+    applyClippingToRenderer();
+    persistViewerPreferences();
+});
+
+// Update range saat axis berganti
+watch(clippingAxis, () => {
+    updateClippingRangeFromModel();
+    applyClippingToRenderer();
+});
+
+// ── Clipping / Sectioning functions ──────────────────────
+function applyClippingToRenderer(): void {
+    if (!renderer) return;
+
+    if (!clippingEnabled.value) {
+        renderer.clippingPlanes = [];
+        renderer.localClippingEnabled = false;
+        return;
+    }
+
+    renderer.localClippingEnabled = true;
+
+    // Tentukan normal vektor berdasarkan axis + flip
+    const sign = clippingFlip.value ? 1 : -1;
+    let normal: THREE.Vector3;
+    switch (clippingAxis.value) {
+        case 'x': normal = new THREE.Vector3(sign, 0, 0); break;
+        case 'z': normal = new THREE.Vector3(0, 0, sign); break;
+        default:  normal = new THREE.Vector3(0, sign, 0); break; // 'y'
+    }
+
+    // constant = jarak bidang dari origin (negatif = arah normal)
+    renderer.clippingPlanes = [
+        new THREE.Plane(normal, clippingValue.value * sign * -1),
+    ];
+}
+
+function resetClipping(): void {
+    clippingEnabled.value = false;
+    clippingAxis.value    = 'y';
+    clippingValue.value   = 3.5;
+    clippingFlip.value    = false;
+}
+
+// Update range slider saat model selesai load (bounding box dari model)
+function updateClippingRangeFromModel(): void {
+    if (!model) return;
+    const box  = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const min  = box.min;
+    const max  = box.max;
+
+    // Range berdasarkan axis yang aktif
+    switch (clippingAxis.value) {
+        case 'x':
+            clippingRange.value = { min: Math.floor(min.x) - 1, max: Math.ceil(max.x) + 1, step: 0.05 };
+            break;
+        case 'z':
+            clippingRange.value = { min: Math.floor(min.z) - 1, max: Math.ceil(max.z) + 1, step: 0.05 };
+            break;
+        default: // y
+            clippingRange.value = { min: Math.floor(min.y) - 0.5, max: Math.ceil(max.y) + 0.5, step: 0.05 };
+            // Set nilai awal ke tengah bangunan jika belum pernah disimpan
+            if (clippingValue.value === 3.5) {
+                clippingValue.value = parseFloat(((min.y + max.y) / 2).toFixed(2));
+            }
+    }
+}
 
 let isDraggingBox = false;
 let dragTargetId: string | null = null;
@@ -1704,6 +1946,8 @@ function loadModel(): void {
             model = gltf.scene;
             scene?.add(model);
             frameModel();
+            updateClippingRangeFromModel();
+            applyClippingToRenderer();
             isLoading.value = false;
         },
         undefined,
