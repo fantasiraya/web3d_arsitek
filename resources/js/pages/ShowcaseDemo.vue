@@ -4,6 +4,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import {
     AlertTriangle,
     ArrowLeft,
+    Bookmark,
     Check,
     CheckCircle2,
     Eye,
@@ -77,7 +78,7 @@ const isFullscreen = ref(false);
 const activeCardId = ref<number | null>(1);
 
 // ─── Camera reset ─────────────────────────────────────────
-const defaultCamPos = new THREE.Vector3(12, 6, 14);
+const defaultCamPos    = new THREE.Vector3(12, 6, 14);
 const defaultCamTarget = new THREE.Vector3(0, 1.5, 0);
 
 let targetCamPos: THREE.Vector3 | null = null;
@@ -88,6 +89,55 @@ const applyPreset = (pos: THREE.Vector3, target: THREE.Vector3) => {
     targetLookAt = target.clone();
     autoRotate.value = false;
 };
+
+// ─── Dummy camera presets (lokal, tidak disimpan ke DB) ───
+interface ShowcasePreset {
+    id:   string;
+    name: string;
+    pos:  THREE.Vector3;
+    tgt:  THREE.Vector3;
+    desc: string;
+}
+
+const showcasePresets: ShowcasePreset[] = [
+    {
+        id:   'eksterior',
+        name: 'Eksterior Utama',
+        desc: 'Fasad depan 360°',
+        pos:  new THREE.Vector3(12,   6,   14),
+        tgt:  new THREE.Vector3(0,    1.5,  0),
+    },
+    {
+        id:   'ruang-tamu',
+        name: 'Ruang Tamu',
+        desc: 'Interior lantai 1',
+        pos:  new THREE.Vector3(-1.2, 1.4,  2.5),
+        tgt:  new THREE.Vector3(0.5,  1.2, -1.0),
+    },
+    {
+        id:   'dapur',
+        name: 'Dapur & Ruang Makan',
+        desc: 'Interior pantry',
+        pos:  new THREE.Vector3(2.5,  1.4,  1.8),
+        tgt:  new THREE.Vector3(1.2,  1.1, -1.2),
+    },
+    {
+        id:   'kamar-utama',
+        name: 'Kamar Utama',
+        desc: 'Interior lantai 2',
+        pos:  new THREE.Vector3(-0.8, 3.8,  2.2),
+        tgt:  new THREE.Vector3(-0.2, 3.2, -0.5),
+    },
+    {
+        id:   'atas',
+        name: 'Bird Eye View',
+        desc: 'Pandangan dari atas',
+        pos:  new THREE.Vector3(0,   18,   0.1),
+        tgt:  new THREE.Vector3(0,    0,   0),
+    },
+];
+
+const isPresetPanelOpen = ref(false);
 
 // ─── Pin Data (local demo) ───────────────────────────────
 const pins = ref<SpatialPin[]>([
@@ -632,7 +682,78 @@ onBeforeUnmount(() => {
                 <button type="button" @click="setInteractionMode('pan')" class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all" :class="interactionMode === 'pan' ? 'bg-white text-black shadow-md font-semibold' : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white'">
                     <Hand class="h-3.5 w-3.5" /><span>Geser</span>
                 </button>
+
+                <div class="h-4 w-px bg-white/15 mx-0.5"></div>
+
+                <!-- Tombol Preset -->
+                <button
+                    type="button"
+                    @click="isPresetPanelOpen = !isPresetPanelOpen"
+                    class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all"
+                    :class="isPresetPanelOpen
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white'"
+                >
+                    <Bookmark class="h-3.5 w-3.5" :class="isPresetPanelOpen ? 'text-amber-400' : ''" />
+                    <span>Preset</span>
+                    <span class="ml-0.5 text-[10px] font-mono px-1 rounded"
+                          :class="isPresetPanelOpen ? 'bg-amber-500/20 text-amber-300' : 'bg-white/10 text-neutral-400'">
+                        {{ showcasePresets.length }}
+                    </span>
+                </button>
             </div>
+
+            <!-- ── CAMERA PRESET PANEL ── -->
+            <Transition
+                enter-active-class="transition-all duration-300 ease-out"
+                enter-from-class="opacity-0 -translate-x-4 scale-95"
+                enter-to-class="opacity-100 translate-x-0 scale-100"
+                leave-active-class="transition-all duration-200 ease-in"
+                leave-from-class="opacity-100 translate-x-0 scale-100"
+                leave-to-class="opacity-0 -translate-x-4 scale-95"
+            >
+                <div
+                    v-if="isPresetPanelOpen"
+                    class="absolute top-16 left-4 z-30 w-64 rounded-2xl border border-white/15 bg-black/90 backdrop-blur-2xl shadow-2xl overflow-hidden"
+                >
+                    <!-- Header -->
+                    <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                        <div class="flex items-center gap-2">
+                            <Bookmark class="h-4 w-4 text-amber-400" />
+                            <span class="text-xs font-bold uppercase tracking-wider text-white">Preset Kamera</span>
+                        </div>
+                        <button type="button" @click="isPresetPanelOpen = false" class="text-neutral-400 hover:text-white transition-colors">
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
+
+                    <!-- Preset list -->
+                    <div>
+                        <button
+                            v-for="preset in showcasePresets"
+                            :key="preset.id"
+                            type="button"
+                            class="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-0"
+                            @click="applyPreset(preset.pos, preset.tgt); isPresetPanelOpen = false"
+                        >
+                            <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20">
+                                <Bookmark class="h-3.5 w-3.5 text-amber-400" />
+                            </div>
+                            <div>
+                                <p class="text-xs font-semibold text-white">{{ preset.name }}</p>
+                                <p class="text-[10px] text-neutral-500">{{ preset.desc }}</p>
+                            </div>
+                        </button>
+                    </div>
+
+                    <!-- Note demo -->
+                    <div class="px-4 py-3 border-t border-white/8">
+                        <p class="text-[10px] font-mono text-neutral-600 leading-relaxed">
+                            Preset demo — di versi nyata preset disimpan ke database per proyek.
+                        </p>
+                    </div>
+                </div>
+            </Transition>
 
             <!-- ── TOOLBAR BOTTOM-CENTER ── -->
             <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 rounded-full border border-white/15 bg-black/85 p-1.5 sm:p-2 shadow-2xl backdrop-blur-2xl max-w-[95vw]">
