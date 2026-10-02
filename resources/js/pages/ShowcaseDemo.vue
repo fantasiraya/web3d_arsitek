@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
+import { ref, onMounted, onBeforeUnmount, nextTick, computed, watch } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import {
     AlertTriangle,
@@ -18,6 +18,7 @@ import {
     Pencil,
     Plus,
     RotateCw,
+    Scissors,
     Send,
     Sparkles,
     Trash2,
@@ -138,6 +139,56 @@ const showcasePresets: ShowcasePreset[] = [
 ];
 
 const isPresetPanelOpen = ref(false);
+
+// ─── Clipping / Sectioning ────────────────────────────────
+const clippingEnabled  = ref(false);
+const clippingAxis     = ref<'x' | 'y' | 'z'>('y');
+const clippingValue    = ref(3.5);
+const clippingFlip     = ref(false);
+const isClipPanelOpen  = ref(false);
+const clippingRange    = ref<{ min: number; max: number; step: number }>({ min: -2, max: 12, step: 0.05 });
+
+function applyClipping(): void {
+    if (!renderer) return;
+    if (!clippingEnabled.value) {
+        renderer.clippingPlanes = [];
+        renderer.localClippingEnabled = false;
+        return;
+    }
+    renderer.localClippingEnabled = true;
+    const sign = clippingFlip.value ? 1 : -1;
+    let normal: THREE.Vector3;
+    switch (clippingAxis.value) {
+        case 'x': normal = new THREE.Vector3(sign, 0, 0); break;
+        case 'z': normal = new THREE.Vector3(0, 0, sign); break;
+        default:  normal = new THREE.Vector3(0, sign, 0); break;
+    }
+    renderer.clippingPlanes = [new THREE.Plane(normal, clippingValue.value * sign * -1)];
+}
+
+function resetClipping(): void {
+    clippingEnabled.value = false;
+    clippingAxis.value    = 'y';
+    clippingValue.value   = 3.5;
+    clippingFlip.value    = false;
+    applyClipping();
+}
+
+function updateClippingRange(): void {
+    if (!modelGroup.children.length) return;
+    const box = new THREE.Box3().setFromObject(modelGroup);
+    const min = box.min;
+    const max = box.max;
+    switch (clippingAxis.value) {
+        case 'x': clippingRange.value = { min: parseFloat((min.x - 0.5).toFixed(1)), max: parseFloat((max.x + 0.5).toFixed(1)), step: 0.05 }; break;
+        case 'z': clippingRange.value = { min: parseFloat((min.z - 0.5).toFixed(1)), max: parseFloat((max.z + 0.5).toFixed(1)), step: 0.05 }; break;
+        default:  clippingRange.value = { min: parseFloat((min.y - 0.5).toFixed(1)), max: parseFloat((max.y + 0.5).toFixed(1)), step: 0.05 };
+                  clippingValue.value  = parseFloat(((min.y + max.y) / 2).toFixed(2));
+    }
+}
+
+watch([clippingEnabled, clippingAxis, clippingValue, clippingFlip], applyClipping);
+watch(clippingAxis, updateClippingRange);
 
 // ─── Pin Data (local demo) ───────────────────────────────
 const pins = ref<SpatialPin[]>([
@@ -560,6 +611,8 @@ const initThree = () => {
             modelGroup.add(model);
             isLoading.value = false;
             updateProjections();
+            updateClippingRange();
+            applyClipping();
         },
         xhr => { if (xhr.total > 0) loadingProgress.value = Math.round((xhr.loaded / xhr.total) * 100); },
         () => { isLoading.value = false; }
@@ -701,6 +754,23 @@ onBeforeUnmount(() => {
                         {{ showcasePresets.length }}
                     </span>
                 </button>
+
+                <div class="h-4 w-px bg-white/15 mx-0.5"></div>
+
+                <!-- Tombol Clipping -->
+                <button
+                    type="button"
+                    @click="isClipPanelOpen = !isClipPanelOpen; isPresetPanelOpen = false"
+                    class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all"
+                    :class="isClipPanelOpen || clippingEnabled
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                        : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white'"
+                    title="Sectioning / Clipping Tool"
+                >
+                    <Scissors class="h-3.5 w-3.5" :class="clippingEnabled ? 'text-cyan-400' : ''" />
+                    <span>Potong</span>
+                    <span v-if="clippingEnabled" class="ml-0.5 h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                </button>
             </div>
 
             <!-- ── CAMERA PRESET PANEL ── -->
@@ -751,6 +821,119 @@ onBeforeUnmount(() => {
                         <p class="text-[10px] font-mono text-neutral-600 leading-relaxed">
                             Preset demo — di versi nyata preset disimpan ke database per proyek.
                         </p>
+                    </div>
+                </div>
+            </Transition>
+
+            <!-- ── CLIPPING / SECTIONING PANEL ── -->
+            <Transition
+                enter-active-class="transition-all duration-300 ease-out"
+                enter-from-class="opacity-0 -translate-x-4 scale-95"
+                enter-to-class="opacity-100 translate-x-0 scale-100"
+                leave-active-class="transition-all duration-200 ease-in"
+                leave-from-class="opacity-100 translate-x-0 scale-100"
+                leave-to-class="opacity-0 -translate-x-4 scale-95"
+            >
+                <div
+                    v-if="isClipPanelOpen"
+                    class="absolute top-16 left-4 z-30 w-72 max-w-[90vw] rounded-2xl border border-white/15 bg-black/90 backdrop-blur-2xl shadow-2xl overflow-hidden"
+                >
+                    <!-- Header -->
+                    <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                        <div class="flex items-center gap-2">
+                            <Scissors class="h-4 w-4 text-cyan-400" />
+                            <span class="text-xs font-bold uppercase tracking-wider text-white">Sectioning Tool</span>
+                            <span v-if="clippingEnabled" class="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                        </div>
+                        <button type="button" @click="isClipPanelOpen = false" class="text-neutral-400 hover:text-white transition-colors">
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
+
+                    <div class="p-4 space-y-4">
+                        <!-- Enable toggle -->
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-semibold text-white">Aktifkan Potongan</p>
+                                <p class="text-[11px] text-neutral-500 mt-0.5">Tampilkan interior tanpa mengubah model</p>
+                            </div>
+                            <button
+                                type="button"
+                                @click="clippingEnabled = !clippingEnabled"
+                                class="relative h-6 w-11 rounded-full transition-all duration-200"
+                                :class="clippingEnabled ? 'bg-cyan-500' : 'bg-white/15'"
+                            >
+                                <span class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200"
+                                      :class="clippingEnabled ? 'left-[22px]' : 'left-0.5'"></span>
+                            </button>
+                        </div>
+
+                        <!-- Axis selector -->
+                        <div class="space-y-1.5">
+                            <p class="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Arah Potongan</p>
+                            <div class="flex gap-1.5">
+                                <button
+                                    v-for="ax in (['x', 'y', 'z'] as const)"
+                                    :key="ax"
+                                    type="button"
+                                    @click="clippingAxis = ax"
+                                    class="flex-1 h-8 rounded-lg text-xs font-mono font-semibold uppercase transition-all"
+                                    :class="clippingAxis === ax
+                                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                                        : 'bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white border border-transparent'"
+                                >
+                                    {{ ax === 'x' ? '← X →' : ax === 'y' ? '↑ Y ↓' : '↙ Z ↗' }}
+                                </button>
+                            </div>
+                            <p class="text-[10px] text-neutral-600">
+                                {{ clippingAxis === 'y' ? 'Potongan horizontal — lantai per lantai' :
+                                   clippingAxis === 'x' ? 'Potongan vertikal kiri-kanan' :
+                                   'Potongan vertikal depan-belakang' }}
+                            </p>
+                        </div>
+
+                        <!-- Slider posisi -->
+                        <div class="space-y-2" :class="!clippingEnabled && 'opacity-40 pointer-events-none'">
+                            <div class="flex items-center justify-between">
+                                <p class="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Posisi Bidang</p>
+                                <span class="text-[11px] font-mono text-cyan-400">{{ clippingValue.toFixed(2) }}m</span>
+                            </div>
+                            <input
+                                type="range"
+                                :min="clippingRange.min"
+                                :max="clippingRange.max"
+                                :step="clippingRange.step"
+                                v-model.number="clippingValue"
+                                class="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-white/10 accent-cyan-500"
+                            />
+                            <div class="flex justify-between text-[10px] font-mono text-neutral-600">
+                                <span>{{ clippingRange.min.toFixed(1) }}m</span>
+                                <span>{{ clippingRange.max.toFixed(1) }}m</span>
+                            </div>
+                        </div>
+
+                        <!-- Flip direction -->
+                        <div class="flex items-center justify-between" :class="!clippingEnabled && 'opacity-40 pointer-events-none'">
+                            <p class="text-xs text-neutral-400">Balik arah potongan</p>
+                            <button
+                                type="button"
+                                @click="clippingFlip = !clippingFlip"
+                                class="relative h-6 w-11 rounded-full transition-all duration-200"
+                                :class="clippingFlip ? 'bg-cyan-500' : 'bg-white/15'"
+                            >
+                                <span class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200"
+                                      :class="clippingFlip ? 'left-[22px]' : 'left-0.5'"></span>
+                            </button>
+                        </div>
+
+                        <!-- Reset -->
+                        <button
+                            type="button"
+                            @click="resetClipping"
+                            class="w-full h-8 rounded-xl border border-white/10 bg-white/5 text-xs text-neutral-400 hover:bg-white/10 hover:text-white transition-all"
+                        >
+                            Reset Potongan
+                        </button>
                     </div>
                 </div>
             </Transition>
