@@ -25,14 +25,12 @@ class PlanController extends Controller
         // Payment settings
         $paymentSettings = \App\Domains\SystemConfig\Models\SystemSetting::whereIn('key', [
             'payment_gateway_enabled',
-            'bank_name',
-            'bank_account_number',
-            'bank_account_holder',
-            'midtrans_is_production',
-            'midtrans_server_key',
-            'midtrans_client_key',
-            'admin_whatsapp',
-            'whatsapp_template',
+            'bank_name', 'bank_account_number', 'bank_account_holder',
+            'midtrans_is_production', 'midtrans_server_key', 'midtrans_client_key',
+            'admin_whatsapp', 'whatsapp_template',
+            'payment_provider_primary', 'payment_provider_fallback', 'payment_provider_future',
+            'tripay_api_key', 'tripay_private_key', 'tripay_merchant_code', 'tripay_is_sandbox',
+            'xendit_secret_key', 'xendit_webhook_token',
         ])->pluck('value', 'key');
 
         return Inertia::render('Admin/Plans/Index', [
@@ -72,38 +70,51 @@ class PlanController extends Controller
     public function updatePaymentSettings(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'payment_gateway_enabled' => ['required', 'boolean'],
-            'bank_name'               => ['nullable', 'string', 'max:100'],
-            'bank_account_number'     => ['nullable', 'string', 'max:50'],
-            'bank_account_holder'     => ['nullable', 'string', 'max:150'],
-            'midtrans_is_production'  => ['required', 'boolean'],
-            'midtrans_server_key'     => ['nullable', 'string', 'max:255'],
-            'midtrans_client_key'     => ['nullable', 'string', 'max:255'],
-            'admin_whatsapp'          => ['nullable', 'string', 'max:20'],
-            'whatsapp_template'       => ['nullable', 'string', 'max:1000'],
+            'payment_gateway_enabled'  => ['required', 'boolean'],
+            'bank_name'                => ['nullable', 'string', 'max:100'],
+            'bank_account_number'      => ['nullable', 'string', 'max:50'],
+            'bank_account_holder'      => ['nullable', 'string', 'max:150'],
+            'midtrans_is_production'   => ['required', 'boolean'],
+            'midtrans_server_key'      => ['nullable', 'string', 'max:255'],
+            'midtrans_client_key'      => ['nullable', 'string', 'max:255'],
+            'admin_whatsapp'           => ['nullable', 'string', 'max:20'],
+            'whatsapp_template'        => ['nullable', 'string', 'max:1000'],
+            // Multi-provider
+            'payment_provider_primary'  => ['nullable', 'string', 'in:midtrans,tripay,xendit'],
+            'payment_provider_fallback' => ['nullable', 'string', 'in:midtrans,tripay,xendit,'],
+            'payment_provider_future'   => ['nullable', 'string', 'in:midtrans,tripay,xendit,'],
+            // Tripay
+            'tripay_api_key'           => ['nullable', 'string', 'max:255'],
+            'tripay_private_key'       => ['nullable', 'string', 'max:255'],
+            'tripay_merchant_code'     => ['nullable', 'string', 'max:100'],
+            'tripay_is_sandbox'        => ['required', 'boolean'],
+            // Xendit
+            'xendit_secret_key'        => ['nullable', 'string', 'max:255'],
+            'xendit_webhook_token'     => ['nullable', 'string', 'max:255'],
         ]);
 
-        // Hapus cache SEBELUM update agar tidak ada race condition
+        // Key-key yang tidak boleh di-overwrite jika dikirim kosong
+        $secretKeys = [
+            'midtrans_server_key', 'midtrans_client_key',
+            'tripay_api_key', 'tripay_private_key',
+            'xendit_secret_key', 'xendit_webhook_token',
+        ];
+
+        // Hapus cache SEBELUM update
         \Illuminate\Support\Facades\Cache::forget(
             \App\Domains\SystemConfig\Repositories\SystemSettingRepository::CACHE_KEY
         );
 
         foreach ($validated as $key => $value) {
-            // Jika key adalah API key Midtrans dan nilainya kosong, skip (jangan overwrite)
-            if (in_array($key, ['midtrans_server_key', 'midtrans_client_key']) && empty($value)) {
+            // Jangan overwrite secret key jika dikirim kosong
+            if (in_array($key, $secretKeys) && empty($value)) {
                 continue;
             }
-            // updateOrCreate agar row baru dibuat jika belum ada
             \App\Domains\SystemConfig\Models\SystemSetting::updateOrCreate(
                 ['key' => $key],
                 ['value' => is_bool($value) ? ($value ? '1' : '0') : (string) ($value ?? '')]
             );
         }
-
-        // Hapus cache lagi SETELAH update untuk memastikan bersih
-        \Illuminate\Support\Facades\Cache::forget(
-            \App\Domains\SystemConfig\Repositories\SystemSettingRepository::CACHE_KEY
-        );
 
         $status = $validated['payment_gateway_enabled']
             ? 'Payment Gateway (Midtrans) diaktifkan.'

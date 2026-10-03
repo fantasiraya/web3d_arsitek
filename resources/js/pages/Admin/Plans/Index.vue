@@ -49,6 +49,15 @@ interface PaymentSettings {
     midtrans_client_key: string;
     admin_whatsapp: string;
     whatsapp_template: string;
+    payment_provider_primary: string;
+    payment_provider_fallback: string;
+    payment_provider_future: string;
+    tripay_api_key: string;
+    tripay_private_key: string;
+    tripay_merchant_code: string;
+    tripay_is_sandbox: string;
+    xendit_secret_key: string;
+    xendit_webhook_token: string;
 }
 
 const props = defineProps<{
@@ -117,21 +126,45 @@ function removeBenefit(idx: number) {
 }
 
 // ─── Payment Settings ─────────────────────────────────────
+const ps = props.paymentSettings;
+
 const paymentForm = useForm({
-    payment_gateway_enabled: props.paymentSettings.payment_gateway_enabled === '1',
-    bank_name:              props.paymentSettings.bank_name ?? '',
-    bank_account_number:    props.paymentSettings.bank_account_number ?? '',
-    bank_account_holder:    props.paymentSettings.bank_account_holder ?? '',
-    midtrans_is_production: props.paymentSettings.midtrans_is_production === '1',
-    midtrans_server_key:    '',
-    midtrans_client_key:    '',
-    admin_whatsapp:         props.paymentSettings.admin_whatsapp ?? '',
-    whatsapp_template:      props.paymentSettings.whatsapp_template ?? '',
+    payment_gateway_enabled:   ps.payment_gateway_enabled === '1',
+    bank_name:                 ps.bank_name ?? '',
+    bank_account_number:       ps.bank_account_number ?? '',
+    bank_account_holder:       ps.bank_account_holder ?? '',
+    midtrans_is_production:    ps.midtrans_is_production === '1',
+    midtrans_server_key:       '',
+    midtrans_client_key:       '',
+    admin_whatsapp:            ps.admin_whatsapp ?? '',
+    whatsapp_template:         ps.whatsapp_template ?? '',
+    // Multi-provider
+    payment_provider_primary:  ps.payment_provider_primary  ?? 'midtrans',
+    payment_provider_fallback: ps.payment_provider_fallback ?? 'tripay',
+    payment_provider_future:   ps.payment_provider_future   ?? 'xendit',
+    // Tripay
+    tripay_api_key:            '',
+    tripay_private_key:        '',
+    tripay_merchant_code:      ps.tripay_merchant_code ?? '',
+    tripay_is_sandbox:         ps.tripay_is_sandbox !== '0',
+    // Xendit
+    xendit_secret_key:         '',
+    xendit_webhook_token:      '',
 });
 
-// Apakah key sudah tersimpan sebelumnya (untuk placeholder informatif)
-const serverKeySaved = !!props.paymentSettings.midtrans_server_key;
-const clientKeySaved = !!props.paymentSettings.midtrans_client_key;
+// Status tersimpan (placeholder informatif)
+const serverKeySaved       = !!ps.midtrans_server_key;
+const clientKeySaved       = !!ps.midtrans_client_key;
+const tripayApiKeySaved    = !!ps.tripay_api_key;
+const tripayPrivateKeySaved = !!ps.tripay_private_key;
+const xenditKeySaved       = !!ps.xendit_secret_key;
+
+// Provider options
+const providerOptions = [
+    { value: 'midtrans', label: 'Midtrans', badge: 'PRIMARY' },
+    { value: 'tripay',   label: 'Tripay',   badge: 'FALLBACK' },
+    { value: 'xendit',   label: 'Xendit',   badge: 'FUTURE' },
+];
 
 function submitPaymentSettings() {
     paymentForm.patch('/admin/payment-settings', {
@@ -305,6 +338,79 @@ function submitPaymentSettings() {
 
                 <!-- Midtrans fields (hanya jika gateway aktif) -->
                 <div v-if="paymentForm.payment_gateway_enabled" class="space-y-4">
+
+                    <!-- ── PROVIDER SELECTOR ─────────────────────────── -->
+                    <div class="space-y-3">
+                        <div>
+                            <p class="text-sm font-semibold text-foreground">Payment Provider</p>
+                            <p class="text-xs text-muted-foreground mt-0.5">
+                                Sistem akan mencoba Primary dulu. Jika gagal/belum dikonfigurasi, otomatis pakai Fallback.
+                            </p>
+                        </div>
+
+                        <!-- Provider cards -->
+                        <div class="grid gap-3 sm:grid-cols-3">
+                            <!-- Primary -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">PRIMARY</span>
+                                    <Label class="text-xs">Provider Utama</Label>
+                                </div>
+                                <select v-model="paymentForm.payment_provider_primary" class="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm">
+                                    <option value="midtrans">Midtrans</option>
+                                    <option value="tripay">Tripay</option>
+                                    <option value="xendit">Xendit</option>
+                                </select>
+                            </div>
+
+                            <!-- Fallback -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">FALLBACK</span>
+                                    <Label class="text-xs">Provider Cadangan</Label>
+                                </div>
+                                <select v-model="paymentForm.payment_provider_fallback" class="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm">
+                                    <option value="">— Tidak ada —</option>
+                                    <option value="midtrans">Midtrans</option>
+                                    <option value="tripay">Tripay</option>
+                                    <option value="xendit">Xendit</option>
+                                </select>
+                            </div>
+
+                            <!-- Future -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded">FUTURE</span>
+                                    <Label class="text-xs">Provider Masa Depan</Label>
+                                </div>
+                                <select v-model="paymentForm.payment_provider_future" class="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm">
+                                    <option value="">— Belum ditentukan —</option>
+                                    <option value="midtrans">Midtrans</option>
+                                    <option value="tripay">Tripay</option>
+                                    <option value="xendit">Xendit</option>
+                                </select>
+                                <p class="text-[10px] text-muted-foreground">Tidak dipakai — hanya sebagai catatan rencana.</p>
+                            </div>
+                        </div>
+
+                        <!-- Info alur -->
+                        <div class="rounded-xl border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground flex items-start gap-2">
+                            <span class="mt-0.5 shrink-0">ℹ️</span>
+                            <span>
+                                Alur: <strong class="text-foreground">{{ paymentForm.payment_provider_primary || 'midtrans' }}</strong>
+                                → jika gagal →
+                                <strong class="text-foreground">{{ paymentForm.payment_provider_fallback || 'tidak ada' }}</strong>.
+                                Untuk menambah provider baru, implementasikan
+                                <code class="bg-muted px-1 rounded">PaymentGatewayInterface</code> di folder
+                                <code class="bg-muted px-1 rounded">app/Domains/Billing/Gateway/Providers/</code>.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-border pt-4 space-y-4">
+                        <!-- Midtrans config -->
+                        <p class="text-xs font-semibold text-foreground uppercase tracking-wider">Konfigurasi Midtrans</p>
+
                     <div class="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/20">
                         <div>
                             <p class="text-sm font-medium text-foreground">Mode Midtrans</p>
@@ -348,6 +454,76 @@ function submitPaymentSettings() {
                                     class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-emerald-500 pointer-events-none">
                                     ✓ Tersimpan
                                 </span>
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+
+                    <!-- Tripay config -->
+                    <div class="border-t border-border pt-4 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs font-semibold text-foreground uppercase tracking-wider">Konfigurasi Tripay</p>
+                            <a href="https://tripay.co.id" target="_blank" class="text-[11px] text-indigo-500 hover:underline">Daftar / Login →</a>
+                        </div>
+                        <div class="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/20">
+                            <div>
+                                <p class="text-sm font-medium text-foreground">Mode Tripay</p>
+                                <p class="text-xs text-muted-foreground">{{ paymentForm.tripay_is_sandbox ? 'Sandbox (Testing)' : 'Produksi (Live)' }}</p>
+                            </div>
+                            <button type="button" @click="paymentForm.tripay_is_sandbox = !paymentForm.tripay_is_sandbox">
+                                <ToggleRight v-if="!paymentForm.tripay_is_sandbox" class="h-8 w-8 text-emerald-500" />
+                                <ToggleLeft v-else class="h-8 w-8 text-muted-foreground" />
+                            </button>
+                        </div>
+                        <div class="grid gap-4 sm:grid-cols-3">
+                            <div class="space-y-1.5">
+                                <Label>API Key</Label>
+                                <div class="relative">
+                                    <Input v-model="paymentForm.tripay_api_key" type="password"
+                                        :placeholder="tripayApiKeySaved ? '••••••• (tersimpan)' : 'Dari dashboard Tripay'" />
+                                    <span v-if="tripayApiKeySaved && !paymentForm.tripay_api_key"
+                                        class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-emerald-500 pointer-events-none">✓</span>
+                                </div>
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label>Private Key</Label>
+                                <div class="relative">
+                                    <Input v-model="paymentForm.tripay_private_key" type="password"
+                                        :placeholder="tripayPrivateKeySaved ? '••••••• (tersimpan)' : 'Dari dashboard Tripay'" />
+                                    <span v-if="tripayPrivateKeySaved && !paymentForm.tripay_private_key"
+                                        class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-emerald-500 pointer-events-none">✓</span>
+                                </div>
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label>Merchant Code</Label>
+                                <Input v-model="paymentForm.tripay_merchant_code" placeholder="Contoh: T12345" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Xendit config -->
+                    <div class="border-t border-border pt-4 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <p class="text-xs font-semibold text-foreground uppercase tracking-wider">Konfigurasi Xendit</p>
+                                <span class="text-[10px] font-bold text-indigo-500 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded">FUTURE</span>
+                            </div>
+                            <a href="https://dashboard.xendit.co/register" target="_blank" class="text-[11px] text-indigo-500 hover:underline">Daftar →</a>
+                        </div>
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="space-y-1.5">
+                                <Label>Secret Key</Label>
+                                <div class="relative">
+                                    <Input v-model="paymentForm.xendit_secret_key" type="password"
+                                        :placeholder="xenditKeySaved ? '••••••• (tersimpan)' : 'xnd_production_xxxx / xnd_development_xxxx'" />
+                                    <span v-if="xenditKeySaved && !paymentForm.xendit_secret_key"
+                                        class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-emerald-500 pointer-events-none">✓</span>
+                                </div>
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label>Webhook Verification Token</Label>
+                                <Input v-model="paymentForm.xendit_webhook_token" type="password"
+                                    placeholder="Dari Xendit Settings → Webhooks" />
                             </div>
                         </div>
                     </div>

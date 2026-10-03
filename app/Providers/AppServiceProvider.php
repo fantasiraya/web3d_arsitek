@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Actions\Auth\MatchInvitedClientEmailAction;
+use App\Domains\Billing\Gateway\PaymentGatewayManager;
 use App\Domains\SystemConfig\Repositories\SystemSettingRepository;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Login;
@@ -23,6 +24,14 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(SystemSettingRepository::class, fn () => new SystemSettingRepository);
+
+        // Payment Gateway Manager — singleton agar instance provider di-cache
+        $this->app->singleton(PaymentGatewayManager::class, function ($app) {
+            return new PaymentGatewayManager(
+                settings:  $app->make(SystemSettingRepository::class),
+                container: $app,
+            );
+        });
 
         // Custom login response to redirect super admin to admin panel
         $this->app->singleton(

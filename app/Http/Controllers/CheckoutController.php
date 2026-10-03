@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Domains\Billing\Gateway\DTO\PaymentData;
+use App\Domains\Billing\Gateway\PaymentGatewayManager;
 use App\Domains\Billing\Models\Plan;
 use App\Domains\Billing\Models\Transaction;
 use App\Domains\SystemConfig\Repositories\SystemSettingRepository;
@@ -13,29 +15,29 @@ use Inertia\Response;
 class CheckoutController extends Controller
 {
     public function __construct(
-        protected SystemSettingRepository $settings
+        protected SystemSettingRepository $settings,
+        protected PaymentGatewayManager   $gateway,
     ) {}
 
     /**
      * GET /checkout/{plan}
-     * Tampilkan halaman checkout untuk plan tertentu.
      */
     public function show(Request $request, string $planSlug): Response|RedirectResponse
     {
-        $plan = Plan::where('slug', $planSlug)
-            ->where('status', 'active')
-            ->firstOrFail();
+        $plan = Plan::where('slug', $planSlug)->where('status', 'active')->firstOrFail();
 
-        // Free plan → langsung ke register
         if ($plan->price_monthly === 'Rp 0' || strtolower($plan->price_monthly) === 'rp 0') {
             return redirect()->route('register');
         }
 
-        // Baca konfigurasi payment
-        $gatewayEnabled = $this->settings->getBool('payment_gateway_enabled');
-        $bankName       = $this->settings->get('bank_name', 'BCA');
-        $bankAccount    = $this->settings->get('bank_account_number', '');
-        $bankHolder     = $this->settings->get('bank_account_holder', '');
+        $gatewayEnabled  = $this->settings->getBool('payment_gateway_enabled');
+        $activeProvider  = $this->settings->get('payment_provider_primary', 'midtrans');
+
+        // Data khusus Midtrans (client key untuk Snap JS)
+        $midtransClientKey = null;
+        if ($gatewayEnabled && $activeProvider === 'midtrans') {
+            $midtransClientKey = $this->settings->get('midtrans_client_key', '');
+        }
 
         return Inertia::render('Checkout/Index', [
             'plan' => [
@@ -49,26 +51,22 @@ class CheckoutController extends Controller
                 'benefits'      => $plan->benefits ?? [],
                 'is_featured'   => $plan->is_featured,
             ],
-            'gatewayEnabled' => $gatewayEnabled,
+            'gatewayEnabled'   => $gatewayEnabled,
+            'activeProvider'   => $activeProvider,
             'bankInfo' => [
-                'bank_name'          => $bankName,
-                'account'            => $bankAccount,
-                'holder'             => $bankHolder,
-                'whatsapp'           => $this->settings->get('admin_whatsapp', ''),
-                'whatsapp_template'  => $this->settings->get('whatsapp_template', ''),
+                'bank_name'         => $this->settings->get('bank_name', 'BCA'),
+                'account'           => $this->settings->get('bank_account_number', ''),
+                'holder'            => $this->settings->get('bank_account_holder', ''),
+                'whatsapp'          => $this->settings->get('admin_whatsapp', ''),
+                'whatsapp_template' => $this->settings->get('whatsapp_template', ''),
             ],
-            'midtransClientKey' => $gatewayEnabled
-                ? $this->settings->get('midtrans_client_key', '')
-                : null,
-            'isProduction' => $this->settings->getBool('midtrans_is_production'),
+            'midtransClientKey' => $midtransClientKey,
+            'isProduction'      => $this->settings->getBool('midtrans_is_production'),
         ]);
     }
 
     /**
      * POST /checkout/{plan}/order
-     * Buat order / transaction record.
-     * - Mode manual  → buat transaction pending, redirect ke halaman instruksi transfer
-     * - Mode gateway → buat transaction + generate Midtrans Snap token
      */
     public function order(Request $request, string $planSlug): \Illuminate\Http\JsonResponse|RedirectResponse
     {
@@ -80,64 +78,108 @@ class CheckoutController extends Controller
             'email'        => ['required', 'email', 'max:255'],
         ]);
 
-        $user         = $request->user();
-        $amount       = $validated['billing_type'] === 'annual'
+        $user           = $request->user();
+        $amount         = $validated['billing_type'] === 'annual'
             ? $this->parsePrice($plan->price_annual)
             : $this->parsePrice($plan->price_monthly);
-        $orderId      = 'AETHER-' . strtoupper($plan->slug) . '-' . time();
+        $orderId        = 'AETHER-' . strtoupper($plan->slug) . '-' . time();
         $gatewayEnabled = $this->settings->getBool('payment_gateway_enabled');
-
-        // Buat transaction record
-        $transaction = Transaction::create([
-            'user_id'      => $user?->id,
-            'order_id'     => $orderId,
-            'amount'       => (string) $amount,
-            'payment_type' => $gatewayEnabled ? 'midtrans' : 'bank_transfer',
-            'status'       => Transaction::STATUS_PENDING,
-            'snap_response' => [
-                'plan_slug'    => $plan->slug,
-                'billing_type' => $validated['billing_type'],
-                'buyer_name'   => $validated['name'],
-                'buyer_email'  => $validated['email'],
-            ],
-        ]);
 
         // ── Mode: Transfer Manual ──────────────────────────
         if (!$gatewayEnabled) {
+            $transaction = Transaction::create([
+                'user_id'       => $user?->id,
+                'order_id'      => $orderId,
+                'amount'        => (string) $amount,
+                'payment_type'  => 'bank_transfer',
+                'status'        => Transaction::STATUS_PENDING,
+                'snap_response' => [
+                    'plan_slug'    => $plan->slug,
+                    'billing_type' => $validated['billing_type'],
+                    'buyer_name'   => $validated['name'],
+                    'buyer_email'  => $validated['email'],
+                ],
+            ]);
             return redirect()->route('checkout.pending', $transaction->id);
         }
 
-        // ── Mode: Midtrans Gateway ─────────────────────────
+        // ── Mode: Payment Gateway (multi-provider) ─────────
         try {
-            $snapToken = $this->getMidtransSnapToken(
-                orderId:  $orderId,
-                amount:   $amount,
-                name:     $validated['name'],
-                email:    $validated['email'],
-                planName: $plan->display_name ?? $plan->name,
+            $paymentData = new PaymentData(
+                orderId:       $orderId,
+                amount:        $amount,
+                customerName:  $validated['name'],
+                customerEmail: $validated['email'],
+                itemName:      ($plan->display_name ?? $plan->name) . ' - ' . ucfirst($validated['billing_type']),
+                planSlug:      $plan->slug,
+                billingType:   $validated['billing_type'],
             );
 
-            $transaction->update([
-                'snap_response' => array_merge(
-                    $transaction->snap_response ?? [],
-                    ['snap_token' => $snapToken]
-                ),
+            $result = $this->gateway->createTransaction($paymentData);
+
+            // Simpan transaction dengan provider yang dipakai
+            $transaction = Transaction::create([
+                'user_id'       => $user?->id,
+                'order_id'      => $orderId,
+                'amount'        => (string) $amount,
+                'payment_type'  => $result->provider,
+                'status'        => Transaction::STATUS_PENDING,
+                'snap_response' => array_merge([
+                    'plan_slug'    => $plan->slug,
+                    'billing_type' => $validated['billing_type'],
+                    'buyer_name'   => $validated['name'],
+                    'buyer_email'  => $validated['email'],
+                    'provider'     => $result->provider,
+                ], $result->raw),
             ]);
 
-            return response()->json([
-                'snap_token'     => $snapToken,
-                'order_id'       => $orderId,
-                'transaction_id' => $transaction->id,
-            ]);
+            return response()->json($result->toArray() + ['transaction_id' => $transaction->id]);
+
         } catch (\Exception $e) {
-            \Log::error('[Checkout] Midtrans error: ' . $e->getMessage());
+            \Log::error('[Checkout] Gateway error: ' . $e->getMessage());
             return response()->json(['message' => 'Gagal menginisialisasi payment gateway. ' . $e->getMessage()], 500);
         }
     }
 
     /**
+     * POST /checkout/payment-callback
+     * Fallback dari Snap/redirect onSuccess untuk local dev.
+     */
+    public function paymentCallback(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $orderId = $request->input('order_id');
+        $status  = $request->input('status', 'settlement');
+
+        if (!$orderId) return response()->json(['message' => 'Invalid payload'], 400);
+
+        $transaction = Transaction::where('order_id', $orderId)->first();
+        if (!$transaction) return response()->json(['message' => 'Transaction not found'], 404);
+
+        if ($transaction->status === Transaction::STATUS_PENDING) {
+            $transaction->update(['status' => Transaction::STATUS_SETTLEMENT, 'paid_at' => now()]);
+
+            if ($transaction->user_id) {
+                $snap     = $transaction->snap_response ?? [];
+                $planSlug = $snap['plan_slug'] ?? null;
+                if ($planSlug) {
+                    $plan = Plan::where('slug', $planSlug)->first();
+                    $user = \App\Domains\Auth\Models\User::find($transaction->user_id);
+                    if ($plan && $user) {
+                        app(\App\Domains\Billing\Actions\ChangeUserPlanAction::class)->execute(
+                            targetUser:  $user,
+                            newPlan:     $plan,
+                            billingType: $snap['billing_type'] ?? 'monthly',
+                            reason:      "Gateway onSuccess callback. Order: {$transaction->order_id}",
+                        );
+                    }
+                }
+            }
+        }
+        return response()->json(['message' => 'OK']);
+    }
+
+    /**
      * GET /checkout/pending/{transaction}
-     * Halaman instruksi transfer manual setelah order dibuat.
      */
     public function pending(Request $request, Transaction $transaction): Response
     {
@@ -161,99 +203,46 @@ class CheckoutController extends Controller
     }
 
     /**
-     * POST /checkout/payment-callback
-     * Dipanggil dari Snap onSuccess (client-side) untuk update status transaksi
-     * sebagai fallback jika webhook Midtrans belum masuk (misal di local dev).
-     */
-    public function paymentCallback(Request $request): \Illuminate\Http\JsonResponse
-    {
-        $orderId = $request->input('order_id');
-        $status  = $request->input('status', 'settlement');
-
-        if (!$orderId) {
-            return response()->json(['message' => 'Invalid payload'], 400);
-        }
-
-        $transaction = Transaction::where('order_id', $orderId)->first();
-        if (!$transaction) {
-            return response()->json(['message' => 'Transaction not found'], 404);
-        }
-
-        // Hanya update jika masih pending (hindari overwrite webhook asli)
-        if ($transaction->status === Transaction::STATUS_PENDING) {
-            $transaction->update([
-                'status'  => Transaction::STATUS_SETTLEMENT,
-                'paid_at' => now(),
-            ]);
-
-            // Aktifkan subscription
-            if ($transaction->user_id) {
-                $planSlug = ($transaction->snap_response ?? [])['plan_slug'] ?? null;
-                if ($planSlug) {
-                    $plan = \App\Domains\Billing\Models\Plan::where('slug', $planSlug)->first();
-                    $user = \App\Domains\Auth\Models\User::find($transaction->user_id);
-                    if ($plan && $user) {
-                        app(\App\Domains\Billing\Actions\ChangeUserPlanAction::class)->execute(
-                            targetUser: $user,
-                            newPlan:    $plan,
-                            billingType: ($transaction->snap_response ?? [])['billing_type'] ?? 'monthly',
-                            reason:     "Midtrans Snap onSuccess. Order: {$transaction->order_id}",
-                        );
-                    }
-                }
-            }
-        }
-
-        return response()->json(['message' => 'OK']);
-    }
-
-    /**
-     * POST /checkout/midtrans/notification
-     * Webhook dari Midtrans — update status transaksi otomatis.
+     * POST /checkout/midtrans/notification — webhook Midtrans
      */
     public function notification(Request $request): \Illuminate\Http\JsonResponse
     {
-        $payload = $request->all();
-        $orderId = $payload['order_id'] ?? null;
+        $payload  = $request->all();
+        $orderId  = $payload['order_id'] ?? null;
 
-        if (!$orderId) {
-            return response()->json(['message' => 'Invalid payload'], 400);
-        }
+        if (!$orderId) return response()->json(['message' => 'Invalid payload'], 400);
 
         $transaction = Transaction::where('order_id', $orderId)->first();
-        if (!$transaction) {
-            return response()->json(['message' => 'Transaction not found'], 404);
+        if (!$transaction) return response()->json(['message' => 'Transaction not found'], 404);
+
+        // Gunakan driver yang sesuai dengan provider transaksi ini
+        $providerName = $transaction->payment_type ?? 'midtrans';
+        $driver       = $this->gateway->driverForWebhook($providerName);
+
+        if (!$driver) {
+            return response()->json(['message' => 'Unknown provider'], 400);
         }
 
-        $transactionStatus = $payload['transaction_status'] ?? '';
-        $fraudStatus       = $payload['fraud_status'] ?? 'accept';
-
-        $newStatus = match (true) {
-            $transactionStatus === 'capture' && $fraudStatus === 'accept' => Transaction::STATUS_SETTLEMENT,
-            $transactionStatus === 'settlement'                            => Transaction::STATUS_SETTLEMENT,
-            in_array($transactionStatus, ['cancel', 'deny', 'expire'])    => Transaction::STATUS_CANCEL,
-            default                                                        => $transaction->status,
-        };
+        $newStatus = $driver->parseWebhookStatus($payload);
 
         $transaction->update([
             'status'        => $newStatus,
-            'payment_type'  => $payload['payment_type'] ?? $transaction->payment_type,
             'paid_at'       => $newStatus === Transaction::STATUS_SETTLEMENT ? now() : $transaction->paid_at,
             'snap_response' => array_merge($transaction->snap_response ?? [], $payload),
         ]);
 
-        // Jika settlement → aktifkan subscription via event/job (simplified)
         if ($newStatus === Transaction::STATUS_SETTLEMENT && $transaction->user_id) {
-            $planSlug = ($transaction->snap_response ?? [])['plan_slug'] ?? null;
+            $snap     = $transaction->snap_response ?? [];
+            $planSlug = $snap['plan_slug'] ?? null;
             if ($planSlug) {
                 $plan = Plan::where('slug', $planSlug)->first();
                 $user = \App\Domains\Auth\Models\User::find($transaction->user_id);
                 if ($plan && $user) {
                     app(\App\Domains\Billing\Actions\ChangeUserPlanAction::class)->execute(
-                        targetUser: $user,
-                        newPlan:    $plan,
-                        billingType: ($transaction->snap_response ?? [])['billing_type'] ?? 'monthly',
-                        reason:     "Midtrans auto-settlement. Order: {$transaction->order_id}",
+                        targetUser:  $user,
+                        newPlan:     $plan,
+                        billingType: $snap['billing_type'] ?? 'monthly',
+                        reason:      "Webhook {$providerName}. Order: {$transaction->order_id}",
                     );
                 }
             }
@@ -262,48 +251,8 @@ class CheckoutController extends Controller
         return response()->json(['message' => 'OK']);
     }
 
-    // ─── Helpers ─────────────────────────────────────────
     private function parsePrice(string $price): int
     {
-        // "Rp 149.000" → 149000
         return (int) preg_replace('/[^0-9]/', '', $price);
-    }
-
-    private function getMidtransSnapToken(string $orderId, int $amount, string $name, string $email, string $planName): string
-    {
-        $serverKey   = $this->settings->get('midtrans_server_key', '');
-        $isProduction = $this->settings->getBool('midtrans_is_production');
-        $baseUrl     = $isProduction
-            ? 'https://app.midtrans.com/snap/v1/transactions'
-            : 'https://app.sandbox.midtrans.com/snap/v1/transactions';
-
-        $payload = [
-            'transaction_details' => ['order_id' => $orderId, 'gross_amount' => $amount],
-            'customer_details'    => ['first_name' => $name, 'email' => $email],
-            'item_details'        => [['id' => $orderId, 'price' => $amount, 'quantity' => 1, 'name' => $planName]],
-        ];
-
-        $ch = curl_init($baseUrl);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => json_encode($payload),
-            CURLOPT_HTTPHEADER     => [
-                'Content-Type: application/json',
-                'Authorization: Basic ' . base64_encode($serverKey . ':'),
-            ],
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        $data = json_decode($response, true);
-        if ($httpCode !== 201 || empty($data['token'])) {
-            \Log::error('[Checkout] Midtrans raw response: ' . $response . ' | HTTP: ' . $httpCode);
-            throw new \RuntimeException($data['error_messages'][0] ?? 'Midtrans error (HTTP ' . $httpCode . ')');
-        }
-
-        return $data['token'];
     }
 }
