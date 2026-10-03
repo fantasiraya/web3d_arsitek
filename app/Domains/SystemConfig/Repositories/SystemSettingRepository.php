@@ -35,6 +35,20 @@ class SystemSettingRepository
     }
 
     /**
+     * Get a boolean setting — tolerant terhadap true/false/1/0/"1"/"0".
+     */
+    public function getBool(string $key, bool $default = false): bool
+    {
+        $value = $this->get($key, $default);
+
+        if (is_bool($value)) return $value;
+        if (is_int($value))  return $value !== 0;
+        if (is_string($value)) return in_array($value, ['1', 'true', 'yes'], true);
+
+        return (bool) $value;
+    }
+
+    /**
      * Set or update a setting.
      */
     public function set(string $key, mixed $value, string $type = 'string', ?string $description = null): SystemSetting

@@ -78,6 +78,9 @@ Route::middleware('guest')->group(function () {
 Route::post('/checkout/midtrans/notification', [CheckoutController::class, 'notification'])
     ->name('checkout.notification')
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+// Payment callback dari Snap onSuccess (client-side)
+Route::middleware(['auth'])->post('/checkout/payment-callback', [CheckoutController::class, 'paymentCallback'])
+    ->name('checkout.payment-callback');
 // Halaman pending transfer
 Route::get('/checkout/pending/{transaction}', [CheckoutController::class, 'pending'])->name('checkout.pending');
 // Wildcard plan — harus paling terakhir

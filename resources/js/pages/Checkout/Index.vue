@@ -124,7 +124,21 @@ function openMidtransSnap(token: string, orderId: string) {
 
     const loadSnap = () => {
         (window as any).snap.pay(token, {
-            onSuccess: () => { window.location.href = `/dashboard?payment=success&order=${orderId}`; },
+            onSuccess: (result: any) => {
+                // Tandai transaksi sebagai paid di backend, lalu redirect
+                fetch(`/checkout/payment-callback`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ order_id: orderId, status: 'settlement', result }),
+                }).finally(() => {
+                    window.location.href = `/dashboard?payment=success&order=${orderId}`;
+                });
+            },
             onPending: () => { window.location.href = `/dashboard?payment=pending&order=${orderId}`; },
             onError:   () => { errorMsg.value = 'Pembayaran gagal. Silakan coba lagi.'; },
             onClose:   () => { /* user tutup popup */ },

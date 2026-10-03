@@ -142,7 +142,7 @@ class SubscriptionController extends Controller
             $query->where('status', $statusFilter);
         }
 
-        $subscriptions = $query->latest('started_at')->paginate(15)->withQueryString();
+        $subscriptions = $query->latest('started_at')->paginate(10)->withQueryString();
 
         $subscriptions->getCollection()->transform(function (Subscription $sub) {
             $user = $sub->user;
@@ -172,30 +172,99 @@ class SubscriptionController extends Controller
             ];
         });
 
+        $txPage    = (int) $request->query('tx_page', 1);
+        $txPerPage = 10;
+        $txSearch  = $request->query('tx_search', '');
+
+        $pendingQuery = Transaction::with('user:id,name,email')
+            ->where('status', Transaction::STATUS_PENDING);
+
+        if ($txSearch) {
+            $pendingQuery->where(function ($q) use ($txSearch) {
+                $q->where('order_id', 'like', "%{$txSearch}%")
+                  ->orWhereHas('user', fn ($u) => $u->where('name', 'like', "%{$txSearch}%")
+                      ->orWhere('email', 'like', "%{$txSearch}%"));
+            });
+        }
+
+        $allPending = $pendingQuery->latest()->get()
+            ->map(fn (Transaction $t) => [
+                'id'           => $t->id,
+                'order_id'     => $t->order_id,
+                'amount'       => 'Rp ' . number_format((float)$t->amount, 0, ',', '.'),
+                'user_name'    => $t->user?->name ?? '—',
+                'user_email'   => $t->user?->email ?? '—',
+                'user_id'      => $t->user_id,
+                'created_at'   => $t->created_at?->diffForHumans(),
+                'plan_slug'    => ($t->snap_response ?? [])['plan_slug'] ?? null,
+                'billing_type' => ($t->snap_response ?? [])['billing_type'] ?? 'monthly',
+                'payment_type' => match ($t->payment_type) {
+                    'bank_transfer' => 'Transfer Bank',
+                    'midtrans'      => 'Midtrans',
+                    'manual'        => 'Manual',
+                    default         => $t->payment_type ?? '—',
+                },
+            ]);
+
+        $txTotal    = $allPending->count();
+        $txLastPage = (int) max(1, ceil($txTotal / $txPerPage));
+        $txPage     = max(1, min($txPage, $txLastPage));
+        $txData     = $allPending->forPage($txPage, $txPerPage)->values();
+
+        // Semua transaksi (bukan hanya pending) — untuk tab "Semua Transaksi"
+        $allTxPage    = (int) $request->query('all_tx_page', 1);
+        $allTxPerPage = 10;
+
+        $allTxRaw = Transaction::with('user:id,name,email')
+            ->latest()
+            ->get()
+            ->map(fn (Transaction $t) => [
+                'id'           => $t->id,
+                'order_id'     => $t->order_id,
+                'amount'       => 'Rp ' . number_format((float)$t->amount, 0, ',', '.'),
+                'user_name'    => $t->user?->name ?? '—',
+                'user_email'   => $t->user?->email ?? '—',
+                'status'       => $t->status,
+                'plan_slug'    => ($t->snap_response ?? [])['plan_slug'] ?? null,
+                'billing_type' => ($t->snap_response ?? [])['billing_type'] ?? '—',
+                'payment_type' => match ($t->payment_type) {
+                    'bank_transfer' => 'Transfer Bank',
+                    'midtrans'      => 'Midtrans',
+                    'manual'        => 'Manual',
+                    default         => $t->payment_type ?? '—',
+                },
+                'created_at'   => $t->created_at?->format('d M Y, H:i'),
+                'paid_at'      => $t->paid_at?->format('d M Y, H:i'),
+            ]);
+
+        $allTxTotal    = $allTxRaw->count();
+        $allTxLastPage = (int) max(1, ceil($allTxTotal / $allTxPerPage));
+        $allTxPage     = max(1, min($allTxPage, $allTxLastPage));
+        $allTxData     = $allTxRaw->forPage($allTxPage, $allTxPerPage)->values();
+
         return Inertia::render('Admin/Subscriptions/Index', [
             'subscriptions' => $subscriptions,
             'plans' => Plan::where('status', 'active')->get(['id','name','slug']),
             'filters' => [
-                'search' => $search ?? '',
-                'plan'   => $planFilter ?? '',
-                'status' => $statusFilter ?? '',
+                'search'    => $search ?? '',
+                'plan'      => $planFilter ?? '',
+                'status'    => $statusFilter ?? '',
+                'tx_search' => $txSearch ?? '',
             ],
-            'pendingTransactions' => Transaction::with('user:id,name,email')
-                ->where('status', Transaction::STATUS_PENDING)
-                ->where('payment_type', 'bank_transfer')
-                ->latest()
-                ->get()
-                ->map(fn (Transaction $t) => [
-                    'id'           => $t->id,
-                    'order_id'     => $t->order_id,
-                    'amount'       => 'Rp ' . number_format((float)$t->amount, 0, ',', '.'),
-                    'user_name'    => $t->user?->name ?? '—',
-                    'user_email'   => $t->user?->email ?? '—',
-                    'user_id'      => $t->user_id,
-                    'created_at'   => $t->created_at?->diffForHumans(),
-                    'plan_slug'    => ($t->snap_response ?? [])['plan_slug'] ?? null,
-                    'billing_type' => ($t->snap_response ?? [])['billing_type'] ?? 'monthly',
-                ]),
+            'pendingTransactions' => [
+                'data'         => $txData,
+                'total'        => $txTotal,
+                'current_page' => $txPage,
+                'last_page'    => $txLastPage,
+                'per_page'     => $txPerPage,
+            ],
+            'allTransactions' => [
+                'data'         => $allTxData,
+                'total'        => $allTxTotal,
+                'current_page' => $allTxPage,
+                'last_page'    => $allTxLastPage,
+                'per_page'     => $allTxPerPage,
+            ],
         ]);
     }
 

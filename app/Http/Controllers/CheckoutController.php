@@ -32,7 +32,7 @@ class CheckoutController extends Controller
         }
 
         // Baca konfigurasi payment
-        $gatewayEnabled = $this->settings->get('payment_gateway_enabled', '0') === '1';
+        $gatewayEnabled = $this->settings->getBool('payment_gateway_enabled');
         $bankName       = $this->settings->get('bank_name', 'BCA');
         $bankAccount    = $this->settings->get('bank_account_number', '');
         $bankHolder     = $this->settings->get('bank_account_holder', '');
@@ -60,7 +60,7 @@ class CheckoutController extends Controller
             'midtransClientKey' => $gatewayEnabled
                 ? $this->settings->get('midtrans_client_key', '')
                 : null,
-            'isProduction' => $this->settings->get('midtrans_is_production', '0') === '1',
+            'isProduction' => $this->settings->getBool('midtrans_is_production'),
         ]);
     }
 
@@ -85,7 +85,7 @@ class CheckoutController extends Controller
             ? $this->parsePrice($plan->price_annual)
             : $this->parsePrice($plan->price_monthly);
         $orderId      = 'AETHER-' . strtoupper($plan->slug) . '-' . time();
-        $gatewayEnabled = $this->settings->get('payment_gateway_enabled', '0') === '1';
+        $gatewayEnabled = $this->settings->getBool('payment_gateway_enabled');
 
         // Buat transaction record
         $transaction = Transaction::create([
@@ -161,6 +161,53 @@ class CheckoutController extends Controller
     }
 
     /**
+     * POST /checkout/payment-callback
+     * Dipanggil dari Snap onSuccess (client-side) untuk update status transaksi
+     * sebagai fallback jika webhook Midtrans belum masuk (misal di local dev).
+     */
+    public function paymentCallback(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $orderId = $request->input('order_id');
+        $status  = $request->input('status', 'settlement');
+
+        if (!$orderId) {
+            return response()->json(['message' => 'Invalid payload'], 400);
+        }
+
+        $transaction = Transaction::where('order_id', $orderId)->first();
+        if (!$transaction) {
+            return response()->json(['message' => 'Transaction not found'], 404);
+        }
+
+        // Hanya update jika masih pending (hindari overwrite webhook asli)
+        if ($transaction->status === Transaction::STATUS_PENDING) {
+            $transaction->update([
+                'status'  => Transaction::STATUS_SETTLEMENT,
+                'paid_at' => now(),
+            ]);
+
+            // Aktifkan subscription
+            if ($transaction->user_id) {
+                $planSlug = ($transaction->snap_response ?? [])['plan_slug'] ?? null;
+                if ($planSlug) {
+                    $plan = \App\Domains\Billing\Models\Plan::where('slug', $planSlug)->first();
+                    $user = \App\Domains\Auth\Models\User::find($transaction->user_id);
+                    if ($plan && $user) {
+                        app(\App\Domains\Billing\Actions\ChangeUserPlanAction::class)->execute(
+                            targetUser: $user,
+                            newPlan:    $plan,
+                            billingType: ($transaction->snap_response ?? [])['billing_type'] ?? 'monthly',
+                            reason:     "Midtrans Snap onSuccess. Order: {$transaction->order_id}",
+                        );
+                    }
+                }
+            }
+        }
+
+        return response()->json(['message' => 'OK']);
+    }
+
+    /**
      * POST /checkout/midtrans/notification
      * Webhook dari Midtrans — update status transaksi otomatis.
      */
@@ -225,7 +272,7 @@ class CheckoutController extends Controller
     private function getMidtransSnapToken(string $orderId, int $amount, string $name, string $email, string $planName): string
     {
         $serverKey   = $this->settings->get('midtrans_server_key', '');
-        $isProduction = $this->settings->get('midtrans_is_production', '0') === '1';
+        $isProduction = $this->settings->getBool('midtrans_is_production');
         $baseUrl     = $isProduction
             ? 'https://app.midtrans.com/snap/v1/transactions'
             : 'https://app.sandbox.midtrans.com/snap/v1/transactions';
@@ -253,7 +300,8 @@ class CheckoutController extends Controller
 
         $data = json_decode($response, true);
         if ($httpCode !== 201 || empty($data['token'])) {
-            throw new \RuntimeException($data['error_messages'][0] ?? 'Midtrans error');
+            \Log::error('[Checkout] Midtrans raw response: ' . $response . ' | HTTP: ' . $httpCode);
+            throw new \RuntimeException($data['error_messages'][0] ?? 'Midtrans error (HTTP ' . $httpCode . ')');
         }
 
         return $data['token'];

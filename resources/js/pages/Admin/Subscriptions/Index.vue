@@ -47,6 +47,15 @@ interface PendingTx {
     created_at: string;
     plan_slug: string | null;
     billing_type: string;
+    payment_type: string;
+}
+
+interface PendingTxPage {
+    data: PendingTx[];
+    total: number;
+    current_page: number;
+    last_page: number;
+    per_page: number;
 }
 
 interface PlanOption { id: string; name: string; slug: string; }
@@ -55,11 +64,54 @@ interface PlanOption { id: string; name: string; slug: string; }
 const props = defineProps<{
     subscriptions: { data: SubItem[]; total: number; current_page: number; last_page: number };
     plans: PlanOption[];
-    filters: { search: string; plan: string; status: string };
-    pendingTransactions: PendingTx[];
+    filters: { search: string; plan: string; status: string; tx_search: string };
+    pendingTransactions: PendingTxPage;
 }>();
 
 const { confirm } = useConfirm();
+
+// ─── Pending TX filter + paginate (server-side) ───────────
+const txSearch = ref(props.filters.tx_search ?? '');
+let txSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+function applyTxSearch() {
+    router.get('/admin/subscriptions', {
+        search:    props.filters.search,
+        plan:      props.filters.plan,
+        tx_search: txSearch.value,
+        tx_page:   1,
+    }, { preserveState: true, preserveScroll: true });
+}
+
+// Debounce search 400ms
+watch(txSearch, () => {
+    if (txSearchTimer) clearTimeout(txSearchTimer);
+    txSearchTimer = setTimeout(applyTxSearch, 400);
+});
+
+function goTxPage(page: number) {
+    router.get('/admin/subscriptions', {
+        search:    props.filters.search,
+        plan:      props.filters.plan,
+        tx_search: props.filters.tx_search ?? '',
+        tx_page:   page,
+    }, { preserveState: true, preserveScroll: true });
+}
+
+const txPageRange = computed(() => {
+    const total   = props.pendingTransactions.last_page;
+    const current = props.pendingTransactions.current_page;
+    const delta   = 2;
+    const pages: (number | '...')[] = [];
+    const start = Math.max(2, current - delta);
+    const end   = Math.min(total - 1, current + delta);
+    pages.push(1);
+    if (start > 2) pages.push('...');
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (end < total - 1) pages.push('...');
+    if (total > 1) pages.push(total);
+    return pages;
+});
 
 // ─── Search / filter ─────────────────────────────────────
 const searchInput = ref(props.filters.search);
@@ -105,7 +157,6 @@ const confirmForm = useForm({
 
 function openConfirmTransfer(tx: PendingTx) {
     confirmingTx.value = tx;
-    // Pre-fill dari data transaksi yang dipesan user
     confirmForm.plan_slug    = tx.plan_slug ?? 'pro';
     confirmForm.billing_type = tx.billing_type ?? 'monthly';
     confirmForm.notes        = '';
@@ -127,12 +178,22 @@ function submitConfirmTransfer() {
 // ─── Helpers ─────────────────────────────────────────────
 function statusColor(status: string) {
     const map: Record<string, string> = {
-        active:  'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25',
-        expired: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/25',
+        active:    'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25',
+        expired:   'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/25',
         cancelled: 'bg-neutral-500/15 text-neutral-500 border-neutral-500/25',
-        trialing: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25',
+        trialing:  'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25',
     };
     return map[status] ?? 'bg-muted text-muted-foreground border-border';
+}
+
+function statusLabel(status: string) {
+    const map: Record<string, string> = {
+        active:    'Aktif',
+        expired:   'Kadaluarsa',
+        cancelled: 'Dibatalkan',
+        trialing:  'Trial',
+    };
+    return map[status] ?? status;
 }
 
 function planColor(slug: string) {
@@ -188,12 +249,26 @@ const pageRange = computed(() => {
         </div>
 
         <!-- ── PENDING TRANSFER SECTION ─────────────────── -->
-        <div v-if="pendingTransactions.length > 0" class="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-4">
-            <div class="flex items-center gap-2">
-                <AlertTriangle class="h-5 w-5 text-amber-500 shrink-0" />
-                <div>
-                    <h2 class="font-semibold text-foreground">Transfer Menunggu Konfirmasi</h2>
-                    <p class="text-xs text-muted-foreground">{{ pendingTransactions.length }} transfer belum dikonfirmasi. Verifikasi rekening lalu klik konfirmasi.</p>
+        <div v-if="pendingTransactions.total > 0" class="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex items-center gap-2">
+                    <AlertTriangle class="h-5 w-5 text-amber-500 shrink-0" />
+                    <div>
+                        <h2 class="font-semibold text-foreground">Transaksi Menunggu Konfirmasi</h2>
+                        <p class="text-xs text-muted-foreground">
+                            {{ pendingTransactions.total }} transaksi belum dikonfirmasi admin.
+                        </p>
+                    </div>
+                </div>
+                <!-- Search filter -->
+                <div class="relative w-full sm:w-64">
+                    <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <input
+                        v-model="txSearch"
+                        type="text"
+                        placeholder="Cari nama, email, order ID..."
+                        class="w-full h-8 pl-8 pr-3 rounded-lg border border-amber-500/30 bg-white/50 dark:bg-black/20 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                    />
                 </div>
             </div>
 
@@ -203,20 +278,34 @@ const pageRange = computed(() => {
                         <tr>
                             <th class="px-4 py-2.5 text-left">Order ID</th>
                             <th class="px-4 py-2.5 text-left">User</th>
+                            <th class="px-4 py-2.5 text-left hidden sm:table-cell">Metode</th>
                             <th class="px-4 py-2.5 text-left">Jumlah</th>
-                            <th class="px-4 py-2.5 text-left">Dikirim</th>
+                            <th class="px-4 py-2.5 text-left hidden md:table-cell">Dikirim</th>
                             <th class="px-4 py-2.5 text-right">Aksi</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-border bg-card">
-                        <tr v-for="tx in pendingTransactions" :key="tx.id" class="hover:bg-muted/30 transition-colors">
+                        <tr v-if="pendingTransactions.data.length === 0">
+                            <td colspan="6" class="px-4 py-8 text-center text-sm text-muted-foreground">
+                                Tidak ada transaksi yang cocok dengan pencarian.
+                            </td>
+                        </tr>
+                        <tr v-for="tx in pendingTransactions.data" :key="tx.id" class="hover:bg-muted/30 transition-colors">
                             <td class="px-4 py-3 font-mono text-xs">{{ tx.order_id }}</td>
                             <td class="px-4 py-3">
                                 <div class="font-medium text-foreground">{{ tx.user_name }}</div>
                                 <div class="text-xs text-muted-foreground">{{ tx.user_email }}</div>
                             </td>
+                            <td class="px-4 py-3 hidden sm:table-cell">
+                                <span class="text-xs px-2 py-0.5 rounded-full border"
+                                    :class="tx.payment_type === 'Midtrans'
+                                        ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'
+                                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'">
+                                    {{ tx.payment_type }}
+                                </span>
+                            </td>
                             <td class="px-4 py-3 font-semibold text-foreground">{{ tx.amount }}</td>
-                            <td class="px-4 py-3 text-xs text-muted-foreground">{{ tx.created_at }}</td>
+                            <td class="px-4 py-3 text-xs text-muted-foreground hidden md:table-cell">{{ tx.created_at }}</td>
                             <td class="px-4 py-3 text-right">
                                 <Button size="sm" class="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white" @click="openConfirmTransfer(tx)">
                                     <CheckCircle2 class="h-3.5 w-3.5" /> Konfirmasi
@@ -225,6 +314,38 @@ const pageRange = computed(() => {
                         </tr>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Pagination pending (server-side) -->
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pt-1">
+                <p class="text-xs text-muted-foreground">
+                    Menampilkan <span class="font-semibold text-foreground">{{ pendingTransactions.data.length }}</span>
+                    dari <span class="font-semibold text-foreground">{{ pendingTransactions.total }}</span> transaksi
+                    · Hal. <span class="font-semibold text-foreground">{{ pendingTransactions.current_page }}</span>/{{ pendingTransactions.last_page }}
+                </p>
+                <div v-if="pendingTransactions.last_page > 1" class="flex items-center gap-1">
+                    <button
+                        :disabled="pendingTransactions.current_page === 1"
+                        @click="goTxPage(pendingTransactions.current_page - 1)"
+                        class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-amber-500/30 text-sm text-muted-foreground hover:bg-amber-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >‹</button>
+                    <template v-for="p in txPageRange" :key="String(p)">
+                        <span v-if="p === '...'" class="inline-flex h-7 w-7 items-center justify-center text-xs text-muted-foreground">…</span>
+                        <button
+                            v-else
+                            @click="goTxPage(p as number)"
+                            class="inline-flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-medium transition-colors"
+                            :class="p === pendingTransactions.current_page
+                                ? 'border-amber-500 bg-amber-500 text-white'
+                                : 'border-amber-500/30 text-muted-foreground hover:bg-amber-500/10'"
+                        >{{ p }}</button>
+                    </template>
+                    <button
+                        :disabled="pendingTransactions.current_page === pendingTransactions.last_page"
+                        @click="goTxPage(pendingTransactions.current_page + 1)"
+                        class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-amber-500/30 text-sm text-muted-foreground hover:bg-amber-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >›</button>
+                </div>
             </div>
         </div>
 
@@ -289,7 +410,7 @@ const pageRange = computed(() => {
                         </td>
                         <td class="px-4 py-3">
                             <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold" :class="statusColor(sub.status)">
-                                {{ sub.status }}
+                                {{ statusLabel(sub.status) }}
                             </span>
                         </td>
                         <td class="px-4 py-3 text-xs text-muted-foreground hidden md:table-cell">{{ sub.started_at }}</td>
@@ -308,33 +429,23 @@ const pageRange = computed(() => {
                 </tbody>
             </table>
 
-            <!-- Pagination -->
-            <div v-if="subscriptions.last_page > 1" class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-border px-4 py-3">
-                <!-- Info -->
+            <!-- Pagination subscription — selalu tampil -->
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-border px-4 py-3">
                 <p class="text-xs text-muted-foreground order-2 sm:order-1">
-                    Halaman <span class="font-semibold text-foreground">{{ subscriptions.current_page }}</span>
-                    dari <span class="font-semibold text-foreground">{{ subscriptions.last_page }}</span>
-                    · Total <span class="font-semibold text-foreground">{{ subscriptions.total }}</span> subscription
+                    Menampilkan <span class="font-semibold text-foreground">{{ subscriptions.data.length }}</span>
+                    dari <span class="font-semibold text-foreground">{{ subscriptions.total }}</span> subscription
+                    <template v-if="subscriptions.last_page > 1">
+                        · Halaman <span class="font-semibold text-foreground">{{ subscriptions.current_page }}</span>/{{ subscriptions.last_page }}
+                    </template>
                 </p>
-
-                <!-- Navigasi -->
-                <div class="flex items-center gap-1 order-1 sm:order-2">
-                    <!-- Prev -->
+                <div v-if="subscriptions.last_page > 1" class="flex items-center gap-1 order-1 sm:order-2">
                     <button
                         :disabled="subscriptions.current_page === 1"
                         @click="goToPage(subscriptions.current_page - 1)"
                         class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border text-sm text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
-                        title="Halaman sebelumnya"
-                    >
-                        ‹
-                    </button>
-
-                    <!-- Nomor halaman -->
+                    >‹</button>
                     <template v-for="p in pageRange" :key="String(p)">
-                        <span
-                            v-if="p === '...'"
-                            class="inline-flex h-8 w-8 items-center justify-center text-xs text-muted-foreground select-none"
-                        >…</span>
+                        <span v-if="p === '...'" class="inline-flex h-8 w-8 items-center justify-center text-xs text-muted-foreground select-none">…</span>
                         <button
                             v-else
                             @click="goToPage(p as number)"
@@ -342,20 +453,13 @@ const pageRange = computed(() => {
                             :class="p === subscriptions.current_page
                                 ? 'border-primary bg-primary text-primary-foreground'
                                 : 'border-border text-muted-foreground hover:bg-muted'"
-                        >
-                            {{ p }}
-                        </button>
+                        >{{ p }}</button>
                     </template>
-
-                    <!-- Next -->
                     <button
                         :disabled="subscriptions.current_page === subscriptions.last_page"
                         @click="goToPage(subscriptions.current_page + 1)"
                         class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border text-sm text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
-                        title="Halaman berikutnya"
-                    >
-                        ›
-                    </button>
+                    >›</button>
                 </div>
             </div>
         </div>
