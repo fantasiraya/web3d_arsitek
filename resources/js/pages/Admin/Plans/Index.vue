@@ -45,6 +45,8 @@ interface PaymentSettings {
     bank_account_number: string;
     bank_account_holder: string;
     midtrans_is_production: string;
+    midtrans_server_key: string;
+    midtrans_client_key: string;
     admin_whatsapp: string;
     whatsapp_template: string;
 }
@@ -126,6 +128,10 @@ const paymentForm = useForm({
     admin_whatsapp:         props.paymentSettings.admin_whatsapp ?? '',
     whatsapp_template:      props.paymentSettings.whatsapp_template ?? '',
 });
+
+// Apakah key sudah tersimpan sebelumnya (untuk placeholder informatif)
+const serverKeySaved = !!props.paymentSettings.midtrans_server_key;
+const clientKeySaved = !!props.paymentSettings.midtrans_client_key;
 
 function submitPaymentSettings() {
     paymentForm.patch('/admin/payment-settings', {
@@ -317,20 +323,32 @@ function submitPaymentSettings() {
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div class="space-y-1.5">
                             <Label>Server Key</Label>
-                            <Input
-                                v-model="paymentForm.midtrans_server_key"
-                                type="password"
-                                placeholder="SB-Mid-server-xxxx (kosongkan jika tidak diubah)"
-                            />
+                            <div class="relative">
+                                <Input
+                                    v-model="paymentForm.midtrans_server_key"
+                                    type="password"
+                                    :placeholder="serverKeySaved ? '••••••• (tersimpan, kosongkan jika tidak diubah)' : 'SB-Mid-server-xxxx'"
+                                />
+                                <span v-if="serverKeySaved && !paymentForm.midtrans_server_key"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-emerald-500 pointer-events-none">
+                                    ✓ Tersimpan
+                                </span>
+                            </div>
                             <p class="text-[11px] text-muted-foreground">Kosongkan jika tidak ingin mengubah key yang tersimpan.</p>
                         </div>
                         <div class="space-y-1.5">
                             <Label>Client Key</Label>
-                            <Input
-                                v-model="paymentForm.midtrans_client_key"
-                                type="password"
-                                placeholder="SB-Mid-client-xxxx (kosongkan jika tidak diubah)"
-                            />
+                            <div class="relative">
+                                <Input
+                                    v-model="paymentForm.midtrans_client_key"
+                                    type="password"
+                                    :placeholder="clientKeySaved ? '••••••• (tersimpan, kosongkan jika tidak diubah)' : 'SB-Mid-client-xxxx'"
+                                />
+                                <span v-if="clientKeySaved && !paymentForm.midtrans_client_key"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-emerald-500 pointer-events-none">
+                                    ✓ Tersimpan
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>

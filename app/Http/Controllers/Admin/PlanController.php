@@ -29,6 +29,8 @@ class PlanController extends Controller
             'bank_account_number',
             'bank_account_holder',
             'midtrans_is_production',
+            'midtrans_server_key',
+            'midtrans_client_key',
             'admin_whatsapp',
             'whatsapp_template',
         ])->pluck('value', 'key');
@@ -81,13 +83,27 @@ class PlanController extends Controller
             'whatsapp_template'       => ['nullable', 'string', 'max:1000'],
         ]);
 
+        // Hapus cache SEBELUM update agar tidak ada race condition
+        \Illuminate\Support\Facades\Cache::forget(
+            \App\Domains\SystemConfig\Repositories\SystemSettingRepository::CACHE_KEY
+        );
+
         foreach ($validated as $key => $value) {
-            \App\Domains\SystemConfig\Models\SystemSetting::where('key', $key)
-                ->update(['value' => (string) $value]);
+            // Jika key adalah API key Midtrans dan nilainya kosong, skip (jangan overwrite)
+            if (in_array($key, ['midtrans_server_key', 'midtrans_client_key']) && empty($value)) {
+                continue;
+            }
+            // updateOrCreate agar row baru dibuat jika belum ada
+            \App\Domains\SystemConfig\Models\SystemSetting::updateOrCreate(
+                ['key' => $key],
+                ['value' => is_bool($value) ? ($value ? '1' : '0') : (string) ($value ?? '')]
+            );
         }
 
-        // Clear settings cache agar perubahan langsung aktif
-        \Illuminate\Support\Facades\Cache::forget(\App\Domains\SystemConfig\Repositories\SystemSettingRepository::CACHE_KEY);
+        // Hapus cache lagi SETELAH update untuk memastikan bersih
+        \Illuminate\Support\Facades\Cache::forget(
+            \App\Domains\SystemConfig\Repositories\SystemSettingRepository::CACHE_KEY
+        );
 
         $status = $validated['payment_gateway_enabled']
             ? 'Payment Gateway (Midtrans) diaktifkan.'
