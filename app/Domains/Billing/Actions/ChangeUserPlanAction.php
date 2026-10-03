@@ -26,6 +26,16 @@ class ChangeUserPlanAction
     ): Subscription {
         $plan = $newPlan instanceof Plan ? $newPlan : Plan::where('slug', $newPlan)->firstOrFail();
 
+        // Hitung expires_at otomatis dari billing_type jika tidak di-pass eksplisit
+        if ($expiresAt === null) {
+            $expiresAt = match ($billingType) {
+                'monthly'  => now()->addMonth(),
+                'annual'   => now()->addYear(),
+                'lifetime' => null,  // lifetime = selamanya, null memang disengaja
+                default    => now()->addMonth(),
+            };
+        }
+
         $oldStatus = $targetUser->subscription_status;
         $oldPlan = $this->limitService->getPlanForUser($targetUser);
         $oldPlanSlug = $oldPlan->slug ?? $oldStatus;
