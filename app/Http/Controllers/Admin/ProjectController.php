@@ -18,7 +18,7 @@ class ProjectController extends Controller
         $userFilter = $request->query('user_id');
         $sortOrder = $request->query('sort', 'latest');
 
-        $query = Project::with(['user', 'clients'])
+        $query = Project::with(['user', 'invitedClients'])
             ->withCount(['versions', 'comments']);
 
         if ($search) {
@@ -60,7 +60,7 @@ class ProjectController extends Controller
                 'max_revisions_allowed' => $project->max_revisions_allowed,
                 'versions_count' => $project->versions_count,
                 'comments_count' => $project->comments_count,
-                'clients_count' => $project->clients->count(),
+                'clients_count' => $project->invitedClients->count(),
                 'owner' => [
                     'id' => $project->user?->id,
                     'name' => $project->user?->name ?? 'Unknown',
