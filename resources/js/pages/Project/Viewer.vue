@@ -19,6 +19,9 @@
                     <span class="rounded bg-rose-500/20 border border-rose-500/30 px-2 py-0.5 text-[10px] font-mono text-rose-300 hidden sm:inline">
                         3D VIEWER
                     </span>
+                    <span v-if="isAdminViewer" class="rounded bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-[10px] font-mono text-amber-300 hidden sm:inline">
+                        ADMIN READ-ONLY
+                    </span>
                 </div>
             </div>
 
@@ -47,8 +50,9 @@
                     <span class="hidden sm:inline">{{ isFullscreen ? 'Keluar Penuh' : 'Layar Penuh' }}</span>
                 </button>
 
-                <!-- Chat toggle -->
+                <!-- Chat toggle — hanya untuk owner dan client, bukan admin viewer -->
                 <button
+                    v-if="!isAdminViewer"
                     type="button"
                     @click="isChatOpen = !isChatOpen; isDrawerOpen = false"
                     class="relative flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
@@ -208,8 +212,9 @@
                     <span>Auto-Orbit</span>
                 </button>
 
-                <!-- Tambah Pin -->
+                <!-- Tambah Pin — hanya untuk owner dan client, bukan admin viewer -->
                 <button
+                    v-if="!isAdminViewer"
                     type="button"
                     @click="handleTambahPinButton"
                     class="flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-all shadow-md"
@@ -354,6 +359,7 @@
                             <p class="text-xs text-neutral-200 leading-relaxed break-words line-clamp-4">{{ item.content }}</p>
                             <div class="mt-3 flex items-center justify-between text-[10px] pt-2 border-t border-white/10">
                                 <button
+                                    v-if="!isAdminViewer"
                                     type="button"
                                     @click.stop="toggleResolved(item.id)"
                                     :disabled="togglingResolvedId === item.id"
@@ -484,6 +490,7 @@
                             <!-- Tandai Selesai di drawer -->
                             <div class="mt-2 flex items-center justify-between">
                                 <button
+                                    v-if="!isAdminViewer"
                                     type="button"
                                     @click.stop="toggleResolved(comment.id)"
                                     :disabled="togglingResolvedId === comment.id"
@@ -892,6 +899,11 @@ const presetInputRef      = ref<HTMLInputElement | null>(null);
 const isOwner = computed(() => {
     const uid = (page.props.auth as any)?.user?.id;
     return uid && project.value.user_id === uid;
+});
+
+// Apakah user adalah super admin yang buka viewer untuk review saja (read-only)
+const isAdminViewer = computed(() => {
+    return (page.props.auth as any)?.user?.is_admin === true && !isOwner.value;
 });
 
 // Lerp target — sama polanya dengan framing model

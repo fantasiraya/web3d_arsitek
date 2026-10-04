@@ -7,11 +7,13 @@ use App\Domains\Project\Models\Project;
 use App\Domains\Project\Models\ProjectClient;
 use App\Events\ChatMessageSent;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\ChecksSuperAdmin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ChatController extends Controller
 {
+    use ChecksSuperAdmin;
     /**
      * GET /projects/{project}/chat
      * Ambil histori pesan (50 terbaru, descending → frontend reverse)
@@ -51,7 +53,7 @@ class ChatController extends Controller
     public function store(Request $request, string $projectId): JsonResponse
     {
         $project = Project::findOrFail($projectId);
-        $this->authorizeAccess($request, $project);
+        $this->authorizeAccess($request, $project, writeAction: true);
 
         $validated = $request->validate([
             'message' => ['required', 'string', 'max:2000'],
@@ -102,14 +104,23 @@ class ChatController extends Controller
     }
 
     /**
-     * Validasi akses: hanya pemilik project atau klien accepted
+     * Validasi akses: hanya pemilik project atau klien accepted.
+     * Super admin diizinkan READ (GET) tapi tidak boleh WRITE (POST).
      */
-    private function authorizeAccess(Request $request, Project $project): void
+    private function authorizeAccess(Request $request, Project $project, bool $writeAction = false): void
     {
         $user = $request->user();
 
         if (! $user) {
             abort(401);
+        }
+
+        // Super admin: boleh baca, tidak boleh kirim pesan
+        if ($this->isSuperAdmin($user)) {
+            if ($writeAction) {
+                abort(403, 'Super admin tidak diizinkan mengirim pesan chat.');
+            }
+            return;
         }
 
         if ($project->user_id === $user->id) {

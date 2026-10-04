@@ -7,12 +7,14 @@ use App\Domains\Comment\Models\Comment;
 use App\Domains\Comment\Requests\StoreCommentRequest;
 use App\Domains\Project\Models\Project;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\ChecksSuperAdmin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class PinCommentController extends Controller
 {
+    use ChecksSuperAdmin;
     public function __construct(protected PinCommentAction $action) {}
 
     /**
@@ -21,7 +23,13 @@ class PinCommentController extends Controller
     public function store(StoreCommentRequest $request, string $projectId): JsonResponse|RedirectResponse
     {
         $project = Project::findOrFail($projectId);
-        $author = $request->user();
+        $author  = $request->user();
+
+        // Super admin tidak boleh tambah pin
+        if ($this->isSuperAdmin($author)) {
+            abort(403, 'Super admin tidak diizinkan menambahkan pin komentar.');
+        }
+
         $comment = $this->action->execute($project, $author, $request->validated());
 
         if ($request->wantsJson() && ! $request->header('X-Inertia')) {
@@ -69,10 +77,15 @@ class PinCommentController extends Controller
      */
     public function toggleResolved(Request $request, string $projectId, string $commentId): JsonResponse|RedirectResponse
     {
-        $project = Project::findOrFail($projectId);
-        $comment = Comment::where('project_id', $project->id)->findOrFail($commentId);
-
+        $project     = Project::findOrFail($projectId);
+        $comment     = Comment::where('project_id', $project->id)->findOrFail($commentId);
         $currentUser = $request->user();
+
+        // Super admin tidak boleh tandai selesai
+        if ($this->isSuperAdmin($currentUser)) {
+            abort(403, 'Super admin tidak diizinkan mengubah status pin.');
+        }
+
         if ($currentUser->id !== $comment->user_id && $currentUser->id !== $project->user_id) {
             abort(403, 'Anda tidak memiliki hak akses untuk mengubah status komentar ini.');
         }

@@ -35,6 +35,20 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        // Cek super_admin via DB langsung — bypass Spatie cache issue
+        $isAdmin = false;
+        if ($request->user()) {
+            $isAdmin = \DB::table('model_has_roles')
+                ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+                ->where('model_has_roles.model_id', $request->user()->id)
+                ->whereIn('model_has_roles.model_type', [
+                    get_class($request->user()),
+                    \App\Domains\Auth\Models\User::class,
+                ])
+                ->where('roles.name', 'super_admin')
+                ->exists();
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -45,9 +59,9 @@ class HandleInertiaRequests extends Middleware
                     'email'               => $request->user()->email,
                     'subscription_status' => $request->user()->subscription_status ?? 'free',
                     'is_pro'              => method_exists($request->user(), 'isPro') ? $request->user()->isPro() : false,
-                    'is_admin'            => $request->user()->hasRole('super_admin'),
+                    'is_admin'            => $isAdmin,
                 ] : null,
-                'can_access_admin' => $request->user()?->hasRole('super_admin') ?? false,
+                'can_access_admin' => $isAdmin,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
