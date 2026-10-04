@@ -37,6 +37,19 @@ class ProjectClientAccessMiddleware
             return $next($request);
         }
 
+        // Super admin dapat akses semua proyek
+        // Bypass Spatie cache — langsung query DB
+        $isSuperAdmin = \DB::table('model_has_roles')
+            ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->where('model_has_roles.model_id', $user->id)
+            ->where('model_has_roles.model_type', get_class($user))
+            ->where('roles.name', 'super_admin')
+            ->exists();
+
+        if ($isSuperAdmin) {
+            return $next($request);
+        }
+
         // Check if the user is an accepted client for this project
         $clientAccess = ProjectClient::where('project_id', $project->id)
             ->where('user_id', $user->id)

@@ -128,7 +128,7 @@ const config = computed(() => {
                         <svg class="h-4 w-4 text-neutral-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                         <span>Mengalami kendala sinkronisasi model?</span>
                         <Link href="/" class="text-indigo-400 hover:underline underline-offset-4 font-medium transition-colors">
-                            Laporkan Masalah →
+                            Kembali ke  →
                         </Link>
                     </div>
                 </div>

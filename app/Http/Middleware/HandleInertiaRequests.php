@@ -39,7 +39,14 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'auth' => [
-                'user' => $request->user(),
+                'user' => $request->user() ? [
+                    'id'                  => $request->user()->id,
+                    'name'                => $request->user()->name,
+                    'email'               => $request->user()->email,
+                    'subscription_status' => $request->user()->subscription_status ?? 'free',
+                    'is_pro'              => method_exists($request->user(), 'isPro') ? $request->user()->isPro() : false,
+                    'is_admin'            => $request->user()->hasRole('super_admin'),
+                ] : null,
                 'can_access_admin' => $request->user()?->hasRole('super_admin') ?? false,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
