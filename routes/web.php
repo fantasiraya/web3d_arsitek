@@ -50,7 +50,8 @@ Route::middleware(['auth', 'project.access'])->patch('/projects/{project}/commen
 Route::middleware(['auth', 'project.access'])->patch('/projects/{project}/comments/{comment}/resolve', [PinCommentController::class, 'toggleResolved'])->name('projects.comments.resolve');
 Route::middleware(['auth', 'project.access'])->delete('/projects/{project}/comments/{comment}', [PinCommentController::class, 'destroy'])->name('projects.comments.destroy');
 
-Route::middleware(['auth', 'project.access'])->get('/projects/{project}/viewer', [ViewerController::class, 'show'])->name('projects.viewer');
+// Viewer — akses dikontrol langsung di ViewerController (owner + client + super_admin)
+Route::middleware(['auth'])->get('/projects/{project}/viewer', [ViewerController::class, 'show'])->name('projects.viewer');
 
 Route::middleware(['auth', 'project.access'])->get('/projects/{project}/comments', [CommentController::class, 'index'])->name('projects.comments.index');
 

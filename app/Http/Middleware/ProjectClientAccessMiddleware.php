@@ -38,11 +38,14 @@ class ProjectClientAccessMiddleware
         }
 
         // Super admin dapat akses semua proyek
-        // Bypass Spatie cache — langsung query DB
+        // Bypass Spatie cache — langsung query DB dengan kedua kemungkinan model_type
         $isSuperAdmin = \DB::table('model_has_roles')
             ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
             ->where('model_has_roles.model_id', $user->id)
-            ->where('model_has_roles.model_type', get_class($user))
+            ->whereIn('model_has_roles.model_type', [
+                get_class($user),
+                \App\Domains\Auth\Models\User::class,
+            ])
             ->where('roles.name', 'super_admin')
             ->exists();
 
