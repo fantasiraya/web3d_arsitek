@@ -57,6 +57,11 @@ class HandleInertiaRequests extends Middleware
                     'id'                  => $request->user()->id,
                     'name'                => $request->user()->name,
                     'email'               => $request->user()->email,
+                    'avatar'              => $request->user()->avatar
+                        ? (str_starts_with($request->user()->avatar, 'http')
+                            ? $request->user()->avatar
+                            : \Illuminate\Support\Facades\Storage::disk('public')->url($request->user()->avatar))
+                        : null,
                     'subscription_status' => $request->user()->subscription_status ?? 'free',
                     'is_pro'              => method_exists($request->user(), 'isPro') ? $request->user()->isPro() : false,
                     'is_admin'            => $isAdmin,
