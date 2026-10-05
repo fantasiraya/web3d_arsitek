@@ -53,10 +53,6 @@ const plans = computed(() =>
         <div class="relative mx-auto max-w-6xl px-6">
             <!-- Header Title -->
             <div class="mx-auto max-w-2xl text-center">
-                <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-neutral-300">
-                    <Sparkles class="h-3 w-3 text-indigo-400" />
-                    <span>Investasi Transparan</span>
-                </div>
                 <h2 class="mt-4 text-3xl font-extrabold tracking-tight sm:text-5xl font-sans">
                     Pilihan Paket yang Jelas. <br />
                     <span class="bg-gradient-to-r from-neutral-200 via-neutral-400 to-neutral-500 bg-clip-text text-transparent">
