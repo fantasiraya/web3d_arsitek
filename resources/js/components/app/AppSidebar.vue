@@ -421,7 +421,6 @@ onUnmounted(() => {
                             <div v-if="isSidebarOpen" class="truncate min-w-0 flex-1">
                                 <div class="text-xs font-semibold text-slate-800 dark:text-white truncate">{{ user?.name || 'User' }}</div>
                                 <div class="flex items-center gap-1">
-                                    <!-- Pro / Enterprise: badge -->
                                     <span
                                         class="text-[9px] font-mono px-1.5 py-0.5 rounded"
                                         :class="planLabel === 'Enterprise'
