@@ -60,7 +60,11 @@ class UserController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'avatar' => $user->avatar,
+                'avatar' => $user->avatar
+                    ? (str_starts_with($user->avatar, 'http')
+                        ? $user->avatar
+                        : \Illuminate\Support\Facades\Storage::disk('public')->url($user->avatar))
+                    : null,
                 'subscription_status' => $user->subscription_status ?? 'free',
                 'status' => $user->status ?? 'active',
                 'project_count' => $user->projects_count,
@@ -112,7 +116,11 @@ class UserController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'avatar' => $user->avatar,
+                'avatar' => $user->avatar
+                    ? (str_starts_with($user->avatar, 'http')
+                        ? $user->avatar
+                        : \Illuminate\Support\Facades\Storage::disk('public')->url($user->avatar))
+                    : null,
                 'status' => $user->status ?? 'active',
                 'subscription_status' => $user->subscription_status ?? 'free',
                 'created_at' => $user->created_at?->format('d M Y, H:i'),

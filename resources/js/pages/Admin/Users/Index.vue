@@ -298,8 +298,20 @@ function toggleUserStatus(user: UserItem) {
                                 <!-- User Name & Email -->
                                 <td class="py-3.5 px-4">
                                     <div class="flex items-center gap-2.5">
-                                        <div class="h-8 w-8 rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center shrink-0">
-                                            {{ user.name.charAt(0) }}
+                                        <!-- Avatar: foto jika ada, inisial jika tidak -->
+                                        <div class="h-8 w-8 rounded-full shrink-0 overflow-hidden border border-border">
+                                            <img
+                                                v-if="user.avatar"
+                                                :src="user.avatar"
+                                                :alt="user.name"
+                                                class="h-full w-full object-cover"
+                                            />
+                                            <div
+                                                v-else
+                                                class="h-full w-full bg-primary/10 text-primary font-semibold flex items-center justify-center text-xs"
+                                            >
+                                                {{ user.name.charAt(0).toUpperCase() }}
+                                            </div>
                                         </div>
                                         <div class="min-w-0">
                                             <Link :href="`/admin/users/${user.id}`" class="font-medium hover:underline text-foreground block truncate">
