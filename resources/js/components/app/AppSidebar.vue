@@ -103,8 +103,8 @@ onUnmounted(() => {
         <!-- Brand Logo & Studio Tier -->
         <div class="h-16 px-5 flex items-center justify-between border-b border-slate-200 dark:border-white/5">
             <Link href="/dashboard" class="flex items-center gap-2.5 min-w-0">
-                <div class="w-8 h-8 rounded-lg bg-slate-900 dark:bg-gradient-to-br dark:from-white dark:to-gray-200 flex items-center justify-center shadow-sm shrink-0">
-                    <Box class="h-5 w-5 text-white dark:text-[#0d0e13]" :stroke-width="2.5" />
+                <div class="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-sm shrink-0 drop-shadow-[0_0_12px_rgba(59,130,246,0.7)]">
+                    <img src="/logo.png" alt="Pitcharch" class="w-full h-full object-contain ring-1 ring-white/20 rounded-lg" />
                 </div>
                 <Transition
                     enter-active-class="transition-opacity duration-200 delay-100"

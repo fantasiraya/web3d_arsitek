@@ -123,8 +123,8 @@ function closeMobileMenu() {
                 <!-- Brand / Logo -->
                 <div class="sidebar-header">
                     <div class="logo-section">
-                        <div class="logo-icon">
-                            <ShieldCheck class="h-5 w-5" />
+                        <div class="logo-icon overflow-hidden drop-shadow-[0_0_12px_rgba(59,130,246,0.7)]">
+                            <img src="/logo.png" alt="Pitcharch" class="h-5 w-5 object-contain ring-1 ring-white/20 rounded" />
                         </div>
                         <Transition name="slide-fade">
                             <div v-if="!isCollapsed" class="logo-text">

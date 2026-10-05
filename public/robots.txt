@@ -1,2 +1,26 @@
 User-agent: *
-Disallow:
+
+# Izinkan halaman publik
+Allow: /
+Allow: /register
+Allow: /login
+Allow: /plans
+Allow: /showcase
+Allow: /sitemap.xml
+
+# Blokir halaman privat & admin
+Disallow: /dashboard
+Disallow: /admin/
+Disallow: /projects/
+Disallow: /settings/
+Disallow: /billing
+Disallow: /teams
+Disallow: /checkout/
+Disallow: /p/
+
+# Blokir asset internal
+Disallow: /storage/avatars/
+Disallow: /storage/projects/
+
+# Sitemap
+Sitemap: https://pitcharch.com/sitemap.xml

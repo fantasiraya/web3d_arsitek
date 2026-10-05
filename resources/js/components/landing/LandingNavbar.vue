@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { Box, ChevronRight, Menu, X, Sparkles } from '@lucide/vue';
+import { ChevronRight, Menu, X, Sparkles } from '@lucide/vue';
 import { dashboard, login, register } from '@/routes';
 
 const page = usePage();
@@ -36,11 +36,7 @@ const handleNavClick = (link: { name: string; href: string; isPage?: boolean }) 
         >
             <!-- Brand Logo -->
             <Link href="/" class="group flex items-center gap-2.5">
-                <div
-                    class="relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/30 via-slate-800 to-black p-0.5 shadow-inner shadow-indigo-500/20"
-                >
-                    <Box class="h-4 w-4 text-white transition-transform duration-300 group-hover:scale-110" />
-                </div>
+                <img src="/logo.png" alt="Pitcharch" class="h-8 w-8 rounded-xl object-contain drop-shadow-[0_0_12px_rgba(59,130,246,0.7)] ring-1 ring-white/20" />
                 <div class="flex items-center gap-1.5">
                     <span class="text-sm font-semibold tracking-wider text-white">AETHER</span>
                     <span class="rounded bg-white/10 px-1 py-0.5 text-[10px] font-medium tracking-widest text-neutral-300">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Box, ArrowRight, Mail, Layers, Shield, Globe } from '@lucide/vue';
+import { ArrowRight, Mail, Layers, Shield, Globe } from '@lucide/vue';
 import { Link } from '@inertiajs/vue3';
 import { login, register } from '@/routes';
 
@@ -89,8 +89,8 @@ const socials = [
                 <div class="col-span-2">
                     <!-- Logo -->
                     <div class="flex items-center gap-2.5">
-                        <div class="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-gradient-to-br from-white/10 to-white/5">
-                            <Box class="h-4.5 w-4.5 text-white" />
+                        <div class="flex h-9 w-9 items-center justify-center rounded-xl overflow-hidden drop-shadow-[0_0_12px_rgba(59,130,246,0.7)]">
+                            <img src="/logo.png" alt="Pitcharch" class="w-full h-full object-contain ring-1 ring-white/20 rounded-xl" />
                         </div>
                         <div>
                             <span class="block text-sm font-bold tracking-widest text-white uppercase">Aether 3D</span>
