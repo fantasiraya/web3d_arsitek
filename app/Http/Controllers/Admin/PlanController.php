@@ -31,6 +31,9 @@ class PlanController extends Controller
             'payment_provider_primary', 'payment_provider_fallback', 'payment_provider_future',
             'tripay_api_key', 'tripay_private_key', 'tripay_merchant_code', 'tripay_is_sandbox',
             'xendit_secret_key', 'xendit_webhook_token',
+            // Limit per tier
+            'free_tier_max_file_size_mb', 'pro_tier_max_file_size_mb', 'enterprise_tier_max_file_size_mb',
+            'free_tier_max_projects', 'pro_tier_max_projects',
         ])->pluck('value', 'key');
 
         return Inertia::render('Admin/Plans/Index', [
@@ -91,6 +94,10 @@ class PlanController extends Controller
             // Xendit
             'xendit_secret_key'        => ['nullable', 'string', 'max:255'],
             'xendit_webhook_token'     => ['nullable', 'string', 'max:255'],
+            // Limit per tier
+            'free_tier_max_file_size_mb'       => ['required', 'integer', 'min:1', 'max:500'],
+            'pro_tier_max_file_size_mb'        => ['required', 'integer', 'min:1', 'max:500'],
+            'enterprise_tier_max_file_size_mb' => ['required', 'integer', 'min:1', 'max:500'],
         ]);
 
         // Key-key yang tidak boleh di-overwrite jika dikirim kosong

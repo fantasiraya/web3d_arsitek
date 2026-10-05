@@ -65,10 +65,12 @@ class UserController extends Controller
                 'status' => $user->status ?? 'active',
                 'project_count' => $user->projects_count,
                 'default_limit' => $plan->project_limit,
-                'custom_limit' => $override ? ($override->is_unlimited ? 'unlimited' : $override->custom_project_limit) : null,
-                'effective_limit' => $effectiveLimit,
-                'is_unlimited' => $effectiveLimit === null,
-                'has_override' => $override !== null,
+                'custom_limit'        => $override ? ($override->is_unlimited ? 'unlimited' : $override->custom_project_limit) : null,
+                'effective_limit'     => $effectiveLimit,
+                'is_unlimited'        => $effectiveLimit === null,
+                'has_override'        => $override !== null,
+                'custom_file_size_mb' => $override?->custom_file_size_mb,
+                'max_file_size_mb'    => $this->limitService->getMaxFileSizeMb($user),
                 'created_at' => $user->created_at?->format('d M Y, H:i'),
                 'last_active_at' => $user->last_active_at?->diffForHumans() ?? 'Belum aktif',
             ];
@@ -117,13 +119,15 @@ class UserController extends Controller
                 'last_active_at' => $user->last_active_at?->format('d M Y, H:i') ?? 'Belum aktif',
             ],
             'plan_details' => [
-                'current_plan' => $plan,
-                'default_limit' => $plan->project_limit,
-                'custom_limit' => $override ? ($override->is_unlimited ? 'unlimited' : $override->custom_project_limit) : null,
-                'effective_limit' => $effectiveLimit,
-                'is_unlimited' => $effectiveLimit === null,
-                'has_override' => $override !== null,
-                'override_reason' => $override?->reason,
+                'current_plan'        => $plan,
+                'default_limit'       => $plan->project_limit,
+                'custom_limit'        => $override ? ($override->is_unlimited ? 'unlimited' : $override->custom_project_limit) : null,
+                'effective_limit'     => $effectiveLimit,
+                'is_unlimited'        => $effectiveLimit === null,
+                'has_override'        => $override !== null,
+                'custom_file_size_mb' => $override?->custom_file_size_mb,
+                'max_file_size_mb'    => $this->limitService->getMaxFileSizeMb($user),
+                'override_reason'     => $override?->reason,
             ],
             'project_usage' => [
                 'count' => $projectCount,
@@ -196,21 +200,24 @@ class UserController extends Controller
     public function setLimitOverride(Request $request, User $user, SetUserProjectLimitOverrideAction $action): RedirectResponse
     {
         $validated = $request->validate([
-            'is_unlimited' => ['required', 'boolean'],
-            'custom_limit' => ['nullable', 'required_if:is_unlimited,false', 'integer', 'min:1', 'max:10000'],
-            'reason' => ['nullable', 'string', 'max:255'],
+            'is_unlimited'       => ['required', 'boolean'],
+            'custom_limit'       => ['nullable', 'required_if:is_unlimited,false', 'integer', 'min:1', 'max:10000'],
+            'custom_file_size_mb' => ['nullable', 'integer', 'min:1', 'max:500'],
+            'reason'             => ['nullable', 'string', 'max:255'],
         ]);
 
         $action->execute(
-            targetUser: $user,
-            customLimit: $validated['is_unlimited'] ? null : (int) $validated['custom_limit'],
-            isUnlimited: (bool) $validated['is_unlimited'],
-            reason: $validated['reason'] ?? null
+            targetUser:       $user,
+            customLimit:      $validated['is_unlimited'] ? null : (int) $validated['custom_limit'],
+            isUnlimited:      (bool) $validated['is_unlimited'],
+            reason:           $validated['reason'] ?? null,
+            customFileSizeMb: isset($validated['custom_file_size_mb']) ? (int) $validated['custom_file_size_mb'] : null,
         );
 
-        $limitDisplay = $validated['is_unlimited'] ? 'Unlimited' : $validated['custom_limit'];
+        $limitDisplay    = $validated['is_unlimited'] ? 'Unlimited' : $validated['custom_limit'];
+        $fileSizeDisplay = isset($validated['custom_file_size_mb']) ? " · File size: {$validated['custom_file_size_mb']} MB" : '';
 
-        return back()->with('success', "Custom project limit untuk {$user->name} berhasil diatur ke {$limitDisplay}.");
+        return back()->with('success', "Custom limit untuk {$user->name}: {$limitDisplay} proyek{$fileSizeDisplay}.");
     }
 
     public function removeLimitOverride(User $user, RemoveUserProjectLimitOverrideAction $action): RedirectResponse

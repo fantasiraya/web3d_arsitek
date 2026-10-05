@@ -6,9 +6,13 @@ use App\Domains\Auth\Models\User;
 use App\Domains\Billing\Models\Plan;
 use App\Domains\Billing\Models\UserPlanOverride;
 use App\Domains\Project\Models\Project;
+use App\Domains\SystemConfig\Repositories\SystemSettingRepository;
 
 class SubscriptionLimitService
 {
+    public function __construct(
+        protected SystemSettingRepository $settings
+    ) {}
     /**
      * Get the resolved Plan for a user.
      */
@@ -210,5 +214,58 @@ class SubscriptionLimitService
         $plan = $this->getPlanForUser($user);
 
         return (bool) ($plan->{$featureKey} ?? false);
+    }
+
+    /**
+     * Get maximum file size (MB) allowed for the user's plan.
+     * Cek custom override per-user dulu, lalu fallback ke system_settings per-plan.
+     */
+    public function getMaxFileSizeMb(User $user): int
+    {
+        // 1. Cek custom override per-user dari admin
+        $override = $user->planOverride;
+        if ($override && $override->custom_file_size_mb !== null) {
+            return (int) $override->custom_file_size_mb;
+        }
+
+        // 2. Baca dari system_settings berdasarkan plan
+        $plan    = $this->getPlanForUser($user);
+        $key     = match ($plan->slug) {
+            Plan::SLUG_FREE        => 'free_tier_max_file_size_mb',
+            Plan::SLUG_PRO         => 'pro_tier_max_file_size_mb',
+            Plan::SLUG_ENTERPRISE  => 'enterprise_tier_max_file_size_mb',
+            default                => 'free_tier_max_file_size_mb',
+        };
+        $default = match ($plan->slug) {
+            Plan::SLUG_FREE        => 15,
+            Plan::SLUG_PRO         => 100,
+            Plan::SLUG_ENTERPRISE  => 100,
+            default                => 15,
+        };
+
+        return (int) ($this->settings->get($key, $default) ?: $default);
+    }
+
+    /**
+     * Validate whether uploaded file size is allowed for the user's plan.
+     *
+     * @return array{allowed: bool, reason: ?string, max_mb: int}
+     */
+    public function canUploadFile(User $user, int $fileSizeBytes): array
+    {
+        $maxMb    = $this->getMaxFileSizeMb($user);
+        $maxBytes = $maxMb * 1024 * 1024;
+
+        if ($fileSizeBytes > $maxBytes) {
+            $actualMb = round($fileSizeBytes / (1024 * 1024), 1);
+
+            return [
+                'allowed' => false,
+                'reason'  => "Ukuran file ({$actualMb} MB) melebihi batas paket Anda ({$maxMb} MB). Upgrade ke paket Pro untuk batas 100 MB.",
+                'max_mb'  => $maxMb,
+            ];
+        }
+
+        return ['allowed' => true, 'reason' => null, 'max_mb' => $maxMb];
     }
 }

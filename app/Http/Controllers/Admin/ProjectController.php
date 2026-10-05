@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domains\Auth\Models\User;
+use App\Domains\Billing\Services\SubscriptionLimitService;
 use App\Domains\Project\Models\Project;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -11,6 +12,9 @@ use Inertia\Response;
 
 class ProjectController extends Controller
 {
+    public function __construct(
+        protected SubscriptionLimitService $limitService
+    ) {}
     public function index(Request $request): Response
     {
         $search = $request->query('search');
@@ -18,7 +22,7 @@ class ProjectController extends Controller
         $userFilter = $request->query('user_id');
         $sortOrder = $request->query('sort', 'latest');
 
-        $query = Project::with(['user', 'invitedClients'])
+        $query = Project::with(['user.planOverride', 'invitedClients'])
             ->withCount(['versions', 'comments']);
 
         if ($search) {
@@ -51,11 +55,16 @@ class ProjectController extends Controller
         $projects = $query->paginate(15)->withQueryString();
 
         $projects->getCollection()->transform(function (Project $project) {
+            $ownerMaxMb = $project->user
+                ? $this->limitService->getMaxFileSizeMb($project->user)
+                : 100;
+
             return [
                 'id' => $project->id,
                 'title' => $project->title,
                 'slug' => $project->slug,
                 'file_size_bytes' => $project->file_size_bytes,
+                'owner_max_file_size_mb' => $ownerMaxMb,
                 'current_revision_count' => $project->current_revision_count,
                 'max_revisions_allowed' => $project->max_revisions_allowed,
                 'versions_count' => $project->versions_count,

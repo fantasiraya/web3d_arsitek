@@ -18,17 +18,19 @@ class SetUserProjectLimitOverrideAction
         User $targetUser,
         ?int $customLimit,
         bool $isUnlimited = false,
-        ?string $reason = null
+        ?string $reason = null,
+        ?int $customFileSizeMb = null,
     ): UserPlanOverride {
         $oldEffective = $this->limitService->getEffectiveProjectLimit($targetUser);
-        $oldOverride = $targetUser->planOverride;
+        $oldOverride  = $targetUser->planOverride;
 
         $override = UserPlanOverride::updateOrCreate(
             ['user_id' => $targetUser->id],
             [
                 'custom_project_limit' => $isUnlimited ? null : $customLimit,
-                'is_unlimited' => $isUnlimited,
-                'reason' => $reason,
+                'custom_file_size_mb'  => $customFileSizeMb,
+                'is_unlimited'         => $isUnlimited,
+                'reason'               => $reason,
             ]
         );
 

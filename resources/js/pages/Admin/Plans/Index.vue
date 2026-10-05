@@ -58,6 +58,10 @@ interface PaymentSettings {
     tripay_is_sandbox: string;
     xendit_secret_key: string;
     xendit_webhook_token: string;
+    // Limit per tier
+    free_tier_max_file_size_mb: string;
+    pro_tier_max_file_size_mb: string;
+    enterprise_tier_max_file_size_mb: string;
 }
 
 const props = defineProps<{
@@ -150,6 +154,10 @@ const paymentForm = useForm({
     // Xendit
     xendit_secret_key:         '',
     xendit_webhook_token:      '',
+    // Limit per tier
+    free_tier_max_file_size_mb:       parseInt(ps.free_tier_max_file_size_mb ?? '15'),
+    pro_tier_max_file_size_mb:        parseInt(ps.pro_tier_max_file_size_mb ?? '100'),
+    enterprise_tier_max_file_size_mb: parseInt(ps.enterprise_tier_max_file_size_mb ?? '100'),
 });
 
 // Status tersimpan (placeholder informatif)
@@ -526,6 +534,66 @@ function submitPaymentSettings() {
                                     placeholder="Dari Xendit Settings → Webhooks" />
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- ── BATAS STORAGE PER PAKET ─────────────────── -->
+                <div class="rounded-xl border border-border bg-muted/20 p-4 space-y-4">
+                    <div>
+                        <p class="text-sm font-semibold text-foreground">Batas Ukuran File per Paket</p>
+                        <p class="text-xs text-muted-foreground mt-0.5">
+                            Atur berapa MB maksimal file 3D (.glb) yang bisa diupload per proyek untuk setiap paket.
+                        </p>
+                    </div>
+                    <div class="grid gap-4 sm:grid-cols-3">
+                        <div class="space-y-1.5">
+                            <Label>Free Tier (MB)</Label>
+                            <div class="flex items-center gap-2">
+                                <Input
+                                    v-model.number="paymentForm.free_tier_max_file_size_mb"
+                                    type="number"
+                                    min="1"
+                                    max="500"
+                                    class="w-full"
+                                    placeholder="15"
+                                />
+                                <span class="text-xs text-muted-foreground shrink-0">MB</span>
+                            </div>
+                            <p class="text-[10px] text-muted-foreground">Rekomendasi: 10–30 MB</p>
+                        </div>
+                        <div class="space-y-1.5">
+                            <Label>Pro Tier (MB)</Label>
+                            <div class="flex items-center gap-2">
+                                <Input
+                                    v-model.number="paymentForm.pro_tier_max_file_size_mb"
+                                    type="number"
+                                    min="1"
+                                    max="500"
+                                    class="w-full"
+                                    placeholder="100"
+                                />
+                                <span class="text-xs text-muted-foreground shrink-0">MB</span>
+                            </div>
+                            <p class="text-[10px] text-muted-foreground">Rekomendasi: 50–200 MB</p>
+                        </div>
+                        <div class="space-y-1.5">
+                            <Label>Enterprise Tier (MB)</Label>
+                            <div class="flex items-center gap-2">
+                                <Input
+                                    v-model.number="paymentForm.enterprise_tier_max_file_size_mb"
+                                    type="number"
+                                    min="1"
+                                    max="500"
+                                    class="w-full"
+                                    placeholder="100"
+                                />
+                                <span class="text-xs text-muted-foreground shrink-0">MB</span>
+                            </div>
+                            <p class="text-[10px] text-muted-foreground">Rekomendasi: 100–500 MB</p>
+                        </div>
+                    </div>
+                    <div class="rounded-lg bg-indigo-500/5 border border-indigo-500/20 px-3 py-2 text-[11px] text-indigo-600 dark:text-indigo-400">
+                        ℹ Perubahan berlaku langsung saat user upload proyek baru. Upload yang sudah ada tidak terpengaruh.
                     </div>
                 </div>
 

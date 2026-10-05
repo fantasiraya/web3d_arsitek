@@ -59,6 +59,8 @@ interface UserItem {
     effective_limit: number | null;
     is_unlimited: boolean;
     has_override: boolean;
+    custom_file_size_mb: number | null;
+    max_file_size_mb: number;
     created_at: string;
     last_active_at: string;
 }
@@ -117,17 +119,19 @@ function resetFilters() {
 const isLimitModalOpen = ref(false);
 const selectedUserForLimit = ref<UserItem | null>(null);
 const limitForm = useForm({
-    is_unlimited: false,
-    custom_limit: 20,
-    reason: '',
+    is_unlimited:        false,
+    custom_limit:        20,
+    custom_file_size_mb: null as number | null,
+    reason:              '',
 });
 
 function openLimitModal(user: UserItem) {
-    selectedUserForLimit.value = user;
-    limitForm.is_unlimited = user.custom_limit === 'unlimited';
-    limitForm.custom_limit = typeof user.custom_limit === 'number' ? user.custom_limit : (user.default_limit || 20);
-    limitForm.reason = '';
-    isLimitModalOpen.value = true;
+    selectedUserForLimit.value   = user;
+    limitForm.is_unlimited       = user.custom_limit === 'unlimited';
+    limitForm.custom_limit       = typeof user.custom_limit === 'number' ? user.custom_limit : (user.default_limit || 20);
+    limitForm.custom_file_size_mb = user.custom_file_size_mb ?? null;
+    limitForm.reason             = '';
+    isLimitModalOpen.value       = true;
 }
 
 function submitLimitOverride() {
@@ -371,6 +375,19 @@ function toggleUserStatus(user: UserItem) {
                                             Custom
                                         </Badge>
                                     </div>
+                                    <!-- File size limit -->
+                                    <div class="flex items-center gap-1 mt-0.5">
+                                        <span class="text-[10px] text-muted-foreground">
+                                            File: <span class="font-medium text-foreground">{{ user.max_file_size_mb }} MB</span>
+                                        </span>
+                                        <Badge
+                                            v-if="user.custom_file_size_mb !== null"
+                                            variant="outline"
+                                            class="text-[9px] px-1 py-0 bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/30 font-medium"
+                                        >
+                                            Custom
+                                        </Badge>
+                                    </div>
                                     <div class="text-[10px] text-muted-foreground mt-0.5">
                                         Default: {{ user.default_limit ?? 'Unlimited' }}
                                     </div>
@@ -517,6 +534,32 @@ function toggleUserStatus(user: UserItem) {
                         />
                         <p class="text-[11px] text-muted-foreground">
                             Default paket {{ selectedUserForLimit?.subscription_status.toUpperCase() }}: {{ selectedUserForLimit?.default_limit ?? 'Unlimited' }}
+                        </p>
+                    </div>
+
+                    <!-- Custom file size override -->
+                    <div class="space-y-1.5">
+                        <Label for="custom_file_size" class="text-xs font-medium">
+                            Batas Ukuran File per Proyek (MB)
+                            <span class="text-muted-foreground font-normal ml-1">— opsional</span>
+                        </Label>
+                        <div class="flex items-center gap-2">
+                            <Input
+                                id="custom_file_size"
+                                type="number"
+                                v-model.number="limitForm.custom_file_size_mb"
+                                min="1"
+                                max="500"
+                                class="h-9 text-xs"
+                                placeholder="Kosongkan = pakai default plan"
+                            />
+                            <span class="text-xs text-muted-foreground shrink-0">MB</span>
+                        </div>
+                        <p class="text-[11px] text-muted-foreground">
+                            Kosongkan untuk menggunakan default paket.
+                            <template v-if="selectedUserForLimit?.custom_file_size_mb">
+                                Override saat ini: <strong>{{ selectedUserForLimit.custom_file_size_mb }} MB</strong>.
+                            </template>
                         </p>
                     </div>
 

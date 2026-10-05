@@ -45,30 +45,43 @@ class ProjectController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $user = $request->user();
+
+        // ── 1. Cek project limit SEBELUM upload file ──────────
+        $canCreate = $this->limitService->canCreateProject($user);
+        if (! $canCreate['allowed']) {
+            return back()->withErrors(['limit' => $canCreate['reason']])->withInput();
+        }
+
+        // ── 2. Cek ukuran file per-plan SEBELUM upload ────────
+        $file         = $request->file('file');
+        $maxMb        = $this->limitService->getMaxFileSizeMb($user);
+        $maxKilobytes = $maxMb * 1024;
+
         $validated = $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:1000'],
+            'title'                => ['required', 'string', 'max:255'],
+            'description'          => ['nullable', 'string', 'max:1000'],
             'max_revisions_allowed' => ['nullable', 'integer', 'min:1', 'max:20'],
-            'file' => ['required', 'file', 'max:102400'], // max 100MB
+            'file'                 => ['required', 'file', 'mimes:glb,gltf', "max:{$maxKilobytes}"],
+        ], [
+            'file.max' => "Ukuran file melebihi batas paket Anda ({$maxMb} MB). Upgrade paket untuk batas lebih besar.",
         ]);
 
-        $user = $request->user();
-        $file = $request->file('file');
-
-        // Store model file
-        $path = $file->store('projects/models', 'public');
+        // ── 3. Upload file ke storage ──────────────────────────
+        $path          = $file->store('projects/models', 'public');
         $fileSizeBytes = $file->getSize() ?: 0;
 
+        // ── 4. Buat project record ─────────────────────────────
         $project = $this->createProjectAction->execute($user, [
-            'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'file_path' => $path,
-            'file_size_bytes' => $fileSizeBytes,
-            'is_draco_compressed' => false,
+            'title'                => $validated['title'],
+            'description'          => $validated['description'] ?? null,
+            'file_path'            => $path,
+            'file_size_bytes'      => $fileSizeBytes,
+            'is_draco_compressed'  => false,
             'max_revisions_allowed' => $validated['max_revisions_allowed'] ?? 3,
         ]);
 
-        // Upload initial version
+        // ── 5. Simpan version record + queue Draco compression ─
         $this->uploadProjectFileAction->execute($project, $user, $file);
 
         return back()->with('success', 'Proyek 3D berhasil dibuat dan siap ditinjau!');
@@ -84,11 +97,16 @@ class ProjectController extends Controller
             abort(403, $check['reason'] ?? 'Hanya arsitek pemilik proyek yang dapat mengubah pengaturan proyek.');
         }
 
+        $maxMb        = $this->limitService->getMaxFileSizeMb($request->user());
+        $maxKilobytes = $maxMb * 1024;
+
         $validated = $request->validate([
-            'title' => ['sometimes', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:1000'],
+            'title'                => ['sometimes', 'string', 'max:255'],
+            'description'          => ['nullable', 'string', 'max:1000'],
             'max_revisions_allowed' => ['sometimes', 'integer', 'min:1', 'max:50'],
-            'file' => ['nullable', 'file', 'max:102400'], // max 100MB
+            'file'                 => ['nullable', 'file', "max:{$maxKilobytes}"],
+        ], [
+            'file.max' => "Ukuran file melebihi batas paket Anda ({$maxMb} MB).",
         ]);
 
         $updateData = [];

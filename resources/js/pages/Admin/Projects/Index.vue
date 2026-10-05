@@ -17,6 +17,7 @@ interface ProjectItem {
     title: string;
     slug: string;
     file_size_bytes: number;
+    owner_max_file_size_mb: number;
     current_revision_count: number;
     max_revisions_allowed: number;
     versions_count: number;
@@ -166,7 +167,7 @@ function planColor(status: string) {
                     <tr>
                         <th class="px-4 py-3 text-left">Proyek</th>
                         <th class="px-4 py-3 text-left">Arsitek</th>
-                        <th class="px-4 py-3 text-left hidden sm:table-cell">Ukuran</th>
+                        <th class="px-4 py-3 text-left hidden sm:table-cell">Ukuran / Limit Per Proyek</th>
                         <th class="px-4 py-3 text-left hidden md:table-cell">Revisi</th>
                         <th class="px-4 py-3 text-left hidden md:table-cell">Klien</th>
                         <th class="px-4 py-3 text-left hidden lg:table-cell">Dibuat</th>
@@ -204,7 +205,8 @@ function planColor(status: string) {
 
                         <!-- Ukuran -->
                         <td class="px-4 py-3 hidden sm:table-cell">
-                            <span class="text-xs font-mono text-muted-foreground">{{ formatBytes(p.file_size_bytes) }}</span>
+                            <span class="text-xs font-mono text-foreground">{{ formatBytes(p.file_size_bytes) }}</span>
+                            <span class="text-xs text-muted-foreground"> / {{ p.owner_max_file_size_mb }} MB</span>
                         </td>
 
                         <!-- Revisi -->

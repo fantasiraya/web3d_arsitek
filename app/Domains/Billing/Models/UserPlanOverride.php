@@ -27,6 +27,7 @@ class UserPlanOverride extends Model
     protected $fillable = [
         'user_id',
         'custom_project_limit',
+        'custom_file_size_mb',
         'is_unlimited',
         'reason',
     ];
@@ -35,7 +36,8 @@ class UserPlanOverride extends Model
     {
         return [
             'custom_project_limit' => 'integer',
-            'is_unlimited' => 'boolean',
+            'custom_file_size_mb'  => 'integer',
+            'is_unlimited'         => 'boolean',
         ];
     }
 
