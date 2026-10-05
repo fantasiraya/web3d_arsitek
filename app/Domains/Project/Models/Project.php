@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * @property string $id
@@ -49,6 +51,35 @@ class Project extends Model
         'max_revisions_allowed',
         'current_revision_count',
     ];
+
+    protected static function booted(): void
+    {
+        static::deleting(function (Project $project): void {
+            $disk = Storage::disk('public');
+
+            // 1. Explicitly delete each ProjectVersion file via Eloquent
+            //    so ProjectVersion::deleting hook fires for every version.
+            $project->versions()->each(fn (ProjectVersion $v) => $v->delete());
+
+            // 2. Delete the project-level file_path (used by the older upload path
+            //    projects/models/{file}.glb stored directly on the project row).
+            $path = $project->file_path;
+            if (!empty($path) && $disk->exists($path)) {
+                $deleted = $disk->delete($path);
+                if (!$deleted) {
+                    Log::error("[Project] Failed to delete project file: {$path} (project {$project->id})");
+                }
+            }
+
+            // 3. Delete the entire project folder  projects/{id}/
+            //    This catches any orphaned files not tracked in DB
+            //    (e.g. original GLB left over before Draco compression committed).
+            $projectFolder = "projects/{$project->id}";
+            if ($disk->exists($projectFolder)) {
+                $disk->deleteDirectory($projectFolder);
+            }
+        });
+    }
 
     protected function casts(): array
     {
