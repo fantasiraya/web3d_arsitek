@@ -378,11 +378,11 @@ onUnmounted(() => {
                 <div 
                     @click="showUserDropdown = !showUserDropdown"
                     :class="[
-                        'flex items-center p-2.5 rounded-xl bg-white dark:bg-[#13141a]/50 hover:bg-slate-100 dark:hover:bg-white/[0.04] border border-slate-200 dark:border-white/5 transition-colors cursor-pointer group',
-                        isSidebarOpen ? 'justify-between' : 'justify-center'
+                        'flex items-center rounded-xl bg-white dark:bg-[#13141a]/50 hover:bg-slate-100 dark:hover:bg-white/[0.04] border border-slate-200 dark:border-white/5 transition-colors cursor-pointer group',
+                        isSidebarOpen ? 'p-2.5 justify-between' : 'p-1.5 justify-center'
                     ]"
                 >
-                    <div class="flex items-center gap-2.5 overflow-hidden min-w-0">
+                    <div :class="['flex items-center min-w-0', isSidebarOpen ? 'gap-2.5 overflow-hidden' : '']">
                         <div class="relative shrink-0">
                             <div class="w-7 h-7 rounded-full bg-slate-200 dark:bg-gradient-to-tr dark:from-[#2e303d] dark:to-[#323442] border border-slate-300 dark:border-white/10 flex items-center justify-center text-slate-700 dark:text-white text-[10px] font-semibold">
                                 {{ user?.name?.charAt(0).toUpperCase() || 'U' }}
