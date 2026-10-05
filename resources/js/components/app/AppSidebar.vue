@@ -296,27 +296,6 @@ onUnmounted(() => {
                     </div>
                 </Link>
             </div>
-
-            <!-- Support Group -->
-            <div v-if="isSidebarOpen" class="space-y-1">
-                <div class="px-3 pb-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-400 dark:text-[#6b7280]/80 font-semibold">Support</div>
-                
-                <a href="#" class="group flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-slate-400 dark:text-[#6b7280] hover:text-slate-700 dark:hover:text-[#f3f4f6] transition-colors">
-                    <span class="flex items-center gap-2">
-                        <BookOpen class="h-[16px] w-[16px] shrink-0" :stroke-width="2" />
-                        <span>Dokumentasi API</span>
-                    </span>
-                    <ChevronRight class="h-[14px] w-[14px] shrink-0" :stroke-width="2" />
-                </a>
-
-                <a href="#" class="group flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-slate-400 dark:text-[#6b7280] hover:text-slate-700 dark:hover:text-[#f3f4f6] transition-colors">
-                    <span class="flex items-center gap-2">
-                        <Server class="h-[16px] w-[16px] text-emerald-500 dark:text-emerald-400 shrink-0" :stroke-width="2" />
-                        <span>Status Engine</span>
-                    </span>
-                    <span class="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">Operational</span>
-                </a>
-            </div>
         </div>
 
         <!-- Bottom Section: Storage & User Pill -->
