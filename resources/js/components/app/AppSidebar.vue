@@ -25,25 +25,28 @@ const user = computed(() => page.props.auth?.user)
 // Get stats for badges
 const stats = computed(() => page.props.stats)
 
-// Hitung total storage dari semua project milik user (real data)
-const storageUsedBytes = computed(() => {
-    const projects = (page.props as any).ownedProjects ?? [];
-    return projects.reduce((sum: number, p: any) => sum + (p.file_size_bytes ?? 0), 0);
-});
+// Kuota proyek: jumlah proyek yang dimiliki vs batas plan
+const projectUsed = computed(() => stats.value?.owned_count ?? 0);
+const projectMax  = computed(() => stats.value?.max_projects ?? 1);
+const projectIsUnlimited = computed(() => projectMax.value >= 999);
 
-const storageUsedMb = computed(() =>
-    (storageUsedBytes.value / (1024 * 1024)).toFixed(1)
+const projectPercent = computed(() =>
+    projectIsUnlimited.value ? 0 : Math.min(100, (projectUsed.value / projectMax.value) * 100)
 );
 
-// Batas storage berdasarkan plan (100MB free, 500MB pro)
-const storageMaxMb = computed(() => {
-    const isPro = (page.props.auth?.user as any)?.is_pro;
-    return isPro ? 500 : 100;
+// Label tier berdasarkan plan_name dari backend (lebih akurat dari max_projects)
+const planLabel = computed<'Free' | 'Pro' | 'Enterprise'>(() => {
+    const name = (stats.value?.plan_name ?? '').toLowerCase();
+    if (name.includes('enterprise')) return 'Enterprise';
+    if (name.includes('pro'))        return 'Pro';
+    return 'Free';
 });
 
-const storagePercent = computed(() =>
-    Math.min(100, (storageUsedBytes.value / (storageMaxMb.value * 1024 * 1024)) * 100)
-);
+// Ukuran file maks per proyek berdasarkan plan (dari PRD: Free=50MB, Pro=100MB)
+const maxFileSizeMb = computed(() => {
+    if (projectIsUnlimited.value) return null;  // enterprise: sesuai config admin
+    return projectMax.value >= 20 ? 100 : 50;
+});
 
 // User dropdown state
 const showUserDropdown = ref(false)
@@ -128,8 +131,22 @@ onUnmounted(() => {
                 leave-from-class="opacity-100"
                 leave-to-class="opacity-0"
             >
-                <span v-if="isSidebarOpen" class="px-1.5 py-0.5 rounded text-[10px] font-mono text-sky-700 dark:text-[#38bdf8] bg-sky-50 dark:bg-[#38bdf8]/10 border border-sky-200 dark:border-[#38bdf8]/20 font-semibold shrink-0">
-                    PRO
+                <span v-if="isSidebarOpen && planLabel === 'Free'">
+                    <Link
+                        href="/billing"
+                        class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold transition-colors bg-sky-50 dark:bg-[#38bdf8]/10 text-sky-700 dark:text-[#38bdf8] border border-sky-200 dark:border-[#38bdf8]/20 hover:bg-sky-100 dark:hover:bg-[#38bdf8]/20"
+                    >
+                        Upgrade
+                    </Link>
+                </span>
+                <span
+                    v-else-if="isSidebarOpen"
+                    class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold shrink-0"
+                    :class="planLabel === 'Enterprise'
+                        ? 'bg-violet-50 dark:bg-violet-400/15 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-400/25'
+                        : 'bg-amber-50 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-400/25'"
+                >
+                    {{ planLabel.toUpperCase() }}
                 </span>
             </Transition>
         </div>
@@ -314,26 +331,65 @@ onUnmounted(() => {
                 leave-to-class="opacity-0"
             >
                 <div v-if="isSidebarOpen" class="p-3 rounded-xl bg-white dark:bg-[#13141a]/70 border border-slate-200 dark:border-white/5 space-y-2">
+                    <!-- Header: jumlah proyek vs kuota -->
                     <div class="flex items-center justify-between text-xs">
-                        <span class="text-slate-500 dark:text-[#9ca3af] font-medium">Storage Proyek</span>
-                        <span class="font-mono text-sky-600 dark:text-[#38bdf8] text-[11px] font-semibold">
-                            {{ storageUsedMb }} / {{ storageMaxMb }} MB
+                        <span class="text-slate-500 dark:text-[#9ca3af] font-medium">Kuota Proyek</span>
+                        <span class="font-mono text-[11px] font-semibold"
+                            :class="projectPercent >= 100
+                                ? 'text-rose-500 dark:text-rose-400'
+                                : projectPercent >= 75
+                                    ? 'text-amber-500 dark:text-amber-400'
+                                    : 'text-sky-600 dark:text-[#38bdf8]'"   
+                        >
+                            {{ projectIsUnlimited ? `${projectUsed} Proyek` : `${projectUsed} / ${projectMax}` }}
                         </span>
                     </div>
-                    <div class="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+
+                    <!-- Progress bar (tersembunyi jika unlimited) -->
+                    <div v-if="!projectIsUnlimited" class="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
                         <div
                             class="h-full rounded-full transition-all duration-500"
-                            :class="storagePercent >= 90
+                            :class="projectPercent >= 100
                                 ? 'bg-gradient-to-r from-rose-500 to-rose-400'
-                                : storagePercent >= 70
+                                : projectPercent >= 75
                                     ? 'bg-gradient-to-r from-amber-500 to-amber-400'
                                     : 'bg-gradient-to-r from-sky-500 dark:from-[#38bdf8] to-sky-300 dark:to-[#8ed5ff]'"
-                            :style="{ width: `${storagePercent}%` }"
-                        ></div>
+                            :style="{ width: `${projectPercent}%` }"
+                        />
                     </div>
+
+                    <!-- Info row bawah -->
                     <div class="flex items-center justify-between text-[10px] font-mono text-slate-400 dark:text-[#6b7280]">
-                        <span>Proyek: {{ stats?.owned_count || 0 }} / {{ stats?.max_projects >= 999 ? '∞' : stats?.max_projects }} kuota</span>
-                        <span class="text-sky-600 dark:text-[#38bdf8] hover:underline cursor-pointer font-semibold">Upgrade</span>
+                        <!-- Kiri: batas file per proyek -->
+                        <span>
+                            <template v-if="maxFileSizeMb">File maks {{ maxFileSizeMb }} MB/proyek</template>
+                            <template v-else>File maks: sesuai konfigurasi</template>
+                        </span>
+                        <!-- Kanan: plan badge atau tombol upgrade -->
+                        <template v-if="planLabel === 'Free'">
+                            <Link href="/billing" class="text-sky-600 dark:text-[#38bdf8] hover:underline font-semibold">
+                                Upgrade
+                            </Link>
+                        </template>
+                        <template v-else>
+                            <span
+                                class="px-1.5 py-0.5 rounded font-semibold"
+                                :class="planLabel === 'Enterprise'
+                                    ? 'bg-violet-50 dark:bg-violet-400/15 text-violet-600 dark:text-violet-300 border border-violet-200 dark:border-violet-400/25'
+                                    : 'bg-amber-50 dark:bg-amber-400/15 text-amber-600 dark:text-amber-300 border border-amber-200 dark:border-amber-400/25'"
+                            >
+                                {{ planLabel }}
+                            </span>
+                        </template>
+                    </div>
+
+                    <!-- Peringatan jika kuota proyek habis -->
+                    <div
+                        v-if="!projectIsUnlimited && projectPercent >= 100"
+                        class="flex items-center gap-1.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 px-2 py-1.5 text-[10px] text-rose-600 dark:text-rose-400"
+                    >
+                        <svg class="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <span>Kuota proyek penuh. Upgrade untuk melanjutkan.</span>
                     </div>
                 </div>
             </Transition>
@@ -365,7 +421,24 @@ onUnmounted(() => {
                             <div v-if="isSidebarOpen" class="truncate min-w-0 flex-1">
                                 <div class="text-xs font-semibold text-slate-800 dark:text-white truncate">{{ user?.name || 'User' }}</div>
                                 <div class="flex items-center gap-1">
-                                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-400/20 text-amber-600 dark:text-amber-300 border border-amber-200 dark:border-amber-400/30">PRO TIER</span>
+                                    <!-- Free: link upgrade -->
+                                    <Link
+                                        v-if="planLabel === 'Free'"
+                                        href="/billing"
+                                        class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-sky-50 dark:bg-[#38bdf8]/10 text-sky-700 dark:text-[#38bdf8] border border-sky-200 dark:border-[#38bdf8]/20 hover:bg-sky-100 dark:hover:bg-[#38bdf8]/20 transition-colors"
+                                    >
+                                        Upgrade →
+                                    </Link>
+                                    <!-- Pro / Enterprise: badge -->
+                                    <span
+                                        v-else
+                                        class="text-[9px] font-mono px-1.5 py-0.5 rounded"
+                                        :class="planLabel === 'Enterprise'
+                                            ? 'bg-violet-50 dark:bg-violet-400/15 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-400/25'
+                                            : 'bg-amber-50 dark:bg-amber-400/20 text-amber-600 dark:text-amber-300 border border-amber-200 dark:border-amber-400/30'"
+                                    >
+                                        {{ planLabel.toUpperCase() }} TIER
+                                    </span>
                                 </div>
                             </div>
                         </Transition>
