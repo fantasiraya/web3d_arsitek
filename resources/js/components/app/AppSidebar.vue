@@ -133,7 +133,7 @@ onUnmounted(() => {
             >
                 <span v-if="isSidebarOpen && planLabel === 'Free'">
                     <Link
-                        href="/billing"
+                        href="/plans"
                         class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold transition-colors bg-sky-50 dark:bg-[#38bdf8]/10 text-sky-700 dark:text-[#38bdf8] border border-sky-200 dark:border-[#38bdf8]/20 hover:bg-sky-100 dark:hover:bg-[#38bdf8]/20"
                     >
                         Upgrade
@@ -421,17 +421,8 @@ onUnmounted(() => {
                             <div v-if="isSidebarOpen" class="truncate min-w-0 flex-1">
                                 <div class="text-xs font-semibold text-slate-800 dark:text-white truncate">{{ user?.name || 'User' }}</div>
                                 <div class="flex items-center gap-1">
-                                    <!-- Free: link upgrade -->
-                                    <Link
-                                        v-if="planLabel === 'Free'"
-                                        href="/billing"
-                                        class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-sky-50 dark:bg-[#38bdf8]/10 text-sky-700 dark:text-[#38bdf8] border border-sky-200 dark:border-[#38bdf8]/20 hover:bg-sky-100 dark:hover:bg-[#38bdf8]/20 transition-colors"
-                                    >
-                                        Upgrade →
-                                    </Link>
                                     <!-- Pro / Enterprise: badge -->
                                     <span
-                                        v-else
                                         class="text-[9px] font-mono px-1.5 py-0.5 rounded"
                                         :class="planLabel === 'Enterprise'
                                             ? 'bg-violet-50 dark:bg-violet-400/15 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-400/25'

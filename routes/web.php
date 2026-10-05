@@ -9,6 +9,7 @@ use App\Http\Controllers\UserSearchController;
 use App\Http\Controllers\ProjectsPageController;
 use App\Http\Controllers\TeamsPageController;
 use App\Http\Controllers\BillingController;
+use App\Http\Controllers\PlansController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Project\ProjectController;
@@ -32,6 +33,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Riwayat pembelian paket
     Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');
+    Route::get('/plans', PlansController::class)->name('plans.index');
 
     // Project management
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');

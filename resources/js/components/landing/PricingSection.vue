@@ -46,7 +46,7 @@ const plans = computed(() =>
 </script>
 
 <template>
-    <section id="pricing" class="relative py-28 sm:py-36 bg-[#050608] text-white">
+    <section id="pricing" class="relative py-2 bg-[#050608] text-white">
         <!-- Ambient lighting -->
         <div class="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[500px] w-full max-w-4xl bg-indigo-600/10 blur-[180px]"></div>
 
