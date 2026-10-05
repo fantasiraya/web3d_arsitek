@@ -22,25 +22,25 @@ const steps = [
     {
         id: 'compression',
         badge: 'Langkah 01',
-        title: 'Kompresi Draco Otomatis',
-        subtitle: 'Upload & Optimasi Mesh Sekali Klik',
-        description: 'Pipeline server otomatis mengompresi geometri 3D hingga 85% lebih ringan tanpa merusak detail material PBR, menghasilkan waktu pemuatan instan di browser klien.',
+        title: 'Lebih Ringan',
+        subtitle: 'Upload Model dari CAD/BIM, Optimasi Sekali Klik',
+        description: 'Ekspor model dari Revit, ArchiCAD, SketchUp, atau Rhino lalu unggah. Pipeline server otomatis mengompresi geometri 3D hingga 85% lebih ringan tanpa merusak detail material PBR, sehingga model bangunan langsung terbuka cepat di browser klien.',
         icon: UploadCloud,
         accent: 'from-blue-500 to-indigo-500',
         borderColor: 'border-blue-500/30',
         glowColor: 'rgba(59, 130, 246, 0.15)',
         stats: [
             { label: 'Reduksi Ukuran', val: '84.6%' },
-            { label: 'Loading Time', val: '~1.2 dtk' },
+            { label: 'Waktu Muat Model', val: '~1.2 dtk' },
             { label: 'Target Performa', val: '60 FPS' }
         ]
     },
     {
         id: 'security',
         badge: 'Langkah 02',
-        title: 'Akses Klien Terproteksi Email',
-        subtitle: 'Zero Link Leak & Keamanan Identitas',
-        description: 'Hilangkan risiko link publik yang disebar tanpa izin. Akses proyek hanya terbuka untuk email klien terdaftar dengan autentikasi Google OAuth atau email terverifikasi.',
+        title: 'Akses Klien via Email',
+        subtitle: 'Tanpa Link Bocor & Identitas Terverifikasi',
+        description: 'Lindungi hak cipta dan kerahasiaan desain Anda dari link publik yang tersebar tanpa izin. Model hanya bisa dibuka oleh email klien, investor, atau konsultan yang Anda undang, dengan autentikasi Google OAuth atau email terverifikasi.',
         icon: ShieldCheck,
         accent: 'from-emerald-500 to-teal-500',
         borderColor: 'border-emerald-500/30',
@@ -54,33 +54,33 @@ const steps = [
     {
         id: 'spatial',
         badge: 'Langkah 03',
-        title: 'Anotasi Pin Spasial (X, Y, Z)',
-        subtitle: 'Raycasting Presisi di Permukaan Desain',
-        description: 'Klien cukup mengklik titik mana pun pada geometri bangunan villa. Raycaster Three.js menghitung koordinat spasial seketika dan menghubungkan bubble revisi dengan SVG leader line.',
+        title: 'Titik Desain (X, Y, Z)',
+        subtitle: 'Anotasi Presisi di Fasad, Ruang, dan Struktur',
+        description: 'Klien cukup mengklik bagian mana pun pada model bangunan, misalnya fasad, dek, atau plafon. Raycaster Three.js menghitung koordinat spasial seketika dan menghubungkan komentar revisi dengan garis penunjuk SVG, sehingga tidak ada lagi masukan ambigu seperti "yang di sebelah sana".',
         icon: MapPin,
         accent: 'from-indigo-500 to-purple-500',
         borderColor: 'border-indigo-500/30',
         glowColor: 'rgba(99, 102, 241, 0.18)',
         stats: [
             { label: 'Presisi Posisi', val: 'Vector 3D' },
-            { label: 'Leader Line', val: 'SVG Real-time' },
-            { label: 'Touch Screen', val: 'Mendukung iPad' }
+            { label: 'Garis Penunjuk', val: 'SVG Real-time' },
+            { label: 'Layar Sentuh', val: 'Mendukung iPad' }
         ]
     },
     {
         id: 'gatekeeper',
         badge: 'Langkah 04',
-        title: 'Revision Gatekeeper & Approval',
-        subtitle: 'Kunci Batas Kuota & Kesepakatan Akhir',
-        description: 'Lindungi arsitek dari revisi tak terbatas. Kuota revisi 3x terpantau transparan; setelah kuota habis, form terkunci otomatis dan klien dapat menyetujui desain akhir via chat terintegrasi.',
+        title: 'Batas Revisi',
+        subtitle: 'Kunci Kuota Revisi & Kesepakatan Akhir',
+        description: 'Lindungi tim Anda dari revisi tanpa akhir. Kuota revisi 3x per tahap desain terpantau transparan; setelah kuota habis, form revisi terkunci otomatis dan klien dapat menyetujui desain akhir via chat terintegrasi atau mengajukan addendum.',
         icon: Sliders,
         accent: 'from-amber-500 to-orange-500',
         borderColor: 'border-amber-500/30',
         glowColor: 'rgba(245, 158, 11, 0.15)',
         stats: [
             { label: 'Batas Revisi', val: '3x Terkunci' },
-            { label: 'Status Proteksi', val: 'Form Locked' },
-            { label: 'Output Akhir', val: 'Final Approval' }
+            { label: 'Status Proteksi', val: 'Form Terkunci' },
+            { label: 'Output Akhir', val: 'Persetujuan Final' }
         ]
     }
 ];
