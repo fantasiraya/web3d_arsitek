@@ -1,141 +1,298 @@
-# 📁 SaaS Web 3D Directory & Folder Structure
+# 📁 PitchArch — Directory & Folder Structure
 
-Dokumen ini adalah acuan resmi struktur folder untuk backend (Laravel 13 DDD), frontend (Nuxt 3 Feature-Driven), dan berkas panduan AI.
+Dokumen ini adalah acuan resmi struktur folder untuk aplikasi **PitchArch**: monorepo Laravel 12 + Inertia.js + Vue 3 (bukan backend/frontend terpisah).
 
-> **v2.4 Changelog:** Menambahkan `Domains/Chat` (real-time messaging), `Domains/Project/Actions` untuk Client Invitation, `Http/Middleware` untuk validasi akses Klien, `features/chat`, serta Landing Page bertema Apple Style dipadukan dengan Scrollytelling Engine.
+> **v2.5 Changelog:** Diperbarui dari struktur fiktif `backend/` + `frontend/` terpisah ke struktur **monorepo Laravel Inertia** yang aktual. Mengganti referensi Nuxt 3 → Inertia/Vue 3, PostgreSQL → MySQL, Cloudflare R2 → local disk public, Sanctum → Fortify. Menambahkan `camera_presets`, `Events/`, `Middleware/` aktual, layout Inertia (`LandingLayout`, `AdminLayout`, `UnifiedLayout`), dan folder `routes/` aktual.
 
 ---
 
 ```text
-my-saas-3d-project/
-├── .github/                   # CI/CD Workflows (GitHub Actions)
+web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │
-├── guide/                     # 📂 FOLDER PANDUAN & KOORDINASI AI
-│   ├── AI_INSTRUCTIONS.md     # System prompt & aturan wajib AI Coding
-│   ├── PRD.md                 # Product Requirement Document (v2.4)
-│   ├── RTCF.md                # Arsitektur teknis & stack spec
-│   ├── RISE.md                # Framework draf prompt & tugas
-│   ├── DATABASE_SCHEMA.md     # Dokumentasi tabel, kolom, UUID, ERD (v2.4)
-│   ├── PROGRESS_TRACKER.md    # Log & status pengerjaan fitur (Auto-update oleh AI)
-│   └── FOLDER_STRUCTURE.md    # Referensi peta direktori projek ini
+├── .github/                    # CI/CD Workflows (GitHub Actions)
+│   └── workflows/tests.yml
 │
-├── backend/                   # 🐘 LARAVEL 13 (DOMAIN-DRIVEN DESIGN)
-│   ├── app/
-│   │   ├── Domains/           # 🎯 BOUNDED CONTEXTS LOGIKA BISNIS
-│   │   │   ├── Auth/
-│   │   │   │   ├── Actions/            # Business Logic / Use Cases
-│   │   │   │   │                       # MatchInvitedClientEmailAction.php (link user_id ke project_clients saat login)
-│   │   │   │   ├── Controllers/        # API Controllers
-│   │   │   │   ├── DTOs/               # Data Transfer Objects
-│   │   │   │   ├── Models/             # User.php
-│   │   │   │   └── Requests/           # LoginRequest.php, RegisterRequest.php
-│   │   │   │
-│   │   │   ├── SystemConfig/           # Konfigurasi Kuota Global & Setting SaaS (termasuk backoffice Super Admin)
-│   │   │   │   ├── Actions/            # UpdateQuotaAction.php, GetSettingsAction.php
-│   │   │   │   ├── Controllers/
-│   │   │   │   ├── Models/             # SystemSetting.php
-│   │   │   │   ├── Repositories/       # SystemSettingRepository.php (Redis Cache)
-│   │   │   │   └── Requests/           # UpdateSettingRequest.php
-│   │   │   │
-│   │   │   ├── Project/                # Manajemen Model 3D, Storage & Client Invitation
-│   │   │   │   ├── Actions/            # CreateProjectAction.php, ProcessDracoAction.php,
-│   │   │   │   │                       # InviteClientAction.php, RevokeClientAccessAction.php,
-│   │   │   │   │                       # ValidateProjectClientAccessAction.php
-│   │   │   │   ├── Controllers/        # ProjectController.php, ProjectClientController.php
-│   │   │   │   ├── Models/             # Project.php, ProjectVersion.php, ProjectClient.php
-│   │   │   │   ├── Notifications/      # ClientInvitationNotification.php (Mailable undangan)
-│   │   │   │   ├── Jobs/               # CompressGlbJob.php (Queue Worker)
-│   │   │   │   └── Requests/           # StoreProjectRequest.php, InviteClientRequest.php
-│   │   │   │
-│   │   │   ├── Comment/                # Spatial 3D Pin Annotation
-│   │   │   │   ├── Actions/            # CreatePinCommentAction.php
-│   │   │   │   ├── Controllers/
-│   │   │   │   ├── Models/             # Comment.php
-│   │   │   │   └── Requests/           # StoreCommentRequest.php
-│   │   │   │
-│   │   │   ├── Chat/                   # 🆕 Real-time Messaging Arsitek ↔ Klien per Project
-│   │   │   │   ├── Actions/            # SendChatMessageAction.php, MarkMessageReadAction.php
-│   │   │   │   ├── Controllers/        # ChatController.php (index/store histori pesan)
-│   │   │   │   ├── Events/             # ChatMessageSent.php (implements ShouldBroadcast)
-│   │   │   │   ├── Models/             # ChatMessage.php
-│   │   │   │   └── Requests/           # SendChatMessageRequest.php
-│   │   │   │
-│   │   │   └── Billing/                # Integrasi Midtrans SaaS & Subscription
-│   │   │       ├── Actions/            # CreateSnapTokenAction.php, HandleWebhookAction.php
-│   │   │       ├── Controllers/
-│   │   │       ├── Models/             # Transaction.php, Subscription.php
-│   │   │       └── Requests/
+├── guide/                      # 📂 FOLDER PANDUAN & KOORDINASI AI
+│   ├── AI_INSTRUCTIONS.md      # System prompt & aturan wajib AI Coding
+│   ├── PRD.md                  # Product Requirement Document (v2.5)
+│   ├── RTCF.md                 # Arsitektur teknis & stack spec
+│   ├── RISE.md                 # Framework draf prompt & tugas
+│   ├── DATABASE_SCHEMA.md      # Dokumentasi tabel, kolom, UUID, ERD (v2.5)
+│   ├── PROGRESS_TRACKER.md     # Log & status pengerjaan fitur
+│   └── FOLDER_STRUCTURE.md     # Referensi peta direktori project ini (file ini)
+│
+├── app/                        # 🐘 LARAVEL 12 APPLICATION LAYER
+│   │
+│   ├── Actions/                # Application-level actions (di luar domain)
+│   │   ├── Auth/
+│   │   │   └── MatchInvitedClientEmailAction.php   # Cocokkan email login dengan project_clients
+│   │   └── Fortify/
+│   │       ├── CreateNewUser.php                    # Registrasi user baru via Fortify
+│   │       └── ResetUserPassword.php                # Reset password via Fortify
+│   │
+│   ├── Concerns/               # Shared traits / PHP Concerns
+│   │   ├── PasswordValidationRules.php
+│   │   └── ProfileValidationRules.php
+│   │
+│   ├── Console/
+│   │   └── Commands/
+│   │       └── ServeCommand.php
+│   │
+│   ├── Domains/                # 🎯 BOUNDED CONTEXTS — LOGIKA BISNIS (DDD)
 │   │   │
-│   │   ├── Http/
-│   │   │   └── Middleware/             # Role/Permission, QuotaCheck, RevisionLimitCheck,
-│   │   │                                # ProjectClientAccessMiddleware.php (🆕 validasi email undangan vs user login)
-│   │   └── Providers/                  # BroadcastServiceProvider.php (registrasi routes/channels.php)
+│   │   ├── Auth/               # Identitas & Autentikasi
+│   │   │   ├── Actions/
+│   │   │   │   └── ToggleUserStatusAction.php       # Aktifkan/nonaktifkan akun user
+│   │   │   └── Models/
+│   │   │       └── User.php                         # implements MustVerifyEmail, PasskeyUser
+│   │   │
+│   │   ├── Billing/            # Integrasi Midtrans SaaS & Subscription
+│   │   │   ├── Actions/
+│   │   │   │   ├── ChangeUserPlanAction.php
+│   │   │   │   ├── CreateSnapTokenAction.php        # Generate Midtrans Snap token
+│   │   │   │   ├── HandleWebhookAction.php          # Proses notifikasi Midtrans
+│   │   │   │   ├── RemoveUserProjectLimitOverrideAction.php
+│   │   │   │   └── SetUserProjectLimitOverrideAction.php
+│   │   │   ├── Gateway/
+│   │   │   │   ├── Contracts/                       # Interface payment gateway
+│   │   │   │   ├── DTO/                             # Data Transfer Objects
+│   │   │   │   ├── PaymentGatewayManager.php
+│   │   │   │   └── Providers/                       # Provider konkret (Midtrans, dll.)
+│   │   │   ├── Models/
+│   │   │   │   ├── Plan.php
+│   │   │   │   ├── Subscription.php
+│   │   │   │   ├── Transaction.php
+│   │   │   │   └── UserPlanOverride.php
+│   │   │   └── Services/
+│   │   │       └── SubscriptionLimitService.php     # Hitung effective project limit
+│   │   │
+│   │   ├── Chat/               # Real-time Messaging Arsitek ↔ Klien per Project
+│   │   │   ├── Controllers/
+│   │   │   │   └── ChatController.php               # index (histori) + store (kirim pesan)
+│   │   │   ├── Models/
+│   │   │   │   └── ChatMessage.php
+│   │   │   └── Requests/                            # SendChatMessageRequest.php
+│   │   │
+│   │   ├── Comment/            # Spatial Pin Annotation & Feedback
+│   │   │   ├── Actions/
+│   │   │   │   └── PinCommentAction.php
+│   │   │   ├── Controllers/
+│   │   │   │   ├── CommentController.php
+│   │   │   │   └── PinCommentController.php
+│   │   │   ├── Models/
+│   │   │   │   └── Comment.php
+│   │   │   └── Requests/
+│   │   │       └── StoreCommentRequest.php
+│   │   │
+│   │   ├── Project/            # Manajemen Model 3D, Storage & Client Invitation
+│   │   │   ├── Actions/
+│   │   │   │   ├── CreateProjectAction.php          # Validasi kuota + buat project
+│   │   │   │   ├── InviteClientAction.php           # Assign email Klien ke project_clients
+│   │   │   │   ├── RevokeClientAccessAction.php     # Cabut akses Klien
+│   │   │   │   └── UploadProjectFileAction.php      # Handle upload .glb/.gltf
+│   │   │   ├── Controllers/
+│   │   │   │   └── CameraPresetController.php       # CRUD camera view presets
+│   │   │   ├── Jobs/
+│   │   │   │   └── DracoCompressionJob.php          # Background queue: kompresi Draco via gltf-pipeline
+│   │   │   ├── Models/
+│   │   │   │   ├── Project.php
+│   │   │   │   ├── ProjectCameraPreset.php
+│   │   │   │   ├── ProjectClient.php
+│   │   │   │   └── ProjectVersion.php
+│   │   │   └── Notifications/
+│   │   │       └── ClientInvitationNotification.php # Email undangan ke Klien
+│   │   │
+│   │   └── SystemConfig/       # Konfigurasi Kuota Global & Backoffice Super Admin
+│   │       ├── Models/
+│   │       │   └── AuditLog.php
+│   │       ├── Repositories/                        # SystemSettingRepository.php
+│   │       └── Services/                            # GetSettingsService.php
 │   │
-│   ├── database/
-│   │   ├── factories/                  # ProjectFactory.php, CommentFactory.php, SubscriptionFactory.php,
-│   │   │                                # ProjectClientFactory.php, ChatMessageFactory.php
-│   │   ├── migrations/                 # PostgreSQL UUID Table Migrations (termasuk project_clients, chat_messages)
-│   │   └── seeders/                    # SystemSettingSeeder.php, DatabaseSeeder.php
+│   ├── Events/                 # Domain Events untuk Broadcasting (Reverb)
+│   │   ├── ChatMessageSent.php             # implements ShouldBroadcast
+│   │   ├── ClientAccessRevoked.php
+│   │   ├── ClientInvitationReceived.php
+│   │   └── ClientStatusUpdated.php
 │   │
-│   ├── routes/
-│   │   ├── api.php                     # Route V1 API per domain
-│   │   ├── channels.php                # 🆕 Broadcasting channel authorization (private channel project.{id}.chat)
-│   │   └── web.php
-│   ├── config/
-│   │   └── reverb.php                  # 🆕 Konfigurasi Laravel Reverb (WebSocket server)
-│   └── storage/
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   │   ├── Admin/                      # Admin Panel controllers (/admin/*)
+│   │   │   │   ├── AuditLogController.php
+│   │   │   │   ├── DashboardController.php
+│   │   │   │   ├── PlansController.php
+│   │   │   │   ├── ProjectsController.php
+│   │   │   │   ├── TransactionsController.php
+│   │   │   │   └── UsersController.php
+│   │   │   ├── Auth/
+│   │   │   │   └── GoogleAuthController.php         # Callback Google OAuth via Socialite
+│   │   │   ├── Project/
+│   │   │   │   ├── ProjectController.php            # CRUD project
+│   │   │   │   └── ViewerController.php             # Serve Viewer page + data model
+│   │   │   ├── Settings/
+│   │   │   │   └── ProfileController.php            # Update profile, avatar, dll.
+│   │   │   ├── BillingController.php
+│   │   │   ├── CheckoutController.php               # Inisiasi Midtrans Snap
+│   │   │   ├── DashboardController.php
+│   │   │   ├── PlansController.php
+│   │   │   ├── ProjectsPageController.php
+│   │   │   ├── TeamsPageController.php
+│   │   │   ├── UserSearchController.php
+│   │   │   └── WelcomeController.php                # Landing page (Welcome.vue)
+│   │   │
+│   │   └── Middleware/
+│   │       ├── CheckAccountStatus.php               # Cek apakah akun aktif/suspended
+│   │       ├── EnsureSuperAdmin.php                 # Guard route /admin/*
+│   │       ├── HandleAppearance.php                 # Dark/light/system mode
+│   │       ├── HandleInertiaRequests.php            # Share data global ke Inertia
+│   │       ├── ProjectClientAccessMiddleware.php    # Validasi email undangan vs user login
+│   │       └── RevisionLimitEnforcementMiddleware.php  # Blokir pin jika kuota habis
+│   │
+│   └── Providers/
+│       ├── AppServiceProvider.php
+│       └── FortifyServiceProvider.php              # Konfigurasi Fortify features & views
 │
-├── frontend/                  # 🟢 NUXT 3 / VUE 3 (FEATURE-DRIVEN)
-│   ├── assets/                # CSS, Tailwind, Images/Mockups
-│   │   ├── css/                # main.css, tailwind.css, theme.css
-│   │   └── images/             # Hero banners, logo, favicon, UI product mockups
+├── resources/                  # 🟢 FRONTEND — Inertia.js + Vue 3
 │   │
-│   ├── components/            # UI Reusable Components
-│   │   ├── ui/                 # Base UI (Button, Modal, Card, Navbar, Footer)
-│   │   └── landing/            # Apple-Style UI Atoms (AppleNavBar, GlassCard, PillBadge, AppleFooter)
+│   ├── css/
+│   │   └── app.css             # Tailwind CSS v4 entry point
 │   │
-│   ├── features/              # 🧩 FEATURE-BASED MODULES
-│   │   ├── viewer-3d/         # Engine Three.js / TresJS (Hanya untuk Authenticated Project View)
-│   │   │   ├── components/    # Canvas3D.vue, PinMarker.vue, OrbitControls.vue, RevisionBadge.vue
-│   │   │   ├── composables/   # useRaycaster.ts, useThreeScene.ts
-│   │   │   └── utils/         # dracoLoader.ts
-│   │   ├── projects/          # Dashboard Project Management
-│   │   │   ├── components/    # ProjectList.vue, InviteClientModal.vue (🆕), ClientAccessList.vue (🆕)
-│   │   │   └── composables/   # useProjectClients.ts (🆕 kelola undangan & status pending/accepted)
-│   │   ├── comments/          # Sidebar Feedback & Thread List
-│   │   ├── chat/              # 🆕 Real-time Chat Arsitek ↔ Klien
-│   │   │   ├── components/    # ChatWindow.vue, ChatBubble.vue, ChatInput.vue, TypingIndicator.vue
-│   │   │   └── composables/   # useChat.ts (kirim/terima pesan), useEcho.ts (koneksi Reverb/Echo)
-│   │   ├── billing/           # Pricing Table & Midtrans Snap Pop-up
-│   │   └── landing/           # 🍎 Apple-Style Scrollytelling Feature Module (resources/js/components/landing)
-│   │       ├── HeroSection.vue                  # Monumental Apple Hero & Titanium Villa Window
-│   │       ├── ScrollyExperienceSection.vue     # Pinned Scroll Track (450vh) 5-Stage Journey
-│   │       ├── ArchitecturalCinematicSection.vue# Pinned Scroll Track (400vh) 4-Layer Spatial Anatomy
-│   │       ├── BentoGridSection.vue             # Apple Pro Bento Grid (Zero-leak, Dual capacity, Draco, WS)
-│   │       ├── InteractiveShowcaseSection.vue   # Dynamic Click-to-Pin Raycast Simulator
-│   │       ├── PricingSection.vue               # Apple Store Comparison Cards
-│   │       ├── FaqSection.vue                   # Apple-style Accordion FAQ
-│   │       ├── CtaSection.vue                   # Closing Call-To-Action
-│   │       ├── LandingNavbar.vue                # Full-Width Frosted Glass Navbar
-│   │       └── LandingFooter.vue                # Minimalist Multi-Column Footer
+│   ├── js/                     # TypeScript/Vue source
+│   │   ├── app.ts              # Entry point: createApp(InertiaApp) + mount
+│   │   │
+│   │   ├── components/         # Reusable UI Components
+│   │   │   ├── app/
+│   │   │   │   ├── AppHeader.vue
+│   │   │   │   └── AppSidebar.vue
+│   │   │   ├── landing/        # Apple-Style Landing Page Components
+│   │   │   │   ├── ArchitecturalCinematicSection.vue
+│   │   │   │   ├── BentoGridSection.vue
+│   │   │   │   ├── CtaSection.vue
+│   │   │   │   ├── FaqSection.vue
+│   │   │   │   ├── HeroSection.vue
+│   │   │   │   ├── InteractiveShowcaseSection.vue
+│   │   │   │   ├── LandingFooter.vue
+│   │   │   │   ├── LandingNavbar.vue
+│   │   │   │   ├── PricingSection.vue
+│   │   │   │   └── ScrollyExperienceSection.vue
+│   │   │   └── ui/             # shadcn/ui Vue port components
+│   │   │       ├── badge/
+│   │   │       ├── button/
+│   │   │       ├── dialog/
+│   │   │       ├── input/
+│   │   │       ├── label/
+│   │   │       ├── skeleton/
+│   │   │       ├── sonner/
+│   │   │       └── spinner/
+│   │   │
+│   │   ├── composables/        # Shared Vue Composables
+│   │   │   ├── useConfirm.ts
+│   │   │   ├── usePageLoading.ts
+│   │   │   └── useSidebar.ts
+│   │   │
+│   │   ├── layouts/            # Inertia Page Layouts
+│   │   │   ├── AdminLayout.vue         # Layout untuk halaman /admin/*
+│   │   │   ├── LandingLayout.vue       # Layout untuk landing page & auth pages
+│   │   │   └── UnifiedLayout.vue       # Layout untuk settings pages
+│   │   │
+│   │   ├── lib/
+│   │   │   ├── echo.ts         # Inisialisasi Laravel Echo + Reverb connector
+│   │   │   └── utils.ts        # Helper functions
+│   │   │
+│   │   ├── pages/              # Inertia Pages (satu file = satu route)
+│   │   │   ├── Welcome.vue             # Landing page (route: /)
+│   │   │   ├── Dashboard.vue           # Dashboard utama
+│   │   │   ├── ShowcaseDemo.vue        # Demo showcase
+│   │   │   ├── Plans.vue               # Halaman pricing/plans
+│   │   │   ├── Error.vue               # Halaman error (404, 403, dll.)
+│   │   │   ├── Admin/                  # Halaman Admin Panel (/admin/*)
+│   │   │   │   ├── Dashboard.vue
+│   │   │   │   ├── Users/Index.vue
+│   │   │   │   ├── Projects/Index.vue
+│   │   │   │   ├── Plans/Index.vue
+│   │   │   │   ├── Transactions/Index.vue
+│   │   │   │   └── AuditLogs/Index.vue
+│   │   │   ├── auth/                   # Halaman autentikasi
+│   │   │   │   ├── Login.vue
+│   │   │   │   ├── Register.vue
+│   │   │   │   ├── ForgotPassword.vue
+│   │   │   │   ├── ResetPassword.vue
+│   │   │   │   ├── VerifyEmail.vue
+│   │   │   │   ├── TwoFactorChallenge.vue
+│   │   │   │   └── ConfirmPassword.vue
+│   │   │   ├── Billing/
+│   │   │   │   └── Index.vue           # Billing history & subscription info
+│   │   │   ├── Checkout/
+│   │   │   │   └── Index.vue           # Midtrans Snap checkout
+│   │   │   ├── Project/
+│   │   │   │   └── Viewer.vue          # 3D Viewer (Three.js, pin comments, chat)
+│   │   │   └── Settings/
+│   │   │       ├── Profile.vue
+│   │   │       ├── Password.vue
+│   │   │       └── Appearance.vue
+│   │   │
+│   │   ├── routes/             # Typed route helpers (Ziggy/manual)
+│   │   └── types/              # TypeScript type definitions
 │   │
-│   ├── composables/           # Shared Composables (useAuth.ts, useApi.ts)
-│   ├── layouts/               # default.vue (Apple-Style Landing), dashboard.vue, viewer.vue
-│   ├── pages/                 # Routing Nuxt
-│   │   ├── index.vue          # 🏠 Landing Page Apple Style Scrollytelling (SSR Enabled, Fast FCP)
-│   │   ├── pricing.vue        # Pricing & Benefit Page
-│   │   ├── login.vue          # Mendukung query `?invited_email=` prefill dari undangan
-│   │   ├── register.vue
-│   │   ├── dashboard/
-│   │   │   ├── index.vue
-│   │   │   └── settings.vue   # Backoffice Control Panel Owner/Admin
-│   │   └── p/
-│   │       └── [token].vue    # Halaman akses project via undangan — WAJIB auth guard +
-│   │                            # validasi email (`project_clients`) sebelum render Viewer/Chat/Comment
-│   ├── middleware/             # 🆕 auth.ts, project-client-access.client.ts (guard route p/[token])
-│   ├── plugins/                 # 🆕 echo.client.ts (init Laravel Echo + Reverb connector)
-│   ├── stores/                 # Pinia Stores (useProjectStore.ts, useCommentStore.ts, useChatStore.ts 🆕)
-│   └── nuxt.config.ts
+│   └── views/
+│       └── app.blade.php       # Blade shell — titik masuk Inertia (@inertia)
 │
-└── docker-compose.yml         # Dev Environment (PostgreSQL, Redis, Reverb, MinIO/R2 Mock)
+├── routes/                     # Laravel Route Files
+│   ├── web.php                 # Routes utama: landing, dashboard, project, billing, auth
+│   ├── admin.php               # Routes admin panel (/admin/*) — guard EnsureSuperAdmin
+│   ├── settings.php            # Routes settings (profile, password, appearance)
+│   └── channels.php            # Broadcasting channel authorization (private channels Reverb)
+│
+├── database/
+│   ├── migrations/             # MySQL UUID Table Migrations
+│   ├── factories/              # Model Factories
+│   └── seeders/
+│       ├── DatabaseSeeder.php
+│       └── SystemSettingSeeder.php
+│
+├── config/
+│   ├── fortify.php             # Fortify features: registration, resetPasswords,
+│   │                           # emailVerification, twoFactor, passkeys
+│   └── reverb.php              # Laravel Reverb WebSocket server config
+│
+├── storage/
+│   └── app/
+│       └── public/             # File 3D yang diupload (.glb/.gltf) — local disk "public"
+│                                # (bukan Cloudflare R2; symlink ke public/storage via artisan)
+│
+├── public/
+│   └── storage/                # Symlink ke storage/app/public (via php artisan storage:link)
+│
+├── .env                        # Environment config (DB_CONNECTION=mysql, QUEUE_CONNECTION=database)
+├── .env.example
+├── package.json                # Vite + Vue 3 dependencies
+├── vite.config.ts
+├── tailwind.config.ts          # Tailwind CSS v4 config
+└── composer.json               # Laravel 12 PHP dependencies
 ```
+
+---
+
+## Catatan Penting Arsitektur
+
+### Monorepo — Bukan Backend/Frontend Terpisah
+PitchArch adalah **monorepo tunggal** berbasis Laravel. Frontend (Vue 3) di-serve melalui Inertia.js — tidak ada server Node.js/Nuxt terpisah. Build frontend dilakukan via Vite dan hasilnya dimasukkan ke `public/build/`.
+
+### Routing
+Routing **tidak menggunakan Nuxt file-based routing**. Semua route didefinisikan di `routes/web.php`, `routes/admin.php`, dan `routes/settings.php`. Inertia me-render komponen Vue yang sesuai berdasarkan nama page yang dikembalikan controller.
+
+### Auth (Fortify, bukan Sanctum)
+- Autentikasi menggunakan **Laravel Fortify** (bukan Sanctum API tokens).
+- Konfigurasi di `config/fortify.php` dan `app/Providers/FortifyServiceProvider.php`.
+- Features yang aktif: `registration`, `resetPasswords`, `emailVerification`, `twoFactor`, `passkeys`.
+- Google OAuth: redirect-based flow via `laravel/socialite` → `GoogleAuthController`.
+- Email verification: `User` model implements `MustVerifyEmail`. Google OAuth otomatis set `email_verified_at`.
+
+### Storage
+- Development & Production menggunakan **Laravel `public` disk lokal** (`storage/app/public/`).
+- File diakses via `Storage::url()` → `/storage/...` (memerlukan `php artisan storage:link`).
+- **Tidak ada Cloudflare R2** saat ini — integrasi cloud storage adalah future enhancement.
+
+### Queue
+- Queue driver: **database** (bukan Redis).
+- `DracoCompressionJob` di-dispatch ke queue `default`.
+- Worker: `php artisan queue:work`.
