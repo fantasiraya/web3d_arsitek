@@ -173,5 +173,33 @@
     body {
         @apply bg-background text-foreground;
     }
+
+    /* Selection color default untuk light mode */
+    input::selection,
+    textarea::selection {
+        background-color: oklch(0.3 0 0 / 0.2);
+        color: inherit;
+    }
+
+    /* Selection color untuk dark context (LandingLayout atau html.dark) */
+    .dark input::selection,
+    .dark textarea::selection {
+        background-color: rgba(99, 102, 241, 0.5); /* indigo-500/50 */
+        color: #ffffff;
+    }
 }
 
+/*
+ * Fix: Browser autofill override pada halaman dark (LandingLayout / auth pages).
+ * Browser (Chrome/Edge) inject background putih & teks hitam saat autofill aktif,
+ * mengabaikan Tailwind classes. Hack ini memaksa autofill mengikuti warna dark theme.
+ */
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus,
+.dark input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #1a1b26 inset !important;
+    -webkit-text-fill-color: #ffffff !important;
+    caret-color: #ffffff;
+    transition: background-color 9999s ease-in-out 0s;
+}

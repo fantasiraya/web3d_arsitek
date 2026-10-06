@@ -117,7 +117,7 @@ defineProps<{
                                 :tabindex="1"
                                 autocomplete="name"
                                 placeholder="Nama lengkap Anda"
-                                class="h-11 rounded-xl border-white/10 bg-white/5 text-white placeholder:text-neutral-600 focus:border-indigo-500/50 focus:ring-indigo-500/20 text-sm"
+                                class="h-11 rounded-xl border-white/10 bg-white/5 text-white placeholder:text-neutral-600 focus:border-indigo-500/50 focus:ring-indigo-500/20 text-sm [color-scheme:dark] selection:bg-indigo-500 selection:text-white"
                             />
                             <InputError :message="errors.name" />
                         </div>
@@ -135,7 +135,7 @@ defineProps<{
                                 :tabindex="2"
                                 autocomplete="email"
                                 placeholder="nama@studio-aether.id"
-                                class="h-11 rounded-xl border-white/10 bg-white/5 text-white placeholder:text-neutral-600 focus:border-indigo-500/50 focus:ring-indigo-500/20 text-sm"
+                                class="h-11 rounded-xl border-white/10 bg-white/5 text-white placeholder:text-neutral-600 focus:border-indigo-500/50 focus:ring-indigo-500/20 text-sm [color-scheme:dark] selection:bg-indigo-500 selection:text-white"
                             />
                             <InputError :message="errors.email" />
                         </div>
@@ -153,7 +153,7 @@ defineProps<{
                                 autocomplete="new-password"
                                 placeholder="Buat kata sandi kuat"
                                 :passwordrules="passwordRules"
-                                class="h-11 rounded-xl border-white/10 bg-white/5 text-white placeholder:text-neutral-600 focus:border-indigo-500/50 focus:ring-indigo-500/20 text-sm"
+                                class="h-11 rounded-xl border-white/10 bg-white/5 text-white placeholder:text-neutral-600 focus:border-indigo-500/50 focus:ring-indigo-500/20 text-sm [color-scheme:dark] selection:bg-indigo-500 selection:text-white"
                             />
                             <InputError :message="errors.password" />
                         </div>
@@ -171,7 +171,7 @@ defineProps<{
                                 autocomplete="new-password"
                                 placeholder="Ulangi kata sandi"
                                 :passwordrules="passwordRules"
-                                class="h-11 rounded-xl border-white/10 bg-white/5 text-white placeholder:text-neutral-600 focus:border-indigo-500/50 focus:ring-indigo-500/20 text-sm"
+                                class="h-11 rounded-xl border-white/10 bg-white/5 text-white placeholder:text-neutral-600 focus:border-indigo-500/50 focus:ring-indigo-500/20 text-sm [color-scheme:dark] selection:bg-indigo-500 selection:text-white"
                             />
                             <InputError :message="errors.password_confirmation" />
                         </div>

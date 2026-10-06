@@ -551,10 +551,31 @@ function acceptInvitation(project: ClientProject) {
 }
 
 // Action: Delete Project
-function deleteProject(project: OwnedProject) {
-    if (!confirm(`Apakah Anda yakin ingin menghapus proyek "${project.title}"?`)) return;
+async function deleteProject(project: OwnedProject) {
+    const ok = await confirm({
+        title: 'Hapus Proyek?',
+        description: `Proyek "${project.title}" beserta semua file dan versinya akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.`,
+        confirmText: 'Ya, Hapus',
+        cancelText: 'Batal',
+        variant: 'destructive',
+        icon: 'trash',
+    });
+
+    if (!ok) return;
+
+    // Optimistic: hapus dari UI sebelum server merespons
+    localOwnedProjects.value = localOwnedProjects.value.filter(p => p.id !== project.id);
+
     router.delete(`/projects/${project.id}`, {
         preserveScroll: true,
+        onSuccess: () => {
+            toast.success(`Proyek "${project.title}" berhasil dihapus.`);
+        },
+        onError: () => {
+            // Rollback: kembalikan project ke list jika gagal
+            localOwnedProjects.value = [...(props.ownedProjects ?? [])];
+            toast.error('Gagal menghapus proyek. Coba lagi.');
+        },
     });
 }
 

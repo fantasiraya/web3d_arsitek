@@ -124,13 +124,29 @@ class ProjectController extends Controller
         }
 
         if ($request->hasFile('file')) {
-            $file = $request->file('file');
-            $path = $file->store('projects/models', 'public');
+            $file          = $request->file('file');
+            $disk          = \Illuminate\Support\Facades\Storage::disk('public');
+
+            // Delete the old project-level file before storing the new one
+            $oldPath = $project->file_path;
+            if (!empty($oldPath) && $disk->exists($oldPath)) {
+                $disk->delete($oldPath);
+
+                // Also delete the draco-compressed variant if it exists alongside the original
+                if (!str_ends_with($oldPath, '_draco.glb')) {
+                    $oldDraco = preg_replace('/\.gl[bt]f?$/i', '_draco.glb', $oldPath);
+                    if ($oldDraco && $disk->exists($oldDraco)) {
+                        $disk->delete($oldDraco);
+                    }
+                }
+            }
+
+            $path          = $file->store('projects/models', 'public');
             $fileSizeBytes = $file->getSize() ?: 0;
 
-            $updateData['file_path'] = $path;
-            $updateData['file_size_bytes'] = $fileSizeBytes;
-            $updateData['is_draco_compressed'] = false;
+            $updateData['file_path']           = $path;
+            $updateData['file_size_bytes']      = $fileSizeBytes;
+            $updateData['is_draco_compressed']  = false;
 
             // Upload new version record & queue draco compression
             $this->uploadProjectFileAction->execute($project, $request->user(), $file);
