@@ -95,7 +95,7 @@ const pageRange = computed(() => {
 </script>
 
 <template>
-    <Head title="Riwayat Pembelian — AETHER 3D" />
+    <Head title="Riwayat Pembelian — PitchArch" />
 
     <div class="min-h-screen bg-[#F8F9FA] dark:bg-[#0b0c10] text-slate-900 dark:text-[#f3f4f6] font-['Geist',sans-serif] antialiased flex relative overflow-x-hidden transition-colors duration-300">
 

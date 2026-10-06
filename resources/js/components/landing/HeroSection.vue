@@ -131,7 +131,7 @@ onUnmounted(() => {
                                 <div class="h-3 w-3 rounded-full bg-yellow-500/80"></div>
                                 <div class="h-3 w-3 rounded-full bg-emerald-500/80"></div>
                                 <span class="ml-3 text-xs font-mono text-neutral-300 tracking-wide">
-                                    AETHER_SHOWCASE_VILLA_CANTILEVER.GLB
+                                    PITCHARCH_SHOWCASE_VILLA_CANTILEVER.GLB
                                 </span>
                             </div>
 

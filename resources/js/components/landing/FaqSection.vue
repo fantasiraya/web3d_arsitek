@@ -198,7 +198,7 @@ const categoryColor: Record<FaqCategory, string> = {
                     Masih ada pertanyaan lain?
                 </p>
                 <a
-                    href="mailto:support@aether3d.id"
+                    href="mailto:support@pitcharch.id"
                     class="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-400 hover:text-indigo-300 transition-colors duration-200"
                 >
                     <MessageCircle class="h-4 w-4" />

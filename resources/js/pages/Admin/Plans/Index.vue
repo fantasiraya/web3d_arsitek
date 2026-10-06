@@ -307,7 +307,7 @@ function submitPaymentSettings() {
                     </div>
                     <div class="space-y-1.5">
                         <Label>Atas Nama</Label>
-                        <Input v-model="paymentForm.bank_account_holder" placeholder="PT Aether Studio" />
+                        <Input v-model="paymentForm.bank_account_holder" placeholder="PT PitchArch Studio" />
                     </div>
                 </div>
 

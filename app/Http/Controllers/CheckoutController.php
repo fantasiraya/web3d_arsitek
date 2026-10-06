@@ -82,7 +82,7 @@ class CheckoutController extends Controller
         $amount         = $validated['billing_type'] === 'annual'
             ? $this->parsePrice($plan->price_annual)
             : $this->parsePrice($plan->price_monthly);
-        $orderId        = 'AETHER-' . strtoupper($plan->slug) . '-' . time();
+        $orderId        = 'PITCH-' . strtoupper($plan->slug) . '-' . time();
         $gatewayEnabled = $this->settings->getBool('payment_gateway_enabled');
 
         // ── Mode: Transfer Manual ──────────────────────────

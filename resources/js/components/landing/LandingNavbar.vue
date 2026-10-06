@@ -38,7 +38,7 @@ const handleNavClick = (link: { name: string; href: string; isPage?: boolean }) 
             <Link href="/" class="group flex items-center gap-2.5">
                 <img src="/logo.png" alt="Pitcharch" class="h-8 w-8 rounded-xl object-contain drop-shadow-[0_0_12px_rgba(59,130,246,0.7)] ring-1 ring-white/20" />
                 <div class="flex items-center gap-1.5">
-                    <span class="text-sm font-semibold tracking-wider text-white">AETHER</span>
+                    <span class="text-sm font-semibold tracking-wider text-white">PITCHARCH</span>
                     <span class="rounded bg-white/10 px-1 py-0.5 text-[10px] font-medium tracking-widest text-neutral-300">
                         3D
                     </span>

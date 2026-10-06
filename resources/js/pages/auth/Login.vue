@@ -21,7 +21,7 @@ defineProps<{
 </script>
 
 <template>
-    <Head title="Masuk — AETHER 3D" />
+    <Head title="Masuk — PitchArch" />
 
     <!-- Split screen container — mengisi flex-grow dari LandingLayout -->
     <div class="flex min-h-[calc(100vh-80px)] flex-col lg:flex-row">
@@ -148,7 +148,7 @@ defineProps<{
                                 autofocus
                                 :tabindex="1"
                                 autocomplete="email"
-                                placeholder="nama@studio-aether.id"
+                                placeholder="nama@studio-pitcharch.id"
                                 class="h-11 rounded-xl border-white/10 bg-white/5 text-white placeholder:text-neutral-600 focus:border-indigo-500/50 focus:ring-indigo-500/20 text-sm [color-scheme:dark] selection:bg-indigo-500 selection:text-white"
                             />
                             <InputError :message="errors.email" />

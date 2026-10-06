@@ -629,7 +629,7 @@ const { isLoading } = usePageLoading(80);
 </script>
 
 <template>
-    <Head title="Dashboard - AETHER 3D Spatial CAD" />
+    <Head title="Dashboard - PitchArch Spatial CAD" />
 
     <!-- Main Container with Sidebar -->
     <div class="min-h-screen bg-[#F8F9FA] dark:bg-[#0b0c10] text-slate-900 dark:text-[#f3f4f6] font-['Geist',sans-serif] antialiased selection:bg-sky-200 dark:selection:bg-[#38bdf8]/20 selection:text-slate-900 dark:selection:text-white relative overflow-x-hidden flex transition-colors duration-300">

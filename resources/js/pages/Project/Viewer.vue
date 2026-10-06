@@ -15,7 +15,7 @@
                 <div class="h-4 w-px bg-white/10 hidden sm:block"></div>
 
                 <div class="flex items-center gap-2">
-                    <span class="text-sm font-semibold tracking-tight text-white line-clamp-1">{{ project.title || 'AETHER 3D Viewer' }}</span>
+                    <span class="text-sm font-semibold tracking-tight text-white line-clamp-1">{{ project.title || 'PitchArch Viewer' }}</span>
                     <span class="rounded bg-rose-500/20 border border-rose-500/30 px-2 py-0.5 text-[10px] font-mono text-rose-300 hidden sm:inline">
                         3D VIEWER
                     </span>

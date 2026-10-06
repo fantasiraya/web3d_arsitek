@@ -116,7 +116,7 @@ onUnmounted(() => {
                 >
                     <div v-if="isSidebarOpen" class="min-w-0">
                         <div class="flex items-center gap-1.5">
-                            <span class="font-bold tracking-tight text-slate-900 dark:text-white text-[15px]">AETHER</span>
+                            <span class="font-bold tracking-tight text-slate-900 dark:text-white text-[15px]">PITCHARCH</span>
                             <span class="text-[12px] font-mono font-semibold text-sky-600 dark:text-[#38bdf8]">3D</span>
                         </div>
                         <span class="text-[9px] font-mono uppercase tracking-widest text-slate-400 dark:text-[#6b7280] block -mt-0.5">Spatial CAD</span>

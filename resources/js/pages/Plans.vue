@@ -26,7 +26,7 @@ const { isSidebarOpen, isMobile } = useSidebar();
 </script>
 
 <template>
-    <Head title="Pilih Plan · AETHER 3D" />
+    <Head title="Pilih Plan · PitchArch" />
 
     <div class="flex h-screen bg-slate-50 dark:bg-[#09090c] overflow-hidden">
         <AppSidebar />

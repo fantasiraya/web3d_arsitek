@@ -15,7 +15,7 @@ defineProps<{
 </script>
 
 <template>
-    <Head title="Lupa Sandi — AETHER 3D" />
+    <Head title="Lupa Sandi — PitchArch" />
 
     <!-- Split screen -->
     <div class="flex min-h-[calc(100vh-80px)] flex-col lg:flex-row">
@@ -89,7 +89,7 @@ defineProps<{
                                     name="email"
                                     autocomplete="off"
                                     autofocus
-                                    placeholder="nama@studio-aether.id"
+                                    placeholder="nama@studio-pitcharch.id"
                                     class="h-11 rounded-xl border-white/10 bg-white/5 text-white placeholder:text-neutral-600 focus:border-indigo-500/50 focus:ring-indigo-500/20 text-sm [color-scheme:dark] selection:bg-indigo-500 selection:text-white"
                                 />
                                 <InputError :message="errors.email" />

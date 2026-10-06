@@ -26,7 +26,7 @@ function copyText(text: string, key: string) {
 function buildWaMessage(): string {
     const planName = props.transaction.snap_response?.plan_slug ?? 'Pro';
     const template = props.bankInfo.whatsapp_template
-        || 'Halo Admin AETHER 3D,\n\nSaya sudah melakukan transfer pembayaran.\n\nOrder ID: {order_id}\nPaket: {plan_name}\nJumlah: {amount}\n\nMohon dikonfirmasi. Terima kasih!';
+        || 'Halo Admin PitchArch,\n\nSaya sudah melakukan transfer pembayaran.\n\nOrder ID: {order_id}\nPaket: {plan_name}\nJumlah: {amount}\n\nMohon dikonfirmasi. Terima kasih!';
     return template
         .replaceAll('{order_id}', props.transaction.order_id)
         .replaceAll('{plan_name}', planName)

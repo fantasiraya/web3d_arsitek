@@ -659,7 +659,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <Head title="AETHER 3D — Live Interactive Showcase Demo">
+    <Head title="PitchArch — Live Interactive Showcase Demo">
         <meta name="description" content="Jelajahi model 3D arsitektur Modern Villa secara interaktif di browser." />
     </Head>
 
@@ -674,7 +674,7 @@ onBeforeUnmount(() => {
                 </Link>
                 <div class="h-4 w-px bg-white/10 hidden sm:block"></div>
                 <div class="flex items-center gap-2">
-                    <span class="text-sm font-semibold tracking-wider text-white">AETHER 3D</span>
+                    <span class="text-sm font-semibold tracking-wider text-white">PitchArch</span>
                     <span class="rounded bg-indigo-500/20 border border-indigo-500/30 px-2 py-0.5 text-[10px] font-mono text-indigo-300 hidden sm:inline">LIVE SHOWCASE</span>
                     <span class="text-xs text-neutral-400 hidden md:inline">• Modern Minimalist Villa</span>
                 </div>

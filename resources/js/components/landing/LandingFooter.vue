@@ -93,7 +93,7 @@ const socials = [
                             <img src="/logo.png" alt="Pitcharch" class="w-full h-full object-contain ring-1 ring-white/20 rounded-xl" />
                         </div>
                         <div>
-                            <span class="block text-sm font-bold tracking-widest text-white uppercase">Aether 3D</span>
+                            <span class="block text-sm font-bold tracking-widest text-white uppercase">PitchArch</span>
                             <span class="block text-[10px] tracking-wide text-neutral-500 uppercase">Architectural Presentation</span>
                         </div>
                     </div>
@@ -126,7 +126,7 @@ const socials = [
                             </svg>
                         </a>
                         <a
-                            href="mailto:hello@aether3d.id"
+                            href="mailto:hello@pitcharch.id"
                             aria-label="Email"
                             class="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-neutral-500 transition-all duration-200 hover:border-indigo-500/40 hover:text-indigo-400"
                         >
@@ -185,7 +185,7 @@ const socials = [
             <!-- Bottom Bar -->
             <div class="mt-14 flex flex-col items-center justify-between gap-4 border-t border-white/[0.07] pt-7 sm:flex-row">
                 <p class="text-[11px] text-neutral-500">
-                    © {{ currentYear }} AETHER 3D. Seluruh hak cipta dilindungi.
+                    © {{ currentYear }} PitchArch. Seluruh hak cipta dilindungi.
                 </p>
                 <p class="text-[11px] text-neutral-600">
                     Dibuat untuk arsitek yang ingin presentasi lebih dari sekadar gambar.
