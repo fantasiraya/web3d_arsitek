@@ -2,7 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\CacheKeys;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -27,6 +29,36 @@ class HandleInertiaRequests extends Middleware
     }
 
     /**
+     * Cek apakah user adalah super_admin.
+     * Di-cache 5 menit dengan tags user:{id} dan user:{id}:roles.
+     * Invalidasi via CacheKeys::flushUserRoles($id) saat role berubah.
+     */
+    protected function resolveIsAdmin(Request $request): bool
+    {
+        $user = $request->user();
+        if (! $user) {
+            return false;
+        }
+
+        return Cache::tags([
+            CacheKeys::tagUser($user->id),
+            CacheKeys::tagUserRoles($user->id),
+        ])->remember(
+            CacheKeys::userIsAdmin($user->id),
+            CacheKeys::TTL_SHORT,
+            fn () => \DB::table('model_has_roles')
+                ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+                ->where('model_has_roles.model_id', $user->id)
+                ->whereIn('model_has_roles.model_type', [
+                    get_class($user),
+                    \App\Domains\Auth\Models\User::class,
+                ])
+                ->where('roles.name', 'super_admin')
+                ->exists()
+        );
+    }
+
+    /**
      * Define the props that are shared by default.
      *
      * @see https://inertiajs.com/shared-data
@@ -35,19 +67,7 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
-        // Cek super_admin via DB langsung — bypass Spatie cache issue
-        $isAdmin = false;
-        if ($request->user()) {
-            $isAdmin = \DB::table('model_has_roles')
-                ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
-                ->where('model_has_roles.model_id', $request->user()->id)
-                ->whereIn('model_has_roles.model_type', [
-                    get_class($request->user()),
-                    \App\Domains\Auth\Models\User::class,
-                ])
-                ->where('roles.name', 'super_admin')
-                ->exists();
-        }
+        $isAdmin = $this->resolveIsAdmin($request);
 
         return [
             ...parent::share($request),

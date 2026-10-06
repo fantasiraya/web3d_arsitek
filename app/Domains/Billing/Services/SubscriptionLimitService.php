@@ -13,37 +13,110 @@ class SubscriptionLimitService
     public function __construct(
         protected SystemSettingRepository $settings
     ) {}
+
+    /**
+     * Per-request in-memory plan cache.
+     * Eliminates repeated DB queries when multiple methods call getPlanForUser()
+     * for the same user within a single request lifecycle.
+     *
+     * @var array<string, Plan>
+     */
+    protected array $planCache = [];
+
+    /**
+     * Per-request override cache.
+     *
+     * @var array<string, UserPlanOverride|null>
+     */
+    protected array $overrideCache = [];
+
+    /**
+     * Flush the in-memory caches (useful in tests between calls).
+     */
+    public function flushCache(): void
+    {
+        $this->planCache    = [];
+        $this->overrideCache = [];
+    }
+
     /**
      * Get the resolved Plan for a user.
+     * Memoized per request — DB hit only once per user per request lifecycle.
      */
     public function getPlanForUser(User $user): Plan
     {
-        // 1. Check active subscription relation with plan model
-        $activeSub = $user->activeSubscription()->with('planModel')->first();
-        if ($activeSub && $activeSub->planModel) {
+        if (isset($this->planCache[$user->id])) {
+            return $this->planCache[$user->id];
+        }
+
+        $plan = $this->resolvePlanForUser($user);
+        $this->planCache[$user->id] = $plan;
+
+        return $plan;
+    }
+
+    /**
+     * Internal plan resolution — called only once per user per request.
+     */
+    protected function resolvePlanForUser(User $user): Plan
+    {
+        // Use already-loaded relation if available (avoids extra query)
+        $activeSub = $user->relationLoaded('activeSubscription')
+            ? $user->activeSubscription
+            : $user->activeSubscription()->with('planModel')->first();
+
+        if ($activeSub && $activeSub->relationLoaded('planModel') && $activeSub->planModel) {
             return $activeSub->planModel;
         }
 
-        // 2. Check by subscription_status slug or active subscription plan slug
-        $slug = $activeSub->plan ?? $user->subscription_status ?? Plan::SLUG_FREE;
+        if ($activeSub && ! $activeSub->relationLoaded('planModel')) {
+            $activeSub->load('planModel');
+            if ($activeSub->planModel) {
+                return $activeSub->planModel;
+            }
+        }
 
-        $plan = Plan::where('slug', $slug)->first();
+        // Resolve slug from subscription or user cache column
+        $slug = $activeSub?->plan ?? $user->subscription_status ?? Plan::SLUG_FREE;
+
+        // Single query — plans are a tiny table, cache at application level
+        $plan = Plan::where('slug', $slug)->first()
+            ?? Plan::where('slug', Plan::SLUG_FREE)->first()
+            ?? Plan::first();
+
         if ($plan) {
             return $plan;
         }
 
-        // 3. Fallback to free plan or first active plan
-        return Plan::where('slug', Plan::SLUG_FREE)->first()
-            ?? Plan::first()
-            ?? new Plan([
-                'name' => 'Free',
-                'slug' => 'free',
-                'project_limit' => 1,
-                'can_create_project' => true,
-                'can_edit_project' => true,
-                'can_delete_project' => true,
-                'can_export' => false,
-            ]);
+        // Hard fallback — should never reach here in production
+        return new Plan([
+            'name'               => 'Free',
+            'slug'               => 'free',
+            'project_limit'      => 1,
+            'can_create_project' => true,
+            'can_edit_project'   => true,
+            'can_delete_project' => true,
+            'can_export'         => false,
+        ]);
+    }
+
+    /**
+     * Get the user's plan override, memoized per request.
+     */
+    protected function getPlanOverride(User $user): ?UserPlanOverride
+    {
+        if (array_key_exists($user->id, $this->overrideCache)) {
+            return $this->overrideCache[$user->id];
+        }
+
+        // Use already-loaded relation if available
+        $override = $user->relationLoaded('planOverride')
+            ? $user->planOverride
+            : $user->planOverride; // Eloquent accessor — loads once and is cached by Eloquent
+
+        $this->overrideCache[$user->id] = $override;
+
+        return $override;
     }
 
     /**
@@ -52,9 +125,7 @@ class SubscriptionLimitService
      */
     public function getEffectiveProjectLimit(User $user): ?int
     {
-        // Check for custom override
-        /** @var UserPlanOverride|null $override */
-        $override = $user->planOverride;
+        $override = $this->getPlanOverride($user);
 
         if ($override) {
             if ($override->is_unlimited) {
@@ -66,7 +137,7 @@ class SubscriptionLimitService
             }
         }
 
-        // Fallback to Plan limit
+        // Fallback to Plan limit (memoized)
         $plan = $this->getPlanForUser($user);
 
         return $plan->project_limit !== null ? (int) $plan->project_limit : null;
@@ -77,7 +148,7 @@ class SubscriptionLimitService
      */
     public function hasCustomLimitOverride(User $user): bool
     {
-        return $user->planOverride !== null;
+        return $this->getPlanOverride($user) !== null;
     }
 
     /**
@@ -222,13 +293,13 @@ class SubscriptionLimitService
      */
     public function getMaxFileSizeMb(User $user): int
     {
-        // 1. Cek custom override per-user dari admin
-        $override = $user->planOverride;
+        // 1. Cek custom override per-user dari admin (memoized)
+        $override = $this->getPlanOverride($user);
         if ($override && $override->custom_file_size_mb !== null) {
             return (int) $override->custom_file_size_mb;
         }
 
-        // 2. Baca dari system_settings berdasarkan plan
+        // 2. Baca dari system_settings berdasarkan plan (plan memoized, settings cached)
         $plan    = $this->getPlanForUser($user);
         $key     = match ($plan->slug) {
             Plan::SLUG_FREE        => 'free_tier_max_file_size_mb',

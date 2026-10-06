@@ -7,6 +7,7 @@ use App\Domains\Billing\Services\SubscriptionLimitService;
 use App\Domains\Project\Models\Project;
 use App\Domains\Project\Models\ProjectClient;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -23,165 +24,230 @@ class DashboardController extends Controller
     {
         $user = $request->user();
 
-        // Auto-match invitations: link any pending invitations matching user's email
+        // Auto-match invitations: link any pending invitations matching user's email.
+        // Scoped to only rows that need updating — avoids full-table update.
         ProjectClient::where('email', $user->email)
             ->whereNull('user_id')
             ->update(['user_id' => $user->id]);
 
-        // 1. Projects owned by this user (Architect capacity)
+        // ── 1. Projects owned by this user (Architect capacity) ──────────────
+        // withCount for revision count avoids loading all comments into memory.
+        // versions loaded with select() — we only need count + version_number.
+        // invitedClients loaded with select() — only columns needed for UI.
         $ownedProjects = Project::where('user_id', $user->id)
+            ->select([
+                'id', 'title', 'slug', 'description', 'file_path',
+                'file_size_bytes', 'is_draco_compressed',
+                'max_revisions_allowed', 'current_revision_count', 'created_at',
+            ])
             ->with([
-                'versions' => fn ($q) => $q->orderBy('version_number', 'desc'),
-                'invitedClients',
+                'versions:id,project_id,version_number',
+                'invitedClients:id,project_id,email,status,invited_at,accepted_at,created_at',
             ])
             ->withCount(['comments as actual_revisions_count' => fn ($q) => $q->whereNull('parent_id')])
             ->latest()
-            ->get()
-            ->map(function (Project $project) {
-                $actualCount = (int) $project->actual_revisions_count;
-                if ($project->current_revision_count !== $actualCount) {
-                    $project->update(['current_revision_count' => $actualCount]);
+            ->get();
+
+        // Collect stale project IDs to batch-update in a single query
+        $staleOwnedIds = [];
+        $ownedProjectsMapped = $ownedProjects->map(function (Project $project) use (&$staleOwnedIds) {
+            $actualCount = (int) $project->actual_revisions_count;
+
+            if ($project->current_revision_count !== $actualCount) {
+                $staleOwnedIds[$project->id] = $actualCount;
+            }
+
+            return [
+                'id'                     => $project->id,
+                'title'                  => $project->title,
+                'slug'                   => $project->slug,
+                'description'            => $project->description,
+                'file_path'              => $project->file_path,
+                'file_size_bytes'        => $project->file_size_bytes,
+                'is_draco_compressed'    => $project->is_draco_compressed,
+                'max_revisions_allowed'  => $project->max_revisions_allowed,
+                'current_revision_count' => $actualCount,
+                'has_reached_revision_limit' => $actualCount >= $project->max_revisions_allowed,
+                'created_at'             => $project->created_at?->diffForHumans(),
+                'versions_count'         => $project->versions->count(),
+                'invited_clients'        => $project->invitedClients->map(fn (ProjectClient $client) => [
+                    'id'          => $client->id,
+                    'email'       => $client->email,
+                    'status'      => $client->status,
+                    'invited_at'  => $client->invited_at?->diffForHumans() ?? $client->created_at?->diffForHumans(),
+                    'accepted_at' => $client->accepted_at?->diffForHumans(),
+                ])->values()->all(),
+            ];
+        });
+
+        // Batch-update stale revision counts in one query per chunk instead of N queries
+        if (! empty($staleOwnedIds)) {
+            foreach (array_chunk($staleOwnedIds, 100, true) as $chunk) {
+                $cases  = '';
+                $ids    = [];
+                foreach ($chunk as $id => $count) {
+                    $cases .= "WHEN '{$id}' THEN {$count} ";
+                    $ids[]  = $id;
                 }
+                DB::table('projects')
+                    ->whereIn('id', $ids)
+                    ->update(['current_revision_count' => DB::raw("CASE id {$cases}END")]);
+            }
+        }
 
-                return [
-                    'id' => $project->id,
-                    'title' => $project->title,
-                    'slug' => $project->slug,
-                    'description' => $project->description,
-                    'file_path' => $project->file_path,
-                    'file_size_bytes' => $project->file_size_bytes,
-                    'is_draco_compressed' => $project->is_draco_compressed,
-                    'max_revisions_allowed' => $project->max_revisions_allowed,
-                    'current_revision_count' => $actualCount,
-                    'has_reached_revision_limit' => $actualCount >= $project->max_revisions_allowed,
-                    'created_at' => $project->created_at?->diffForHumans(),
-                    'versions_count' => $project->versions->count(),
-                    'invited_clients' => $project->invitedClients->map(fn (ProjectClient $client) => [
-                        'id' => $client->id,
-                        'email' => $client->email,
-                        'status' => $client->status,
-                        'invited_at' => $client->invited_at?->diffForHumans() ?? $client->created_at?->diffForHumans(),
-                        'accepted_at' => $client->accepted_at?->diffForHumans(),
-                    ])->values()->all(),
-                ];
-            });
-
-        // 2. Projects where this user is an invited Client
+        // ── 2. Projects where this user is an invited Client ──────────────────
         $clientProjects = ProjectClient::where(function ($query) use ($user) {
             $query->where('user_id', $user->id)
-                ->orWhere('email', $user->email);
+                  ->orWhere('email', $user->email);
         })
             ->where('status', '!=', ProjectClient::STATUS_REVOKED)
             ->with([
-                'project.user',
-                'project.versions',
-                'project' => fn ($q) => $q->withCount(['comments as actual_revisions_count' => fn ($c) => $c->whereNull('parent_id')]),
+                'project:id,title,description,user_id,max_revisions_allowed,current_revision_count,created_at',
+                'project.user:id,name,email',
+            ])
+            ->select([
+                'id', 'project_id', 'user_id', 'email',
+                'status', 'invited_at', 'accepted_at', 'created_at',
             ])
             ->latest('invited_at')
             ->get()
-            ->filter(fn (ProjectClient $pc) => $pc->project !== null)
-            ->map(function (ProjectClient $client) {
-                $project = $client->project;
-                $actualCount = (int) ($project->actual_revisions_count ?? $project->current_revision_count);
-                if ($project->current_revision_count !== $actualCount) {
-                    $project->update(['current_revision_count' => $actualCount]);
+            ->filter(fn (ProjectClient $pc) => $pc->project !== null);
+
+        // Batch revision count for client projects
+        $clientProjectIds = $clientProjects
+            ->pluck('project.id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->toArray();
+
+        $revisionCounts = [];
+        if (! empty($clientProjectIds)) {
+            $revisionCounts = DB::table('comments')
+                ->selectRaw('project_id, COUNT(*) as cnt')
+                ->whereIn('project_id', $clientProjectIds)
+                ->whereNull('parent_id')
+                ->groupBy('project_id')
+                ->pluck('cnt', 'project_id')
+                ->toArray();
+
+            // Batch-update stale client project counts
+            $staleClientIds = [];
+            foreach ($clientProjects as $pc) {
+                $project    = $pc->project;
+                $actual     = (int) ($revisionCounts[$project->id] ?? 0);
+                if ($project->current_revision_count !== $actual) {
+                    $staleClientIds[$project->id] = $actual;
                 }
+            }
+            if (! empty($staleClientIds)) {
+                foreach (array_chunk($staleClientIds, 100, true) as $chunk) {
+                    $cases = '';
+                    $ids   = [];
+                    foreach ($chunk as $id => $count) {
+                        $cases .= "WHEN '{$id}' THEN {$count} ";
+                        $ids[]  = $id;
+                    }
+                    DB::table('projects')
+                        ->whereIn('id', $ids)
+                        ->update(['current_revision_count' => DB::raw("CASE id {$cases}END")]);
+                }
+            }
+        }
 
-                return [
-                    'invitation_id' => $client->id,
-                    'invitation_status' => $client->status,
-                    'invited_at' => $client->invited_at?->diffForHumans() ?? $client->created_at?->diffForHumans(),
-                    'accepted_at' => $client->accepted_at?->diffForHumans(),
-                    'id' => $project->id,
-                    'title' => $project->title,
-                    'description' => $project->description,
-                    'architect_name' => $project->user?->name ?? 'Arsitek',
-                    'architect_email' => $project->user?->email ?? '',
-                    'max_revisions_allowed' => $project->max_revisions_allowed,
-                    'current_revision_count' => $actualCount,
-                    'has_reached_revision_limit' => $actualCount >= $project->max_revisions_allowed,
-                    'created_at' => $project->created_at?->diffForHumans(),
-                ];
-            })
-            ->values();
+        $clientProjectsMapped = $clientProjects->map(function (ProjectClient $client) use ($revisionCounts) {
+            $project     = $client->project;
+            $actualCount = (int) ($revisionCounts[$project->id] ?? $project->current_revision_count);
 
-        // 3. User stats & limits using SubscriptionLimitService
-        $ownedCount = $ownedProjects->count();
-        $clientCount = $clientProjects->count();
+            return [
+                'invitation_id'          => $client->id,
+                'invitation_status'      => $client->status,
+                'invited_at'             => $client->invited_at?->diffForHumans() ?? $client->created_at?->diffForHumans(),
+                'accepted_at'            => $client->accepted_at?->diffForHumans(),
+                'id'                     => $project->id,
+                'title'                  => $project->title,
+                'description'            => $project->description,
+                'architect_name'         => $project->user?->name ?? 'Arsitek',
+                'architect_email'        => $project->user?->email ?? '',
+                'max_revisions_allowed'  => $project->max_revisions_allowed,
+                'current_revision_count' => $actualCount,
+                'has_reached_revision_limit' => $actualCount >= $project->max_revisions_allowed,
+                'created_at'             => $project->created_at?->diffForHumans(),
+            ];
+        })->values();
 
+        // ── 3. User stats — single call chain using memoized service ─────────
+        // getPlanForUser() is memoized; subsequent calls return cached value.
+        $plan          = $this->limitService->getPlanForUser($user);
         $effectiveLimit = $this->limitService->getEffectiveProjectLimit($user);
-        $canCreateResult = $this->limitService->canCreateProject($user);
-        $plan = $this->limitService->getPlanForUser($user);
+        $canCreate     = $this->limitService->canCreateProject($user);
+        $hasOverride   = $this->limitService->hasCustomLimitOverride($user);
 
-        // Check if user has custom override
-        $hasCustomOverride = $this->limitService->hasCustomLimitOverride($user);
+        $ownedCount  = $ownedProjectsMapped->count();
+        $clientCount = $clientProjectsMapped->count();
 
-        // Warning when user exceeds limit (e.g., downgraded)
         $limitWarning = null;
         if ($effectiveLimit !== null && $ownedCount > $effectiveLimit) {
             $limitWarning = [
-                'message' => "Your current plan allows {$effectiveLimit} project(s). You currently have {$ownedCount} projects. Please upgrade your plan or contact the administrator.",
+                'message'       => "Your current plan allows {$effectiveLimit} project(s). You currently have {$ownedCount} projects. Please upgrade your plan or contact the administrator.",
                 'current_count' => $ownedCount,
                 'allowed_limit' => $effectiveLimit,
             ];
         }
 
-        // 4. Riwayat transaksi pembelian paket milik user
-        $txPage = (int) $request->query('tx_page', 1);
+        // ── 4. Transactions — paginated at DB level, not in PHP ───────────────
+        $txPage    = max(1, (int) $request->query('tx_page', 1));
         $txPerPage = 8;
 
-        $rawTransactions = Transaction::where('user_id', $user->id)
+        $txPaginator = Transaction::where('user_id', $user->id)
+            ->select(['id', 'order_id', 'amount', 'payment_type', 'status', 'snap_response', 'created_at', 'paid_at'])
             ->latest()
-            ->get()
-            ->map(function (Transaction $t) {
-                $snap = $t->snap_response ?? [];
-                return [
-                    'id'           => $t->id,
-                    'order_id'     => $t->order_id,
-                    'plan_name'    => $snap['plan_slug'] ?? '—',
-                    'billing_type' => $snap['billing_type'] ?? '—',
-                    'amount'       => 'Rp ' . number_format((float) $t->amount, 0, ',', '.'),
-                    'payment_type' => $t->payment_type,
-                    'status'       => $t->status,
-                    'created_at'   => $t->created_at?->format('d M Y, H:i'),
-                    'paid_at'      => $t->paid_at?->format('d M Y, H:i'),
-                ];
-            });
+            ->paginate($txPerPage, ['*'], 'tx_page', $txPage);
 
-        $txTotal      = $rawTransactions->count();
-        $txLastPage   = (int) max(1, ceil($txTotal / $txPerPage));
-        $txPage       = max(1, min($txPage, $txLastPage));
-        $txData       = $rawTransactions->forPage($txPage, $txPerPage)->values();
+        $txData = $txPaginator->getCollection()->map(function (Transaction $t) {
+            $snap = $t->snap_response ?? [];
+            return [
+                'id'           => $t->id,
+                'order_id'     => $t->order_id,
+                'plan_name'    => $snap['plan_slug'] ?? '—',
+                'billing_type' => $snap['billing_type'] ?? '—',
+                'amount'       => 'Rp ' . number_format((float) $t->amount, 0, ',', '.'),
+                'payment_type' => $t->payment_type,
+                'status'       => $t->status,
+                'created_at'   => $t->created_at?->format('d M Y, H:i'),
+                'paid_at'      => $t->paid_at?->format('d M Y, H:i'),
+            ];
+        });
 
         return Inertia::render('Dashboard', [
             'auth' => [
                 'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
+                    'id'                  => $user->id,
+                    'name'                => $user->name,
+                    'email'               => $user->email,
                     'subscription_status' => $user->subscription_status ?? 'free',
-                    'is_pro' => $user->isPro(),
+                    'is_pro'              => $user->isPro(),
                 ],
             ],
-            'ownedProjects' => $ownedProjects,
-            'clientProjects' => $clientProjects,
-            'stats' => [
-                'owned_count' => $ownedCount,
-                'client_count' => $clientCount,
-                'max_projects' => $effectiveLimit ?? 999999, // Display 999999 for unlimited
-                'effective_limit' => $effectiveLimit, // null = unlimited
-                'can_create_project' => $canCreateResult['allowed'],
-                'cannot_create_reason' => $canCreateResult['reason'],
-                'subscription_status' => $user->subscription_status ?? 'free',
-                'plan_name' => $plan->name,
-                'has_custom_override' => $hasCustomOverride,
-                'limit_warning' => $limitWarning,
+            'ownedProjects'  => $ownedProjectsMapped,
+            'clientProjects' => $clientProjectsMapped,
+            'stats'          => [
+                'owned_count'          => $ownedCount,
+                'client_count'         => $clientCount,
+                'max_projects'         => $effectiveLimit ?? 999999,
+                'effective_limit'      => $effectiveLimit,
+                'can_create_project'   => $canCreate['allowed'],
+                'cannot_create_reason' => $canCreate['reason'],
+                'subscription_status'  => $user->subscription_status ?? 'free',
+                'plan_name'            => $plan->name,
+                'has_custom_override'  => $hasOverride,
+                'limit_warning'        => $limitWarning,
             ],
             'transactions' => [
-                'data'         => $txData,
-                'total'        => $txTotal,
-                'current_page' => $txPage,
-                'last_page'    => $txLastPage,
+                'data'         => $txData->values(),
+                'total'        => $txPaginator->total(),
+                'current_page' => $txPaginator->currentPage(),
+                'last_page'    => $txPaginator->lastPage(),
                 'per_page'     => $txPerPage,
             ],
         ]);

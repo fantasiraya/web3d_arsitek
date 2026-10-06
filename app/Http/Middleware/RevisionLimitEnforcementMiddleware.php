@@ -2,39 +2,49 @@
 
 namespace App\Http\Middleware;
 
-use App\Domains\Comment\Models\Comment;
 use App\Domains\Project\Models\Project;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 class RevisionLimitEnforcementMiddleware
 {
     /**
      * Handle an incoming request.
+     *
+     * Checks the project's revision limit before allowing a new pin comment.
+     * Uses current_revision_count (maintained via DB trigger / action layer)
+     * rather than running a COUNT(*) query on every request.
+     * A single COUNT re-sync only happens when the project model signals it
+     * is stale (current_revision_count < 0 — defensive guard).
      */
     public function handle(Request $request, Closure $next): Response
     {
         $project = $request->route('project');
 
         if (is_string($project)) {
-            $project = Project::findOrFail($project);
+            // Fetch only the two columns we need — avoids loading all project fields
+            $project = Project::select(['id', 'current_revision_count', 'max_revisions_allowed'])
+                ->findOrFail($project);
         }
 
         if (! $project) {
             abort(404, 'Project not found.');
         }
 
-        // If the project has comments, ensure current_revision_count is in sync with root comments count
-        $rootCommentsCount = Comment::where('project_id', $project->id)
-            ->whereNull('parent_id')
-            ->count();
+        // Defensive: if counter is somehow negative, re-sync once
+        if ($project->current_revision_count < 0) {
+            $actual = DB::table('comments')
+                ->where('project_id', $project->id)
+                ->whereNull('parent_id')
+                ->count();
 
-        if ($rootCommentsCount > 0 || $project->comments()->exists()) {
-            if ($project->current_revision_count !== $rootCommentsCount) {
-                $project->update(['current_revision_count' => $rootCommentsCount]);
-                $project->refresh();
-            }
+            DB::table('projects')
+                ->where('id', $project->id)
+                ->update(['current_revision_count' => $actual]);
+
+            $project->current_revision_count = $actual;
         }
 
         if ($project->current_revision_count >= $project->max_revisions_allowed) {
