@@ -148,6 +148,26 @@
 | Chat Domain Feature Tests | `Domains/Chat` | 🔴 Pending | Test broadcasting, channel authorization |
 | Billing & Webhook Feature Tests | `Domains/Billing` | 🔴 Pending | Test Midtrans Signature, Status Updates |
 
+### 10. RAB & Lembar Kerja (`Domains/Rab`)
+| Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
+| :--- | :--- | :---: | :--- |
+| Migration `plans.can_use_rab` + `rab_*` (6 migration) | Database | 🟢 Completed | Dijalankan 2026-10-07, semua tabel aktif di DB |
+| Models: `RabDocument`, `RabItem`, `RabPriceItem`, `RabTemplate`, `RabTemplateItem`, `RabMapping` | Backend DDD | 🟢 Completed | HasUuids, casts(), relasi lengkap, helper isDraft/isFinal/calculateSubtotal |
+| `RabAccessService` | Backend DDD | 🟢 Completed | canEdit/canView/canAccessProject/hasPlanAccess/authorizeEdit/authorizeView via SubscriptionLimitService |
+| Form Requests RAB | Backend | 🟢 Completed | `StoreRabDocumentRequest`, `UpdateRabDocumentRequest`, `UpsertRabItemRequest`, `StorePriceItemRequest` (unique per user), `StoreRabTemplateRequest` |
+| Actions Fase A | Backend DDD | 🟢 Completed | `RecalculateRabAction` (satu sumber kebenaran), `CreateRabDocumentAction` (salin template + snapshot harga), `UpdateRabDocumentAction`, `UpsertRabItemAction`, `DeleteRabItemAction`, `FinalizeRabDocumentAction` (finalize+reopen), `ToggleRabClientVisibilityAction`, `SavePriceItemAction`, `SaveRabTemplateAction` |
+| Controllers + routes RAB (20 routes) | Backend | 🟢 Completed | `RabDocumentController`, `RabItemController`, `RabPriceItemController`, `RabTemplateController` — verified via `php artisan route:list` |
+| UI Harga Satuan (`/rab/price-items`) | Frontend | 🟢 Completed | `Rab/PriceItems.vue` — grouped by category, search, CRUD modal |
+| UI Template RAB (`/rab/templates`) | Frontend | 🟢 Completed | `Rab/Templates.vue` — grid card, CRUD modal |
+| UI Daftar RAB per Project (`/projects/{id}/rab`) | Frontend | 🟢 Completed | `Rab/Index.vue` — daftar dokumen, buat baru dari template, upgrade notice |
+| UI Editor RAB (`/projects/{id}/rab/{rab}`) | Frontend | 🟢 Completed | `Rab/Show.vue` — item CRUD per section, summary cards, finalize/reopen, toggle visibilitas klien |
+| Menu RAB di AppSidebar | Frontend | 🟢 Completed | Icon `ClipboardList`, active state detection `/rab/*` dan `/projects/*/rab/*` |
+| Pest tests Action RAB | Testing | 🔴 Pending | Dijadwalkan post-MVP |
+| Fase B: Import Quantity Take-off CSV/Excel | Backend & Frontend | 🔴 Pending | `ImportQuantityTakeoffAction`, `TakeoffParserService`, `RabMappingService` |
+| Fase C: Estimator RAB dari `.glb` | Frontend (Three.js) & Backend | 🔴 Pending | `useGlbQuantities.ts`, `ApplyGlbQuantitiesAction` |
+| Export RAB Excel/PDF | Backend | 🔴 Pending | Perlu persetujuan paket XLSX/PDF |
+| Import IFC | Backend | 🔴 Pending | Could Have |
+
 ---
 
 ## 📝 Activity Logs
@@ -162,3 +182,5 @@
 - **2026-09-23:** LocalStorage Persistence di Viewer — posisi kartu komentar, status drawer, toggle annotasi tersimpan per `projectId` di `localStorage`.
 - **2026-09-28:** Redesain Total Landing Page — Apple-Style + Scroll-Driven Scrollytelling. Eliminasi demo WebGL publik. `ScrollyExperienceSection.vue` (450vh, 5 stages), `ArchitecturalCinematicSection.vue` (4-layer anatomy), `FaqSection.vue`, full-width Navbar. Build Vite sukses, 81 Pest tests lulus 100%.
 - **2026-09-28:** Sinkronisasi dokumen v2.5 — Update seluruh guide folder agar mencerminkan kondisi aplikasi PitchArch aktual: nama brand PitchArch, Laravel 12 (bukan 13), Inertia.js + Vue 3 (bukan Nuxt 3), MySQL (bukan PostgreSQL), Laravel Fortify (bukan Sanctum), local disk public (bukan Cloudflare R2), queue database driver (bukan Redis), tambah tabel `camera_presets`, email verification sudah diimplementasikan, Admin Panel sudah selesai, fitur billing sudah selesai (kecuali invoice PDF).
+- **2026-10-07:** Sinkronisasi dokumen v2.6 — rancangan modul RAB (`Domains/Rab`) digabung ke PRD, DATABASE_SCHEMA, FOLDER_STRUCTURE, AI_INSTRUCTIONS, RTCF, RISE. Ditulis migration + Action Fase A (🟡, belum dijalankan/diuji di repo).
+- **2026-10-07 (Update):** Implementasi RAB Fase A selesai penuh — 6 migration dijalankan, 6 models, RabAccessService, 5 Form Requests, 9 Actions (RecalculateRabAction sebagai satu sumber kebenaran), 4 Controllers, 20 routes aktif, 4 halaman Vue (PriceItems, Templates, Index, Show), menu sidebar. Vite build sukses 3331 modules, PHP syntax check 18 file OK.

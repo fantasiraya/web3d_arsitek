@@ -1,3 +1,5 @@
+> **v2.6 Note:** Ditambahkan alur K (RAB & Lembar Kerja) dan route RAB.
+>
 > **v2.5 Note:** File ini diperbarui agar mencerminkan kondisi aplikasi **PitchArch** yang aktual. Perubahan dari v2.4: Laravel 13 → **Laravel 12**, Nuxt 3 → **Inertia.js + Vue 3** (monorepo), PostgreSQL → **MySQL**, Sanctum → **Laravel Fortify**, Cloudflare R2 → **local disk `public`**, queue Redis → **database driver**, tambah Passkeys & Email Verification.
 
 [ROLE]
@@ -103,6 +105,13 @@ Sajikan output secara terstruktur dalam format Markdown:
    - GSAP ScrollTrigger di-init dalam `onMounted()` setiap section component.
    - Tidak ada Three.js/WebGL di halaman ini. Semua animasi: CSS transforms + GSAP.
 
+   **K. RAB & Lembar Kerja (`Domains/Rab`)**
+   - Gating: `RabAccessService` cek `plans.can_use_rab`; pemilik project saja yang boleh membuat/mengedit.
+   - Fase A: harga satuan + template → `CreateRabDocumentAction` (salin item template, snapshot harga) → `UpsertRabItemAction` → `RecalculateRabAction`.
+   - Fase B: upload CSV/XLSX → `ImportQuantityTakeoffAction` → pencocokan `rab_mappings` → review item belum dipetakan.
+   - Fase C: `useGlbQuantities.ts` hitung luas/volume di Three.js → `ApplyGlbQuantitiesAction` → item `is_estimate = true`.
+   - Switch `is_visible_to_clients`: Klien `accepted` melihat RAB read-only bila menyala.
+
 2. **Struktur Folder (lihat `FOLDER_STRUCTURE.md` untuk detail lengkap)**
    - Monorepo: `app/Domains/`, `app/Http/`, `resources/js/pages/`, `resources/js/components/`, `resources/js/layouts/`.
    - Routes: `routes/web.php`, `routes/admin.php`, `routes/settings.php`, `routes/channels.php`.
@@ -156,6 +165,22 @@ Sajikan output secara terstruktur dalam format Markdown:
    PUT  /settings/profile          → ProfileController@update
    GET  /settings/password         → (Fortify)                          (Settings/Password.vue)
    GET  /settings/appearance       → (Appearance controller)            (Settings/Appearance.vue)
+
+   # RAB & Lembar Kerja (pemilik + can_use_rab; klien read-only bila is_visible_to_clients)
+   GET    /projects/{project}/rab                    → RabDocumentController@index
+   POST   /projects/{project}/rab                    → RabDocumentController@store
+   GET    /projects/{project}/rab/{rab}              → RabDocumentController@show
+   PUT    /projects/{project}/rab/{rab}              → RabDocumentController@update
+   PATCH  /projects/{project}/rab/{rab}/visibility   → RabDocumentController@toggleVisibility
+   POST   /projects/{project}/rab/{rab}/finalize     → RabDocumentController@finalize
+   POST   /projects/{project}/rab/{rab}/reopen       → RabDocumentController@reopen
+   POST|PUT|DELETE /projects/{project}/rab/{rab}/items[/{item}] → RabItemController
+   POST   /projects/{project}/rab/import             → RabDocumentController@import   (Fase B)
+   POST   /projects/{project}/rab/from-glb           → RabDocumentController@fromGlb  (Fase C)
+   GET    /projects/{project}/rab/{rab}/export       → RabDocumentController@export
+   GET|POST|PUT|DELETE /rab/price-items              → RabPriceItemController
+   GET|POST|PUT|DELETE /rab/templates                → RabTemplateController
+   GET|POST|DELETE     /rab/mappings                 → RabMappingController
 
    # Admin Panel (routes/admin.php — guard: EnsureSuperAdmin)
    GET  /admin/dashboard           → Admin\DashboardController

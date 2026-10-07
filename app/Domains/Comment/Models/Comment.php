@@ -53,6 +53,7 @@ class Comment extends Model
         'normal_y',
         'normal_z',
         'status',
+        'is_pinned',
     ];
 
     protected function casts(): array
@@ -61,9 +62,10 @@ class Comment extends Model
             'position_x' => 'float',
             'position_y' => 'float',
             'position_z' => 'float',
-            'normal_x' => 'float',
-            'normal_y' => 'float',
-            'normal_z' => 'float',
+            'normal_x'   => 'float',
+            'normal_y'   => 'float',
+            'normal_z'   => 'float',
+            'is_pinned'  => 'boolean',
         ];
     }
 

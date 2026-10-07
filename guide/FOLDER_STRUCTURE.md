@@ -2,6 +2,8 @@
 
 Dokumen ini adalah acuan resmi struktur folder untuk aplikasi **PitchArch**: monorepo Laravel 12 + Inertia.js + Vue 3 (bukan backend/frontend terpisah).
 
+> **v2.6 Changelog:** Menambahkan `app/Domains/Rab/` dan `resources/js/pages/Rab/` (modul RAB & Lembar Kerja).
+>
 > **v2.5 Changelog:** Diperbarui dari struktur fiktif `backend/` + `frontend/` terpisah ke struktur **monorepo Laravel Inertia** yang aktual. Mengganti referensi Nuxt 3 → Inertia/Vue 3, PostgreSQL → MySQL, Cloudflare R2 → local disk public, Sanctum → Fortify. Menambahkan `camera_presets`, `Events/`, `Middleware/` aktual, layout Inertia (`LandingLayout`, `AdminLayout`, `UnifiedLayout`), dan folder `routes/` aktual.
 
 ---
@@ -101,6 +103,22 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │   │   └── ProjectVersion.php
 │   │   │   └── Notifications/
 │   │   │       └── ClientInvitationNotification.php # Email undangan ke Klien
+│   │   │
+│   │   ├── Rab/                # RAB & Lembar Kerja (template / CSV / .glb)
+│   │   │   ├── Actions/
+│   │   │   │   ├── CreateRabDocumentAction.php
+│   │   │   │   ├── UpdateRabDocumentAction.php
+│   │   │   │   ├── UpsertRabItemAction.php
+│   │   │   │   ├── DeleteRabItemAction.php
+│   │   │   │   ├── RecalculateRabAction.php
+│   │   │   │   ├── FinalizeRabDocumentAction.php    # finalize + reopen
+│   │   │   │   ├── ToggleRabClientVisibilityAction.php
+│   │   │   │   ├── SavePriceItemAction.php
+│   │   │   │   └── SaveRabTemplateAction.php        # Fase B/C: ImportQuantityTakeoffAction, ApplyGlbQuantitiesAction
+│   │   │   ├── Models/                              # RabDocument, RabItem, RabPriceItem, RabTemplate, RabTemplateItem, RabMapping
+│   │   │   ├── Requests/                            # StoreRabDocumentRequest, UpsertRabItemRequest, StorePriceItemRequest
+│   │   │   └── Services/
+│   │   │       └── RabAccessService.php             # Gating can_use_rab + akses lihat (switch klien)
 │   │   │
 │   │   └── SystemConfig/       # Konfigurasi Kuota Global & Backoffice Super Admin
 │   │       ├── Models/
@@ -225,6 +243,11 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │   │   └── Index.vue           # Midtrans Snap checkout
 │   │   │   ├── Project/
 │   │   │   │   └── Viewer.vue          # 3D Viewer (Three.js, pin comments, chat)
+│   │   │   ├── Rab/
+│   │   │   │   ├── Index.vue           # Daftar RAB per project
+│   │   │   │   ├── Show.vue            # Editor/preview RAB + switch visibilitas klien
+│   │   │   │   ├── PriceItems.vue      # Master harga satuan
+│   │   │   │   └── Templates.vue       # Template RAB
 │   │   │   └── Settings/
 │   │   │       ├── Profile.vue
 │   │   │       ├── Password.vue

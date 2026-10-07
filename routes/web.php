@@ -4,6 +4,10 @@ use App\Domains\Comment\Controllers\CommentController;
 use App\Domains\Comment\Controllers\PinCommentController;
 use App\Domains\Chat\Controllers\ChatController;
 use App\Domains\Project\Controllers\CameraPresetController;
+use App\Domains\Rab\Controllers\RabDocumentController;
+use App\Domains\Rab\Controllers\RabItemController;
+use App\Domains\Rab\Controllers\RabPriceItemController;
+use App\Domains\Rab\Controllers\RabTemplateController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\UserSearchController;
 use App\Http\Controllers\ProjectsPageController;
@@ -62,6 +66,37 @@ Route::middleware(['auth', 'project.access'])->group(function () {
     Route::get('/projects/{project}/camera-presets', [CameraPresetController::class, 'index'])->name('projects.camera-presets.index');
     Route::post('/projects/{project}/camera-presets', [CameraPresetController::class, 'store'])->name('projects.camera-presets.store');
     Route::delete('/projects/{project}/camera-presets/{preset}', [CameraPresetController::class, 'destroy'])->name('projects.camera-presets.destroy');
+});
+
+// ── RAB & Lembar Kerja ──
+Route::middleware(['auth', 'verified'])->group(function () {
+    // Master harga satuan (milik user, tidak terikat project)
+    Route::get('/rab/price-items', [RabPriceItemController::class, 'index'])->name('rab.price-items.index');
+    Route::post('/rab/price-items', [RabPriceItemController::class, 'store'])->name('rab.price-items.store');
+    Route::put('/rab/price-items/{priceItem}', [RabPriceItemController::class, 'update'])->name('rab.price-items.update');
+    Route::delete('/rab/price-items/{priceItem}', [RabPriceItemController::class, 'destroy'])->name('rab.price-items.destroy');
+
+    // Template RAB (milik user, tidak terikat project)
+    Route::get('/rab/templates', [RabTemplateController::class, 'index'])->name('rab.templates.index');
+    Route::post('/rab/templates', [RabTemplateController::class, 'store'])->name('rab.templates.store');
+    Route::get('/rab/templates/{template}', [RabTemplateController::class, 'show'])->name('rab.templates.show');
+    Route::put('/rab/templates/{template}', [RabTemplateController::class, 'update'])->name('rab.templates.update');
+    Route::delete('/rab/templates/{template}', [RabTemplateController::class, 'destroy'])->name('rab.templates.destroy');
+
+    // Dokumen RAB (terikat project)
+    Route::get('/projects/{project}/rab', [RabDocumentController::class, 'index'])->name('rab.index');
+    Route::post('/projects/{project}/rab', [RabDocumentController::class, 'store'])->name('rab.store');
+    Route::get('/projects/{project}/rab/{rab}', [RabDocumentController::class, 'show'])->name('rab.show');
+    Route::put('/projects/{project}/rab/{rab}', [RabDocumentController::class, 'update'])->name('rab.update');
+    Route::delete('/projects/{project}/rab/{rab}', [RabDocumentController::class, 'destroy'])->name('rab.destroy');
+    Route::post('/projects/{project}/rab/{rab}/finalize', [RabDocumentController::class, 'finalize'])->name('rab.finalize');
+    Route::post('/projects/{project}/rab/{rab}/reopen', [RabDocumentController::class, 'reopen'])->name('rab.reopen');
+    Route::patch('/projects/{project}/rab/{rab}/visibility', [RabDocumentController::class, 'toggleVisibility'])->name('rab.visibility');
+
+    // Item RAB (terikat dokumen RAB)
+    Route::post('/projects/{project}/rab/{rab}/items', [RabItemController::class, 'store'])->name('rab.items.store');
+    Route::put('/projects/{project}/rab/{rab}/items/{item}', [RabItemController::class, 'update'])->name('rab.items.update');
+    Route::delete('/projects/{project}/rab/{rab}/items/{item}', [RabItemController::class, 'destroy'])->name('rab.items.destroy');
 });
 
 // ── Chat realtime routes ──

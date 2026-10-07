@@ -2,6 +2,8 @@
 
 > **PENTING UNTUK AI:** Sebelum menulis atau memodifikasi kode apa pun di project ini, kamu WAJIB membaca dan mematuhi seluruh panduan yang ada di dalam folder `guide/`. Dilarang keras membuat asumsi, halusinasi arsitektur, atau mengubah konvensi tanpa persetujuan.
 >
+> **v2.6:** Ditambahkan `Domains/Rab` dan Section M (RAB Rule).
+>
 > **v2.5:** Stack aktual diperbarui — Laravel 12 (bukan 13), Inertia.js + Vue 3 (bukan Nuxt 3), MySQL (bukan PostgreSQL), Fortify (bukan Sanctum), local disk public (bukan R2), queue database driver (bukan Redis). Ditambahkan Section K (Email Verification Rule) dan Section L (Inertia & Frontend Rules).
 
 ---
@@ -28,6 +30,7 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
    - `Domains/Comment` (Spatial Pin Annotation & Feedback)
    - `Domains/Chat` (Real-time Messaging Arsitek ↔ Klien per Project)
    - `Domains/Billing` (Transaksi, Subscription & Midtrans)
+   - `Domains/Rab` (RAB & Lembar Kerja: harga satuan, template, import take-off, estimator `.glb`)
 2. **Primary Key UUID:** Selalu gunakan UUID untuk ID tabel database. Gunakan `$table->uuid('id')->primary()` di migration.
 3. **Dynamic Quotas:** Selalu baca batasan kuota Free/Pro Tier dari `system_settings` via database query. **Jangan hardcode** angka kuota di controller atau action.
 4. **No Spaghetti Code:** Terapkan pemisahan tanggung jawab yang jelas (Form Request, Action/Service, Repository).
@@ -146,13 +149,24 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
 6. **UI Components:** Gunakan shadcn/ui Vue port yang sudah ada di `resources/js/components/ui/`. Jangan menginstall library UI lain tanpa persetujuan.
 7. **Tailwind v4:** Konfigurasi di `resources/css/app.css` menggunakan Tailwind CSS v4 syntax. Jangan gunakan `tailwind.config.js` gaya lama jika bertentangan.
 
+### M. RAB Rule (`Domains/Rab`)
+1. **Gating:** fitur RAB (buat/edit) hanya jika `plans.can_use_rab = true` untuk paket aktif user; cek lewat `RabAccessService`. Jangan hardcode slug paket di controller/action.
+2. **Kepemilikan:** harga satuan, template, dan mapping milik `user_id` masing-masing. Setiap query WAJIB difilter `user_id` pemilik.
+3. **Akses lihat:** pemilik project selalu boleh. Klien hanya boleh jika `project_clients.status = 'accepted'` **dan** `rab_documents.is_visible_to_clients = true`, read-only. Klien dilarang membuat/mengubah RAB.
+4. **Snapshot harga:** `rab_items.unit_price` disalin saat item dibuat. Mengubah harga master dilarang mengubah item RAB yang ada.
+5. **Final lock:** dokumen `final` tidak boleh diedit; hanya `reopen` oleh pemilik. Switch visibilitas boleh diubah kapan saja.
+6. **Estimasi `.glb`:** item dari jalur `.glb` WAJIB `is_estimate = true` dan berlabel "Estimasi" di UI. Jangan menyajikannya sebagai RAB final.
+7. **Perhitungan:** seluruh hitung ulang lewat `RecalculateRabAction` (satu sumber kebenaran); dilarang menghitung total di controller atau frontend sebagai nilai tersimpan.
+8. **Form Request & Test:** Form Request per action di `app/Domains/Rab/Requests/`; setiap Action wajib punya tes Pest di `tests/Feature/Domains/Rab/`.
+9. **Paket baru** (XLSX/PDF export) wajib persetujuan sebelum dipasang.
+
 ---
 
 ## 3. Workflow Procedure for AI
 1. Periksa `guide/PROGRESS_TRACKER.md` untuk melihat fitur mana yang perlu dikerjakan selanjutnya.
 2. Baca skema tabel terkait di `guide/DATABASE_SCHEMA.md`.
 3. Baca peta folder di `guide/FOLDER_STRUCTURE.md` untuk menentukan lokasi file yang benar.
-4. Tulis kode sesuai aturan DDD dan konvensi project (termasuk Section H/I/J/K/L jika menyentuh Auth, Project, Chat, atau Frontend).
+4. Tulis kode sesuai aturan DDD dan konvensi project (termasuk Section H/I/J/K/L/M jika menyentuh Auth, Project, Chat, Frontend, atau RAB).
 5. Update `guide/PROGRESS_TRACKER.md` begitu pekerjaan selesai.
 
 ---

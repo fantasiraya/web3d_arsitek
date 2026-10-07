@@ -1,3 +1,5 @@
+> **v2.6 Note:** Ditambahkan langkah 13-14 (modul RAB).
+>
 > **v2.5 Note:** File ini diperbarui agar mencerminkan kondisi aplikasi **PitchArch** yang aktual. Perubahan dari v2.4: Laravel 13 → **Laravel 12**, Nuxt 3 → **Inertia.js + Vue 3** (monorepo), PostgreSQL → **MySQL**, Sanctum → **Laravel Fortify**, Cloudflare R2 → **local disk `public`**, queue Redis → **database driver**. Ditambahkan langkah untuk Camera Presets dan Email Verification.
 
 [ROLE]
@@ -37,6 +39,10 @@ Mengacu pada PRD v2.5 "PitchArch — Platform Presentasi & Feedback Arsitektur 3
 11. Tuliskan `CameraPresetController` pada `app/Domains/Project/Controllers/` (store, index, destroy) dan contoh penggunaan di `Viewer.vue` untuk menyimpan dan me-load camera angle presets.
 
 12. Tuliskan komponen Landing Page bertema Apple Style dengan Scrollytelling (contoh: `HeroSection.vue`, `ScrollyExperienceSection.vue`) pada `resources/js/components/landing/` menggunakan GSAP ScrollTrigger untuk mem-pin section narasi produk — tanpa memuat WebGL/Three.js publik. Komponen di-compose di `resources/js/pages/Welcome.vue` dengan `LandingLayout`.
+
+13. Tuliskan migration `plans.can_use_rab`, `rab_price_items`, `rab_templates`, `rab_template_items`, `rab_mappings`, `rab_documents`, `rab_items`, serta Action `CreateRabDocumentAction`, `UpsertRabItemAction`, `RecalculateRabAction`, `FinalizeRabDocumentAction`, `ToggleRabClientVisibilityAction` di `app/Domains/Rab/` dengan `RabAccessService` (gating + akses lihat klien). Patuhi AI_INSTRUCTIONS Section M.
+
+14. Tuliskan `ImportQuantityTakeoffAction` + `TakeoffParserService` (CSV/XLSX, pemilihan kolom, pencocokan `rab_mappings`) dan composable `useGlbQuantities.ts` + `ApplyGlbQuantitiesAction` (luas/volume/count dari Three.js, item `is_estimate = true`).
 
 [EXPECTATION]
 Output berupa contoh kode modular, rapi, aman, dan siap pakai (Developer-Ready / Production-Grade) tanpa penjelasan teori yang bertele-tele. Setiap kode yang menyentuh akses project (viewer, comment, chat) WAJIB melalui `ProjectClientAccessMiddleware` — tidak ada jalur akses tanpa login.

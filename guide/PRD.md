@@ -1,4 +1,6 @@
-# 📄 Product Requirement Document (PRD) v2.5
+# 📄 Product Requirement Document (PRD) v2.6
+
+> **v2.6 Note:** Menambahkan modul **RAB & Lembar Kerja** (`Domains/Rab`): template + harga satuan, import quantity take-off CSV/Excel, estimator dari `.glb`, switch visibilitas RAB ke Klien, gating `plans.can_use_rab`. Lihat Section 8.
 ## PitchArch — Platform Presentasi & Feedback Arsitektur 3D Berbasis Web
 
 > **Revision Note:** v2.5 — disinkronkan dengan kondisi aplikasi aktual. Perubahan utama dari v2.4:
@@ -85,8 +87,13 @@ Membangun platform SaaS berbasis Web 3D interaktif bernama **PitchArch** yang me
 | **Should Have** | Sectioning / Clipping Tool di Viewer | 🔴 Pending |
 | **Should Have** | Invoice PDF Download | 🔴 Pending |
 | **Should Have** | Chat Read Receipt & Typing Indicator | 🔴 Pending |
+| **Should Have** | RAB Fase A: Harga Satuan, Template RAB, RAB Manual, Switch Visibilitas Klien | 🟡 In Progress |
+| **Should Have** | RAB Fase B: Import Quantity Take-off (CSV/Excel) | 🔴 Pending |
+| **Should Have** | RAB Fase C: Estimator RAB dari `.glb` (label "Estimasi") | 🔴 Pending |
+| **Should Have** | Export RAB ke Excel/PDF | 🔴 Pending |
 | **Could Have** | First-Person Walkthrough Mode | 🔴 Pending |
 | **Could Have** | Material Swapper | 🔴 Pending |
+| **Could Have** | Import IFC (data BIM) untuk RAB | 🔴 Pending |
 | **Won't Have** | In-Browser 3D Mesh Editing | Out of Scope |
 | **Won't Have** | Public Read-Only Link (tanpa login/undangan) | Deprecated |
 | **Won't Have** | Public 3D WebGL Demo di Landing Page | Out of Scope |
@@ -183,3 +190,37 @@ Effective Limit = Custom User Override (jika ada) ?? Plan Limit ?? 1
 | `Domains/Comment` | Spatial pin annotation, pin/unpin, koordinat X/Y/Z |
 | `Domains/Chat` | Real-time messaging Arsitek ↔ Klien per project via Reverb |
 | `Domains/Billing` | Midtrans Snap, webhook handler, subscription management |
+| `Domains/Rab` | Harga satuan, template RAB, dokumen RAB, import take-off, estimator `.glb`, visibilitas ke Klien |
+
+---
+
+## 8. RAB & Lembar Kerja (`Domains/Rab`)
+
+### 8.A Tujuan
+Mempercepat Arsitek membuat lembar kerja dan Rencana Anggaran Biaya (RAB) dengan mengurangi pengetikan ulang dan perhitungan volume manual.
+
+### 8.B Tiga Jalur Sumber Data (urutan build: A → B → C)
+| Fase | Jalur | Sumber angka | Akurasi |
+| :--- | :--- | :--- | :--- |
+| A | Template RAB + harga satuan tersimpan | Input manual Arsitek | Tinggi |
+| B | Import quantity take-off CSV/Excel | Revit / SketchUp | Tinggi |
+| C | Estimator dari `.glb` | Geometri model (Three.js) | Estimasi awal |
+
+### 8.C Aturan Bisnis
+1. **Gating paket:** kolom `plans.can_use_rab` (default `false`; `pro` dan `enterprise` = `true`). Downgrade tidak menghapus data; hanya memblokir pembuatan/edit baru, pemilik tetap bisa melihat RAB lamanya.
+2. **Kepemilikan:** RAB milik Arsitek pemilik project. Harga satuan, template, dan pemetaan milik user masing-masing.
+3. **Switch visibilitas Klien:** setiap dokumen RAB punya `is_visible_to_clients` (default `false`). Jika dinyalakan, Klien berstatus `accepted` pada project tersebut dapat melihat RAB **read-only**; Klien tidak pernah bisa mengubahnya.
+4. **Rumus:** `subtotal_item = qty × (1 + waste%) × harga_satuan`; `total = subtotal + overhead + PPN` (PPN dihitung atas subtotal + overhead).
+5. **Snapshot harga:** `rab_items.unit_price` disalin saat item dibuat; mengubah harga master tidak mengubah RAB yang sudah ada.
+6. **Status:** `draft` (bisa diedit) dan `final` (terkunci, bisa di-reopen oleh pemilik).
+7. **Jalur `.glb`:** hanya estimasi awal (bukan RAB final kontrak). Item wajib berlabel `is_estimate = true`. `.glb` tidak memuat data BIM, jadi bagian yang tidak dimodelkan tidak terhitung.
+8. **Konvensi nama objek** (panduan di UI): `KATEGORI_JENIS_SPEK`, contoh `DINDING_BATA_15`, `LANTAI_KERAMIK_60`.
+
+### 8.D Alur
+1. Arsitek membuka project → tab **RAB** → pilih sumber (Manual/Template, Import CSV/Excel, Hitung dari model 3D).
+2. Sistem membuat `rab_documents` (`draft`) beserta `rab_items`; item yang cocok dengan harga satuan terisi otomatis, sisanya ditandai **belum dipetakan**.
+3. Arsitek mengecek dan mengedit, lalu `final`. Opsional: nyalakan switch agar Klien dapat melihat.
+4. Export ke Excel/PDF.
+
+**Import CSV (Fase B):** upload → pilih kolom Nama/Satuan/Kuantitas → pencocokan lewat `rab_mappings` → review item belum dipetakan → simpan.
+**Estimator `.glb` (Fase C):** luas, volume (hanya mesh tertutup), dan jumlah dihitung di `Viewer.vue` dengan Three.js → dikirim ke server → dipetakan lewat `rab_mappings`. Peringatan otomatis untuk skala tidak wajar, mesh tidak tertutup, dan objek tanpa nama.

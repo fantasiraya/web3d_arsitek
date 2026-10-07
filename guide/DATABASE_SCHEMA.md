@@ -3,7 +3,7 @@
 **Database Engine:** MySQL
 **Primary Key Standard:** UUID
 **Reference:** PRD v2.5, RTCF, RISE Framework
-**Revision:** v2.5 — synced dengan kondisi aplikasi aktual
+**Revision:** v2.6 — ditambah modul RAB (tabel `rab_*`, kolom `plans.can_use_rab`)
 **v2.5 Changelog:** Mengganti engine dari PostgreSQL ke **MySQL** (aktual). Menambahkan tabel `camera_presets`. Semua tipe `jsonb` → `json` (MySQL syntax). Menyesuaikan catatan storage dari Cloudflare R2 ke **local disk `public`**.
 
 ---
@@ -24,6 +24,12 @@ erDiagram
     PROJECTS ||--o{ CHAT_MESSAGES : "has thread"
     PROJECTS ||--o{ CAMERA_PRESETS : "has presets"
     COMMENTS ||--o{ COMMENTS : "has replies (parent_id)"
+    USERS ||--o{ RAB_PRICE_ITEMS : "owns"
+    USERS ||--o{ RAB_TEMPLATES : "owns"
+    PROJECTS ||--o{ RAB_DOCUMENTS : "has RAB"
+    RAB_DOCUMENTS ||--o{ RAB_ITEMS : "contains"
+    RAB_TEMPLATES ||--o{ RAB_TEMPLATE_ITEMS : "contains"
+    RAB_PRICE_ITEMS ||--o{ RAB_ITEMS : "priced by"
     SYSTEM_SETTINGS {
         string key PK
         string value
@@ -254,6 +260,7 @@ Menyimpan konfigurasi paket langganan secara dinamis.
 | `sso` | `boolean` | `DEFAULT(false)` | Akses Single Sign-On |
 | `custom_branding` | `boolean` | `DEFAULT(false)` | Fitur custom branding |
 | `priority_support` | `boolean` | `DEFAULT(false)` | Akses priority support |
+| `can_use_rab` | `boolean` | `DEFAULT(false)` | Akses modul RAB & Lembar Kerja (true untuk Pro & Enterprise) |
 | `status` | `string` | `DEFAULT('active')` | Status paket: `active`, `inactive` |
 | `created_at` | `timestamp` | `NULLABLE` | Waktu entri dibuat |
 | `updated_at` | `timestamp` | `NULLABLE` | Waktu entri diperbarui |
@@ -306,7 +313,80 @@ Menyimpan riwayat pembayaran transaksi upgrade langganan dari Midtrans.
 
 ---
 
-### G. Laravel Built-in Tables
+### G. Rab Domain (RAB & Lembar Kerja)
+
+#### `rab_price_items`
+Harga satuan master milik user.
+
+| Field | Type | Modifiers | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `uuid` | `PRIMARY KEY` | Unique Identifier |
+| `user_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Pemilik |
+| `code` | `string(50)` | `NULLABLE` | Kode item; UNIQUE bersama `user_id` |
+| `name` | `string` | `NOT NULL` | Nama pekerjaan/material |
+| `unit` | `string(20)` | `NOT NULL` | m², m³, unit, m', ls |
+| `unit_price` | `decimal(14,2)` | `DEFAULT(0)` | Harga satuan |
+| `category` | `string(100)` | `NULLABLE` | Kategori pekerjaan |
+| `created_at` / `updated_at` | `timestamp` | `NULLABLE` | |
+
+#### `rab_templates` & `rab_template_items`
+- `rab_templates`: `id`, `user_id` (FK), `name`, `description` (nullable), timestamps.
+- `rab_template_items`: `id`, `rab_template_id` (FK, cascade), `rab_price_item_id` (FK, cascade), `section` (default `Umum`), `sort_order`, timestamps.
+
+#### `rab_mappings`
+Aturan pencocokan nama objek/material/baris CSV ke harga satuan (dipakai Fase B & C).
+
+| Field | Type | Modifiers | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `uuid` | `PRIMARY KEY` | |
+| `user_id` | `uuid` | `FOREIGN KEY, NOT NULL` | |
+| `match_type` | `string(20)` | `DEFAULT('name_pattern')` | `name_pattern`, `material`, `exact` |
+| `pattern` | `string` | `NOT NULL` | Contoh `DINDING_BATA_*`; UNIQUE `(user_id, match_type, pattern)` |
+| `rab_price_item_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Harga satuan tujuan |
+| `quantity_basis` | `string(20)` | `DEFAULT('area')` | `area`, `volume`, `count`, `length` |
+| timestamps | | | |
+
+#### `rab_documents`
+| Field | Type | Modifiers | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `uuid` | `PRIMARY KEY` | |
+| `project_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Relasi ke `projects.id` |
+| `project_version_id` | `uuid` | `FOREIGN KEY, NULLABLE` | Versi `.glb` yang dihitung |
+| `user_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Pembuat (Arsitek pemilik) |
+| `rab_template_id` | `uuid` | `FOREIGN KEY, NULLABLE` | Template asal |
+| `title` | `string` | `NOT NULL` | |
+| `source` | `string(10)` | `DEFAULT('manual')` | `manual`, `csv`, `glb` |
+| `status` | `string(10)` | `DEFAULT('draft')` | `draft`, `final` |
+| `is_visible_to_clients` | `boolean` | `DEFAULT(false)` | Switch: Klien `accepted` boleh melihat read-only |
+| `overhead_percent` / `ppn_percent` | `decimal(5,2)` | `DEFAULT(0)` | |
+| `subtotal` / `overhead_amount` / `ppn_amount` / `total` | `decimal(16,2)` | `DEFAULT(0)` | Hasil hitung |
+| `finalized_at` | `timestamp` | `NULLABLE` | |
+| timestamps | | | |
+
+#### `rab_items`
+| Field | Type | Modifiers | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `uuid` | `PRIMARY KEY` | |
+| `rab_document_id` | `uuid` | `FOREIGN KEY, NOT NULL` | |
+| `rab_price_item_id` | `uuid` | `FOREIGN KEY, NULLABLE` | Null jika belum dipetakan / harga manual |
+| `section` | `string` | `DEFAULT('Umum')` | Bagian pekerjaan |
+| `description` | `string` | `NOT NULL` | |
+| `unit` | `string(20)` | `NOT NULL` | |
+| `quantity` | `decimal(14,3)` | `DEFAULT(0)` | |
+| `waste_percent` | `decimal(5,2)` | `DEFAULT(0)` | Faktor sisa |
+| `unit_price` | `decimal(14,2)` | `DEFAULT(0)` | **Snapshot** harga saat item dibuat |
+| `subtotal` | `decimal(16,2)` | `DEFAULT(0)` | |
+| `source_ref` | `string` | `NULLABLE` | Nama objek `.glb` / nomor baris CSV |
+| `is_mapped` | `boolean` | `DEFAULT(true)` | |
+| `is_estimate` | `boolean` | `DEFAULT(false)` | True untuk jalur `.glb` |
+| `sort_order` | `unsignedInteger` | `DEFAULT(0)` | |
+| timestamps | | | |
+
+> **Catatan:** Akses lihat: pemilik project selalu; Klien `accepted` hanya jika `is_visible_to_clients = true`. Edit/buat: hanya pemilik **dan** `plans.can_use_rab = true`. Dokumen `final` terkunci.
+
+---
+
+### H. Laravel Built-in Tables
 
 | Tabel | Keterangan |
 | :--- | :--- |
@@ -330,3 +410,6 @@ Menyimpan riwayat pembayaran transaksi upgrade langganan dari Midtrans.
 8. **`project_clients.user_id`:** Index B-Tree — query "semua project di mana saya jadi Klien" (dashboard dual-capacity).
 9. **`chat_messages.project_id`:** Index B-Tree (composite dengan `created_at DESC`) — pagination histori chat per project.
 10. **`camera_presets.project_id`:** Index B-Tree — loading preset kamera per project di Viewer.
+11. **`rab_price_items.(user_id, code)`:** Composite Unique Index — satu kode per user.
+12. **`rab_documents.project_id`:** Index B-Tree — daftar RAB per project.
+13. **`rab_items.rab_document_id`:** Index B-Tree — loading item RAB; `rab_mappings.(user_id, match_type, pattern)` Unique.
