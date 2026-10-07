@@ -8,6 +8,7 @@ use App\Domains\Rab\Controllers\RabDocumentController;
 use App\Domains\Rab\Controllers\RabItemController;
 use App\Domains\Rab\Controllers\RabMappingController;
 use App\Domains\Rab\Controllers\RabPriceItemController;
+use App\Domains\Rab\Controllers\RabPriceItemComponentController;
 use App\Domains\Rab\Controllers\RabTemplateController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\UserSearchController;
@@ -76,6 +77,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/rab/price-items', [RabPriceItemController::class, 'store'])->name('rab.price-items.store');
     Route::put('/rab/price-items/{priceItem}', [RabPriceItemController::class, 'update'])->name('rab.price-items.update');
     Route::delete('/rab/price-items/{priceItem}', [RabPriceItemController::class, 'destroy'])->name('rab.price-items.destroy');
+
+    // AHSP — Komponen analisa per harga satuan
+    Route::get('/rab/price-items/{priceItem}/components', [RabPriceItemComponentController::class, 'show'])->name('rab.price-items.components');
+    Route::post('/rab/price-items/{priceItem}/components', [RabPriceItemComponentController::class, 'store'])->name('rab.price-items.components.store');
+    Route::put('/rab/price-items/{priceItem}/components/{component}', [RabPriceItemComponentController::class, 'update'])->name('rab.price-items.components.update');
+    Route::delete('/rab/price-items/{priceItem}/components/{component}', [RabPriceItemComponentController::class, 'destroy'])->name('rab.price-items.components.destroy');
+    Route::patch('/rab/price-items/{priceItem}/overhead', [RabPriceItemComponentController::class, 'updateOverhead'])->name('rab.price-items.overhead');
 
     // Mapping rules (nama objek → harga satuan) — dipakai Fase B & C
     Route::get('/rab/mappings', [RabMappingController::class, 'index'])->name('rab.mappings.index');
