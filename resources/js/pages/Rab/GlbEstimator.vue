@@ -63,6 +63,8 @@ interface RowItem {
     unit_price: number;
     /** Apakah row ini disertakan dalam submit */
     included: boolean;
+    /** True jika mesh punya custom properties dari Blender */
+    has_extras: boolean;
 }
 
 const props = defineProps<{
@@ -82,30 +84,52 @@ const rows = ref<RowItem[]>([]);
 
 function initRows(meshes: MeshQuantity[]) {
     rows.value = meshes.map(m => {
-        // Auto-suggest basis dari nama objek
-        const nameLower = m.name.toLowerCase();
+        // ── 1. Prioritaskan custom properties Blender (extras) ────────────
         let suggestedBasis: 'area' | 'volume' | 'count' | 'length' = 'area';
-        let suggestedUnit = 'm²';
+        let suggestedUnit  = 'm²';
+        let unitPrice      = 0;
+        let category       = '';
+        let section        = 'Estimasi 3D';
 
-        if (nameLower.includes('kolom') || nameLower.includes('balok') || nameLower.includes('pondasi') || nameLower.includes('cor')) {
-            suggestedBasis = 'volume';
-            suggestedUnit  = 'm³';
-        } else if (nameLower.includes('pintu') || nameLower.includes('jendela') || nameLower.includes('kusen') || nameLower.includes('tangga')) {
-            suggestedBasis = 'count';
-            suggestedUnit  = 'unit';
-        } else if (nameLower.includes('pipa') || nameLower.includes('railing') || nameLower.includes('lisplang')) {
-            suggestedBasis = 'length';
-            suggestedUnit  = 'm\'';
+        if (m.has_extras) {
+            // Basis dari custom property
+            const bp = m.extras.quantity_basis;
+            if (bp === 'volume')  { suggestedBasis = 'volume'; suggestedUnit = 'm³'; }
+            else if (bp === 'count')  { suggestedBasis = 'count';  suggestedUnit = 'unit'; }
+            else if (bp === 'length') { suggestedBasis = 'length'; suggestedUnit = 'm\''; }
+            else                      { suggestedBasis = 'area';   suggestedUnit = 'm²'; }
+
+            // Override dengan unit dari Blender jika ada
+            if (m.extras.unit) {
+                suggestedUnit = m.extras.unit.replace('m2', 'm²').replace('m3', 'm³');
+            }
+
+            unitPrice = m.extras.unit_price ?? 0;
+            category  = m.extras.category ?? '';
+            section   = m.extras.section  ?? 'Estimasi 3D';
+        } else {
+            // ── 2. Fallback: heuristic dari nama mesh ─────────────────────
+            const nameLower = m.name.toLowerCase();
+            if (nameLower.includes('kolom') || nameLower.includes('balok') || nameLower.includes('pondasi') || nameLower.includes('cor')) {
+                suggestedBasis = 'volume'; suggestedUnit = 'm³';
+            } else if (nameLower.includes('pintu') || nameLower.includes('jendela') || nameLower.includes('kusen') || nameLower.includes('tangga')) {
+                suggestedBasis = 'count'; suggestedUnit = 'unit';
+            } else if (nameLower.includes('pipa') || nameLower.includes('railing') || nameLower.includes('lisplang')) {
+                suggestedBasis = 'length'; suggestedUnit = 'm\'';
+            }
         }
 
-        // Cari mapping yang cocok
-        const mapped = findMapping(m.name);
-        const priceItem = mapped ? props.priceItems.find(p => p.id === mapped.rab_price_item_id) : null;
+        // ── 3. Mapping rule dari database ─────────────────────────────────
+        const mapped     = findMapping(m.name);
+        const priceItem  = mapped ? props.priceItems.find(p => p.id === mapped.rab_price_item_id) : null;
 
         if (mapped) {
-            suggestedBasis = mapped.quantity_basis;
-            suggestedUnit  = priceItem?.unit ?? suggestedUnit;
+            suggestedBasis = mapped.quantity_basis as any;
+            if (priceItem) { suggestedUnit = priceItem.unit; }
         }
+
+        // Harga: extras > mapping > 0
+        const finalUnitPrice = unitPrice > 0 ? unitPrice : (priceItem?.unit_price ?? 0);
 
         const quantity = getQuantity(m, suggestedBasis);
 
@@ -117,12 +141,13 @@ function initRows(meshes: MeshQuantity[]) {
             is_open_mesh:      m.is_open_mesh,
             warnings:          m.warnings,
             quantity_basis:    suggestedBasis,
-            quantity:          quantity,
+            quantity,
             unit:              suggestedUnit,
-            section:           suggestSection(m.name),
+            section,
             rab_price_item_id: priceItem?.id ?? null,
-            unit_price:        priceItem?.unit_price ?? 0,
+            unit_price:        finalUnitPrice,
             included:          quantity > 0 && m.name !== 'Objek_Tanpa_Nama',
+            has_extras:        m.has_extras,
         };
     });
 }
@@ -295,11 +320,33 @@ function fmtNum(val: number, decimals = 2) {
 }
 
 const basisOptions = [
-    { value: 'area',   label: 'Luas (m²)',   icon: '⬛' },
-    { value: 'volume', label: 'Volume (m³)',  icon: '⬜' },
+    { value: 'area',   label: 'Luas (m²)',    icon: '⬛' },
+    { value: 'volume', label: 'Volume (m³)',   icon: '⬜' },
     { value: 'count',  label: 'Jumlah (unit)', icon: '🔢' },
-    { value: 'length', label: 'Panjang (m\')',  icon: '📏' },
+    { value: 'length', label: 'Panjang (m\')', icon: '📏' },
 ];
+
+// ── Panduan format penamaan ───────────────────────────────────────────────────
+const namingExamples = [
+    { name: 'DINDING_BATA_15',   basis: 'Luas (area)',    unit: 'm²',  note: 'Dinding bata tebal 15cm' },
+    { name: 'LANTAI_KERAMIK_60', basis: 'Luas (area)',    unit: 'm²',  note: 'Lantai keramik 60×60' },
+    { name: 'ATAP_GENTENG',      basis: 'Luas (area)',    unit: 'm²',  note: 'Penutup atap' },
+    { name: 'KOLOM_BETON_30X30', basis: 'Volume',         unit: 'm³',  note: 'Kolom beton bertulang' },
+    { name: 'PONDASI_BATU_KALI', basis: 'Volume',         unit: 'm³',  note: 'Pondasi batu kali' },
+    { name: 'PINTU_P1',          basis: 'Jumlah (count)', unit: 'unit', note: 'Pintu tipe P1' },
+    { name: 'JENDELA_J2',        basis: 'Jumlah (count)', unit: 'unit', note: 'Jendela tipe J2' },
+    { name: 'RAILING_TANGGA',    basis: 'Panjang',        unit: 'm\'', note: 'Railing besi tangga' },
+];
+
+const blenderProps = [
+    { key: 'unit_price',     label: 'Harga Satuan',    desc: 'Angka tanpa titik/koma ribuan',  example: '85000' },
+    { key: 'unit',           label: 'Satuan',           desc: 'Gunakan: m2, m3, unit, m, jam', example: '"m2"' },
+    { key: 'category',       label: 'Kategori',         desc: 'Nama kategori pekerjaan',        example: '"Pek. Arsitektur"' },
+    { key: 'section',        label: 'Bagian',           desc: 'Bagian dalam RAB',               example: '"Struktur"' },
+    { key: 'quantity_basis', label: 'Basis Kuantitas',  desc: 'area | volume | count | length', example: '"area"' },
+];
+
+const supportedUnits = ['m2', 'm3', 'm', 'unit', 'OH', 'jam', 'kg', 'zak', 'btg', 'lbr', 'ls'];
 </script>
 
 <template>
@@ -345,6 +392,104 @@ const basisOptions = [
                 </p>
             </div>
         </div>
+
+        <!-- ═══ Panduan Format Penamaan ══════════════════════════════════════ -->
+        <details class="group rounded-2xl border border-violet-200 dark:border-violet-500/20 overflow-hidden">
+            <summary class="flex items-center justify-between px-5 py-3.5 bg-violet-50 dark:bg-violet-500/10 cursor-pointer list-none">
+                <div class="flex items-center gap-2">
+                    <Cpu class="h-4 w-4 text-violet-600 dark:text-violet-400 shrink-0" />
+                    <span class="font-semibold text-sm text-violet-700 dark:text-violet-300">
+                        Panduan Format Penamaan Objek di Blender / SketchUp
+                    </span>
+                </div>
+                <ChevronRight class="h-4 w-4 text-violet-400 transition-transform group-open:rotate-90" />
+            </summary>
+
+            <div class="px-5 py-4 space-y-5 bg-white dark:bg-white/[0.02]">
+                <!-- Cara 1: Nama objek -->
+                <div class="space-y-3">
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-500/30">Cara 1</span>
+                        <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Nama Object — Konvensi Standar</p>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        Beri nama object di Blender/SketchUp menggunakan format:
+                        <code class="font-mono bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-200">KATEGORI_JENIS_SPEK</code>
+                    </p>
+                    <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
+                        <table class="min-w-full text-xs">
+                            <thead>
+                                <tr class="bg-slate-50 dark:bg-white/[0.03] border-b border-slate-200 dark:border-white/10">
+                                    <th class="px-3 py-2 text-left font-semibold text-slate-500 uppercase tracking-wide">Nama Object</th>
+                                    <th class="px-3 py-2 text-left font-semibold text-slate-500 uppercase tracking-wide">Basis Otomatis</th>
+                                    <th class="px-3 py-2 text-left font-semibold text-slate-500 uppercase tracking-wide">Satuan</th>
+                                    <th class="px-3 py-2 text-left font-semibold text-slate-500 uppercase tracking-wide">Keterangan</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-white/5">
+                                <tr v-for="ex in namingExamples" :key="ex.name" class="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                                    <td class="px-3 py-2 font-mono font-medium text-violet-700 dark:text-violet-300">{{ ex.name }}</td>
+                                    <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ ex.basis }}</td>
+                                    <td class="px-3 py-2 font-mono text-slate-500">{{ ex.unit }}</td>
+                                    <td class="px-3 py-2 text-slate-400">{{ ex.note }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Cara 2: Custom Properties Blender -->
+                <div class="space-y-3">
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30">Cara 2</span>
+                        <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Custom Properties Blender — Harga Otomatis ✨</p>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        Di Blender, tambahkan custom properties pada object (Properties → Object Properties → Custom Properties):
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div v-for="prop in blenderProps" :key="prop.key"
+                             class="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10">
+                            <div class="shrink-0">
+                                <code class="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded">{{ prop.key }}</code>
+                            </div>
+                            <div class="min-w-0">
+                                <p class="text-xs font-medium text-slate-700 dark:text-slate-200">{{ prop.label }}</p>
+                                <p class="text-xs text-slate-400 mt-0.5">{{ prop.desc }}</p>
+                                <p class="text-xs font-mono text-slate-500 mt-0.5">Contoh: <span class="text-slate-700 dark:text-slate-200">{{ prop.example }}</span></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contoh lengkap -->
+                    <div class="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20">
+                        <p class="text-xs font-semibold text-emerald-700 dark:text-emerald-300 mb-2">📐 Contoh Object Lengkap di Blender:</p>
+                        <div class="font-mono text-xs text-slate-700 dark:text-slate-200 space-y-0.5">
+                            <p><span class="text-violet-600 dark:text-violet-400">Object Name:</span> DINDING_BATA_15</p>
+                            <p class="pl-4"><span class="text-emerald-600 dark:text-emerald-400">unit_price</span> = <span class="text-amber-600 dark:text-amber-400">85000</span></p>
+                            <p class="pl-4"><span class="text-emerald-600 dark:text-emerald-400">unit</span> = <span class="text-amber-600 dark:text-amber-400">"m2"</span></p>
+                            <p class="pl-4"><span class="text-emerald-600 dark:text-emerald-400">category</span> = <span class="text-amber-600 dark:text-amber-400">"Pekerjaan Arsitektur"</span></p>
+                            <p class="pl-4"><span class="text-emerald-600 dark:text-emerald-400">section</span> = <span class="text-amber-600 dark:text-amber-400">"Struktur"</span></p>
+                            <p class="pl-4"><span class="text-emerald-600 dark:text-emerald-400">quantity_basis</span> = <span class="text-amber-600 dark:text-amber-400">"area"</span></p>
+                        </div>
+                        <p class="text-xs text-emerald-600 dark:text-emerald-500 mt-2">
+                            ✅ Harga satuan akan terisi otomatis — tidak perlu mapping manual!
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Nilai satuan yang didukung -->
+                <div class="space-y-2">
+                    <p class="text-xs font-semibold text-slate-600 dark:text-slate-300">Nilai <code class="font-mono">unit</code> yang didukung:</p>
+                    <div class="flex flex-wrap gap-1.5">
+                        <code v-for="u in supportedUnits" :key="u"
+                              class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10">
+                            {{ u }}
+                        </code>
+                    </div>
+                </div>
+            </div>
+        </details>
 
         <!-- Loading state -->
         <div v-if="isLoading"
@@ -478,6 +623,10 @@ const basisOptions = [
                                 <Badge v-if="row.rab_price_item_id" variant="outline"
                                        class="text-[10px] border-emerald-300 text-emerald-600 dark:text-emerald-400">
                                     terpetakan
+                                </Badge>
+                                <Badge v-if="row.has_extras" variant="outline"
+                                       class="text-[10px] border-violet-300 text-violet-600 dark:text-violet-400 flex items-center gap-0.5">
+                                    ✨ Blender
                                 </Badge>
                             </div>
                             <div class="flex items-center gap-3 mt-0.5 text-xs text-slate-400">

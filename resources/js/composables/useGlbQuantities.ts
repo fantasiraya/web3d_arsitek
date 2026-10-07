@@ -2,20 +2,15 @@
  * useGlbQuantities.ts
  *
  * Composable untuk menghitung kuantitas geometri dari file .glb menggunakan Three.js.
- * Dipakai di RAB Fase C — Estimasi otomatis dari model 3D.
+ * Mendukung dua sumber data:
  *
- * Kuantitas yang dihitung per mesh:
- *  - area   : luas permukaan (m²) — jumlah luas semua segitiga
- *  - volume : volume (m³) — hanya mesh tertutup (watertight), via divergence theorem
- *  - count  : jumlah objek (unit)
- *
- * Keterbatasan (.glb tidak memuat data BIM):
- *  - Volume hanya akurat untuk mesh tertutup (watertight solid)
- *  - Tidak ada data material/properti semantik
- *  - Akurasi tergantung skala model (unit asumsi: meter)
- *
- * Konvensi nama objek (panduan dari AI_INSTRUCTIONS.md):
- *  Format: KATEGORI_JENIS_SPEK  (contoh: DINDING_BATA_15, LANTAI_KERAMIK_60)
+ * 1. Nama mesh (konvensi: KATEGORI_JENIS_SPEK, contoh: DINDING_BATA_15)
+ * 2. Custom Properties Blender via mesh.userData.extras:
+ *    - unit_price  : harga satuan (number)
+ *    - unit        : satuan (string, contoh: "m2", "m3", "unit")
+ *    - category    : kategori pekerjaan (string)
+ *    - section     : bagian pekerjaan (string)
+ *    - quantity_basis: area | volume | count | length
  */
 
 import { ref, readonly } from 'vue';
@@ -40,6 +35,20 @@ export interface MeshQuantity {
     warnings: string[];
     /** Dimensi bounding box (untuk heuristik skala) */
     bbox: { x: number; y: number; z: number };
+    /**
+     * Custom properties dari Blender (mesh.userData.extras).
+     * Diisi jika arsitek menyertakan properti di Blender sebelum export.
+     */
+    extras: {
+        unit_price?:      number;   // harga satuan dari custom property
+        unit?:            string;   // satuan (m2, m3, unit, dll.)
+        category?:        string;   // kategori pekerjaan
+        section?:         string;   // bagian pekerjaan
+        quantity_basis?:  string;   // area | volume | count | length
+        [key: string]:    unknown;  // properti lain yang mungkin ada
+    };
+    /** True jika mesh punya custom properties dari Blender */
+    has_extras: boolean;
 }
 
 export interface GlbQuantityResult {
@@ -275,6 +284,10 @@ export function useGlbQuantities() {
             let groupArea   = 0;
             let groupVolume = 0;
 
+            // Kumpulkan extras dari mesh pertama yang punya userData
+            let extras: MeshQuantity['extras'] = {};
+            let hasExtras = false;
+
             for (const mesh of meshGroup) {
                 // Apply world matrix ke geometry untuk ukuran dunia nyata
                 const geoCopy = mesh.geometry.clone();
@@ -284,6 +297,26 @@ export function useGlbQuantities() {
                 groupVolume += computeSignedVolume(geoCopy);
 
                 geoCopy.dispose();
+
+                // Baca custom properties Blender dari userData
+                // Blender menyimpan custom properties di .extras saat export .glb
+                if (!hasExtras) {
+                    const ud = mesh.userData as Record<string, unknown>;
+                    // Blender GLB exporter menyimpan custom props di userData langsung
+                    // atau di userData.extras tergantung versi
+                    const rawExtras = (ud.extras ?? ud) as Record<string, unknown>;
+
+                    const unitPrice     = _parseNumber(rawExtras.unit_price ?? rawExtras.harga ?? rawExtras.price);
+                    const unit          = _parseString(rawExtras.unit ?? rawExtras.satuan);
+                    const category      = _parseString(rawExtras.category ?? rawExtras.kategori);
+                    const section       = _parseString(rawExtras.section ?? rawExtras.bagian);
+                    const quantityBasis = _parseString(rawExtras.quantity_basis ?? rawExtras.basis);
+
+                    if (unitPrice !== undefined || unit || category || section) {
+                        extras    = { unit_price: unitPrice, unit, category, section, quantity_basis: quantityBasis };
+                        hasExtras = true;
+                    }
+                }
             }
 
             const openMesh = isLikelyOpenMesh(groupArea, groupVolume);
@@ -303,8 +336,8 @@ export function useGlbQuantities() {
 
             meshQuantities.push({
                 name,
-                area:         Math.round(groupArea * 100) / 100,      // 2 desimal
-                volume:       Math.round(groupVolume * 1000) / 1000,   // 3 desimal
+                area:         Math.round(groupArea * 100) / 100,
+                volume:       Math.round(groupVolume * 1000) / 1000,
                 count:        meshGroup.length,
                 is_open_mesh: openMesh,
                 warnings,
@@ -313,6 +346,8 @@ export function useGlbQuantities() {
                     y: Math.round(bboxSize.y * 100) / 100,
                     z: Math.round(bboxSize.z * 100) / 100,
                 },
+                extras,
+                has_extras: hasExtras,
             });
 
             totalArea   += groupArea;
@@ -351,4 +386,18 @@ export function useGlbQuantities() {
         calculate,
         reset,
     };
+}
+
+// ── Module-level helpers (bukan di dalam composable) ─────────────────────────
+
+function _parseNumber(v: unknown): number | undefined {
+    if (v === undefined || v === null || v === '') return undefined;
+    const n = Number(v);
+    return isNaN(n) ? undefined : n;
+}
+
+function _parseString(v: unknown): string | undefined {
+    if (v === undefined || v === null) return undefined;
+    const s = String(v).trim();
+    return s === '' ? undefined : s;
 }
