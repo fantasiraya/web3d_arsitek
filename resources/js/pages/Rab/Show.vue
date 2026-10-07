@@ -4,7 +4,7 @@ import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import {
     Plus, Pencil, Trash2, X, Save, Lock, Unlock, Eye, EyeOff,
     ChevronRight, ChevronDown, AlertTriangle, CheckCircle2,
-    DollarSign, Percent, FileText,
+    DollarSign, Percent, FileText, Cpu, Download,
 } from '@lucide/vue';
 import UnifiedLayout from '@/layouts/UnifiedLayout.vue';
 import { Button } from '@/components/ui/button';
@@ -276,6 +276,12 @@ function fmt(val: number) {
                             <FileText class="h-4 w-4" /> Import CSV/Excel
                         </Button>
                     </Link>
+                    <Link :href="`/projects/${project.id}/rab/${document.id}/glb-estimator`">
+                        <Button size="sm" variant="outline"
+                                class="gap-1.5 border-violet-300 dark:border-violet-500/40 text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10">
+                            <Cpu class="h-4 w-4" /> Estimasi 3D
+                        </Button>
+                    </Link>
                     <Button v-if="document.status === 'draft'" size="sm" class="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" @click="finalizeDoc">
                         <CheckCircle2 class="h-4 w-4" /> Finalisasi
                     </Button>
@@ -283,6 +289,14 @@ function fmt(val: number) {
                 <Button v-if="document.status === 'final' && is_owner" size="sm" variant="outline" class="gap-1.5" @click="reopenDoc">
                     <Unlock class="h-4 w-4" /> Reopen
                 </Button>
+
+                <!-- Export Excel — selalu muncul untuk owner -->
+                <a :href="`/projects/${project.id}/rab/${document.id}/export`" target="_blank">
+                    <Button size="sm" variant="outline"
+                            class="gap-1.5 border-sky-300 dark:border-sky-500/40 text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-500/10">
+                        <Download class="h-4 w-4" /> Export Excel
+                    </Button>
+                </a>
             </div>
         </div>
 

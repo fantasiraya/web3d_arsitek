@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import {
     Plus, FileText, Trash2, X, Save, Eye, Lock, Unlock,
-    ArrowRight, AlertCircle, ChevronRight,
+    ArrowRight, AlertCircle, ChevronRight, Cpu,
 } from '@lucide/vue';
 import UnifiedLayout from '@/layouts/UnifiedLayout.vue';
 import { Button } from '@/components/ui/button';
@@ -212,6 +212,15 @@ const sourceLabels: Record<string, string> = {
                         <Button size="sm" variant="outline" class="gap-1.5 h-8">
                             <span class="hidden sm:inline">Buka</span>
                             <ArrowRight class="h-3.5 w-3.5" />
+                        </Button>
+                    </Link>
+                    <!-- Tombol Estimasi 3D — hanya untuk draft + owner -->
+                    <Link v-if="can_edit && doc.status === 'draft'"
+                          :href="`/projects/${project.id}/rab/${doc.id}/glb-estimator`"
+                          title="Estimasi kuantitas dari model 3D">
+                        <Button size="icon" variant="ghost"
+                                class="h-8 w-8 text-violet-500 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-500/10">
+                            <Cpu class="h-3.5 w-3.5" />
                         </Button>
                     </Link>
                     <Button v-if="can_edit" size="icon" variant="ghost"

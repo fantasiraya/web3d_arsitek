@@ -6,6 +6,7 @@ use App\Domains\Chat\Controllers\ChatController;
 use App\Domains\Project\Controllers\CameraPresetController;
 use App\Domains\Rab\Controllers\RabDocumentController;
 use App\Domains\Rab\Controllers\RabItemController;
+use App\Domains\Rab\Controllers\RabMappingController;
 use App\Domains\Rab\Controllers\RabPriceItemController;
 use App\Domains\Rab\Controllers\RabTemplateController;
 use App\Http\Controllers\Auth\GoogleAuthController;
@@ -76,6 +77,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/rab/price-items/{priceItem}', [RabPriceItemController::class, 'update'])->name('rab.price-items.update');
     Route::delete('/rab/price-items/{priceItem}', [RabPriceItemController::class, 'destroy'])->name('rab.price-items.destroy');
 
+    // Mapping rules (nama objek → harga satuan) — dipakai Fase B & C
+    Route::get('/rab/mappings', [RabMappingController::class, 'index'])->name('rab.mappings.index');
+    Route::post('/rab/mappings', [RabMappingController::class, 'store'])->name('rab.mappings.store');
+    Route::put('/rab/mappings/{mapping}', [RabMappingController::class, 'update'])->name('rab.mappings.update');
+    Route::delete('/rab/mappings/{mapping}', [RabMappingController::class, 'destroy'])->name('rab.mappings.destroy');
+
     // Template RAB (milik user, tidak terikat project)
     Route::get('/rab/templates', [RabTemplateController::class, 'index'])->name('rab.templates.index');
     Route::post('/rab/templates', [RabTemplateController::class, 'store'])->name('rab.templates.store');
@@ -107,6 +114,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'document' => \App\Domains\Rab\Models\RabDocument::findOrFail($rab),
         ])
     )->name('rab.import.page');
+
+    // Estimasi dari .glb (Fase C)
+    Route::get('/projects/{project}/rab/{rab}/glb-estimator', [RabDocumentController::class, 'glbEstimatorPage'])->name('rab.glb-estimator');
+    Route::post('/projects/{project}/rab/{rab}/from-glb',     [RabDocumentController::class, 'fromGlb'])->name('rab.from-glb');
+
+    // Export RAB ke Excel
+    Route::get('/projects/{project}/rab/{rab}/export', [RabDocumentController::class, 'export'])->name('rab.export');
 
     // Item RAB (terikat dokumen RAB)
     Route::post('/projects/{project}/rab/{rab}/items', [RabItemController::class, 'store'])->name('rab.items.store');

@@ -3,12 +3,15 @@
 namespace App\Domains\Rab\Controllers;
 
 use App\Domains\Project\Models\Project;
+use App\Domains\Rab\Actions\ApplyGlbQuantitiesAction;
 use App\Domains\Rab\Actions\CreateRabDocumentAction;
+use App\Domains\Rab\Actions\ExportRabAction;
 use App\Domains\Rab\Actions\FinalizeRabDocumentAction;
 use App\Domains\Rab\Actions\ImportQuantityTakeoffAction;
 use App\Domains\Rab\Actions\ToggleRabClientVisibilityAction;
 use App\Domains\Rab\Actions\UpdateRabDocumentAction;
 use App\Domains\Rab\Models\RabDocument;
+use App\Domains\Rab\Requests\ApplyGlbQuantitiesRequest;
 use App\Domains\Rab\Requests\ImportTakeoffRequest;
 use App\Domains\Rab\Requests\StoreRabDocumentRequest;
 use App\Domains\Rab\Requests\UpdateRabDocumentRequest;
@@ -21,12 +24,14 @@ use Inertia\Response;
 class RabDocumentController extends Controller
 {
     public function __construct(
-        protected RabAccessService             $access,
-        protected CreateRabDocumentAction      $create,
-        protected UpdateRabDocumentAction      $update,
-        protected FinalizeRabDocumentAction    $finalize,
+        protected RabAccessService               $access,
+        protected CreateRabDocumentAction        $create,
+        protected UpdateRabDocumentAction        $update,
+        protected FinalizeRabDocumentAction      $finalize,
         protected ToggleRabClientVisibilityAction $toggleVisibility,
-        protected ImportQuantityTakeoffAction  $importer,
+        protected ImportQuantityTakeoffAction    $importer,
+        protected ApplyGlbQuantitiesAction       $glbAction,
+        protected ExportRabAction                $exporter,
     ) {}
 
     /**
@@ -274,5 +279,81 @@ class RabDocumentController extends Controller
 
         return to_route('rab.show', [$project->id, $rab->id])
             ->with('success', 'Import quantity take-off berhasil. Periksa item yang belum terpetakan.');
+    }
+
+    // ── Estimasi dari .glb (Fase C) ───────────────────────────────────────────
+
+    /**
+     * Halaman estimator .glb — render Inertia page GlbEstimator.
+     * Controller hanya kirim project + dokumen + price items + versi .glb.
+     * Kalkulasi dilakukan sepenuhnya di frontend (Three.js).
+     */
+    public function glbEstimatorPage(Request $request, Project $project, RabDocument $rab): \Inertia\Response
+    {
+        $user = $request->user();
+        $this->access->authorizeEdit($user, $project);
+        abort_if($rab->isFinal(), 403, 'Dokumen sudah final. Reopen terlebih dahulu.');
+
+        // Versi .glb terbaru project
+        $latestVersion = $project->versions()->latest('version_number')->first();
+
+        // Harga satuan milik user — untuk mapping di frontend
+        $priceItems = \App\Domains\Rab\Models\RabPriceItem::where('user_id', $user->id)
+            ->orderBy('category')
+            ->orderBy('name')
+            ->get(['id', 'code', 'name', 'unit', 'unit_price', 'category']);
+
+        // Mapping rules yang sudah ada — untuk auto-suggest
+        $mappings = \App\Domains\Rab\Models\RabMapping::where('user_id', $user->id)
+            ->get(['id', 'match_type', 'pattern', 'rab_price_item_id', 'quantity_basis']);
+
+        return \Inertia\Inertia::render('Rab/GlbEstimator', [
+            'project'       => $project->only('id', 'title', 'slug'),
+            'document'      => $rab->only('id', 'title', 'status', 'source'),
+            'latestVersion' => $latestVersion ? [
+                'id'        => $latestVersion->id,
+                'file_path' => $latestVersion->file_path,
+                'version_number' => $latestVersion->version_number,
+            ] : null,
+            'glbUrl'     => $latestVersion
+                ? '/storage/' . $latestVersion->file_path
+                : null,
+            'priceItems' => $priceItems,
+            'mappings'   => $mappings,
+        ]);
+    }
+
+    /**
+     * Terima hasil estimasi dari frontend, buat items RAB is_estimate=true.
+     */
+    public function fromGlb(ApplyGlbQuantitiesRequest $request, Project $project, RabDocument $rab): \Illuminate\Http\RedirectResponse
+    {
+        $user = $request->user();
+        $this->access->authorizeEdit($user, $project);
+
+        $this->glbAction->execute(
+            $user,
+            $rab,
+            $request->validated()['items'],
+            $request->input('project_version_id'),
+        );
+
+        return to_route('rab.show', [$project->id, $rab->id])
+            ->with('success', 'Estimasi dari model 3D berhasil diterapkan. Semua item ditandai "Estimasi" — bukan RAB final kontrak.');
+    }
+
+    // ── Export ke Excel ───────────────────────────────────────────────────────
+
+    /**
+     * Download dokumen RAB sebagai file Excel (.xlsx).
+     * Pemilik: bisa export kapan saja (draft maupun final).
+     * Klien accepted: bisa export jika is_visible_to_clients = true.
+     */
+    public function export(Request $request, Project $project, RabDocument $rab): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $user = $request->user();
+        $this->access->authorizeView($user, $project, $rab);
+
+        return $this->exporter->execute($rab);
     }
 }

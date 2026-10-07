@@ -323,7 +323,7 @@ async function revokeClient(client: ProjectClientItem) {
                         </div>
 
                         <!-- Footer -->
-                        <div class="border-t border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4 flex flex-col items-center gap-2">
+                        <div class="border-t border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4 flex items-center gap-2">
                             <Link :href="`/projects/${project.id}/viewer`" class="flex-1">
                                 <Button class="w-full text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white" size="sm">
                                     <Box class="mr-1.5 h-3.5 w-3.5" /> Buka 3D Viewer
