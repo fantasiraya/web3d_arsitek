@@ -25,6 +25,12 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', \App\Http\Controllers\WelcomeController::class)->name('home');
 Route::inertia('/showcase', 'ShowcaseDemo')->name('showcase');
 
+// ── Wilayah Indonesia (publik, cached 24h) ────────────────────────────────────
+Route::get('/region/provinces', [\App\Http\Controllers\IndonesiaRegionController::class, 'provinces']);
+Route::get('/region/cities',    [\App\Http\Controllers\IndonesiaRegionController::class, 'cities']);
+Route::get('/region/districts', [\App\Http\Controllers\IndonesiaRegionController::class, 'districts']);
+Route::get('/region/villages',  [\App\Http\Controllers\IndonesiaRegionController::class, 'villages']);
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 

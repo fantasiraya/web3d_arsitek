@@ -2,6 +2,7 @@
 
 namespace App\Domains\Rab\Actions;
 
+use App\Domains\Auth\Models\User;
 use App\Domains\Rab\Models\RabDocument;
 use App\Domains\Rab\Models\RabPriceItem;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -13,9 +14,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Export dokumen RAB ke Excel (.xlsx) — Multi-sheet:
- *   Sheet 1  : Rekapitulasi RAB (ringkasan volume × harga satuan per section)
+ *   Sheet 1  : Rekapitulasi RAB (kop surat + ringkasan per section)
  *   Sheet 2  : Daftar RAB detail (semua item)
- *   Sheet 3+ : AHSP per harga satuan yang punya komponen (Tenaga/Bahan/Peralatan)
+ *   Sheet 3+ : AHSP per harga satuan yang punya komponen
  */
 class ExportRabAction
 {
@@ -36,22 +37,24 @@ class ExportRabAction
 
     public function execute(RabDocument $document): StreamedResponse
     {
-        $document->load(['items.priceItem.components', 'project']);
+        $document->load(['items.priceItem.components', 'project', 'owner']);
+
+        // Ambil data profil arsitek pemilik dokumen
+        $owner = $document->owner;
 
         $spreadsheet = new Spreadsheet();
 
         // ── Sheet 1: Rekapitulasi ────────────────────────────────────────────
         $sheet1 = $spreadsheet->getActiveSheet();
         $sheet1->setTitle('Rekapitulasi RAB');
-        $this->buildRekapSheet($sheet1, $document);
+        $this->buildRekapSheet($sheet1, $document, $owner);
 
         // ── Sheet 2: Daftar RAB Detail ───────────────────────────────────────
         $sheet2 = $spreadsheet->createSheet();
         $sheet2->setTitle('Daftar RAB');
-        $this->buildRabDetailSheet($sheet2, $document);
+        $this->buildRabDetailSheet($sheet2, $document, $owner);
 
         // ── Sheet 3+: AHSP per price item ────────────────────────────────────
-        // Kumpulkan price items unik yang has_components & dipakai di dokumen ini
         $ahspItems = collect($document->items)
             ->filter(fn ($item) => $item->priceItem?->has_components)
             ->map(fn ($item) => $item->priceItem)
@@ -60,13 +63,12 @@ class ExportRabAction
 
         foreach ($ahspItems as $idx => $priceItem) {
             $priceItem->load('components');
-            $title   = 'AHSP ' . ($idx + 1);
-            $sheet   = $spreadsheet->createSheet();
+            $title = 'AHSP ' . ($idx + 1);
+            $sheet = $spreadsheet->createSheet();
             $sheet->setTitle($title);
             $this->buildAhspSheet($sheet, $priceItem, $idx + 1);
         }
 
-        // ── Stream response ──────────────────────────────────────────────────
         $filename = 'RAB_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $document->title)
                   . '_' . now()->format('Ymd') . '.xlsx';
 
@@ -87,7 +89,7 @@ class ExportRabAction
     // ════════════════════════════════════════════════════════════════════════
     // Sheet 1 — Rekapitulasi (ringkasan per section)
     // ════════════════════════════════════════════════════════════════════════
-    private function buildRekapSheet($sheet, RabDocument $document): void
+    private function buildRekapSheet($sheet, RabDocument $document, ?User $owner = null): void
     {
         $sheet->getColumnDimension('A')->setWidth(6);
         $sheet->getColumnDimension('B')->setWidth(45);
@@ -96,7 +98,10 @@ class ExportRabAction
 
         $row = 1;
 
-        // Header dokumen
+        // Kop surat arsitek
+        $row = $this->buildLetterhead($sheet, $owner, 'A', 'D', $row);
+
+        // Header dokumen RAB
         $this->merge($sheet, "A{$row}:D{$row}", 'REKAPITULASI RENCANA ANGGARAN BIAYA', bold: true, size: 14, center: true);
         $row++;
         $this->merge($sheet, "A{$row}:D{$row}", $document->project->title ?? '-', bold: true, size: 12, center: true);
@@ -162,7 +167,7 @@ class ExportRabAction
     // ════════════════════════════════════════════════════════════════════════
     // Sheet 2 — Daftar RAB Detail (semua item)
     // ════════════════════════════════════════════════════════════════════════
-    private function buildRabDetailSheet($sheet, RabDocument $document): void
+    private function buildRabDetailSheet($sheet, RabDocument $document, ?User $owner = null): void
     {
         $sheet->getColumnDimension('A')->setWidth(6);
         $sheet->getColumnDimension('B')->setWidth(42);
@@ -170,9 +175,13 @@ class ExportRabAction
         $sheet->getColumnDimension('D')->setWidth(12);
         $sheet->getColumnDimension('E')->setWidth(18);
         $sheet->getColumnDimension('F')->setWidth(20);
-        $sheet->getColumnDimension('G')->setWidth(12); // ref AHSP
+        $sheet->getColumnDimension('G')->setWidth(12);
 
         $row = 1;
+
+        // Kop surat
+        $row = $this->buildLetterhead($sheet, $owner, 'A', 'G', $row);
+
         $this->merge($sheet, "A{$row}:G{$row}", 'RENCANA ANGGARAN BIAYA — DETAIL', bold: true, size: 13, center: true);
         $row++;
         $this->merge($sheet, "A{$row}:G{$row}", $document->title . ' | ' . ($document->project->title ?? '-'), size: 11, center: true);
@@ -371,6 +380,90 @@ class ExportRabAction
         $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
         $sheet->getStyle("G{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
         $this->border($sheet, "A{$row}:G{$row}");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Kop Surat Arsitek
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Tulis kop surat arsitek di atas sheet, return baris berikutnya.
+     * Jika owner tidak punya data profil, skip kop surat.
+     */
+    private function buildLetterhead($sheet, ?User $owner, string $colStart, string $colEnd, int $startRow): int
+    {
+        if (!$owner) return $startRow;
+
+        $companyType = $owner->company_type ?? '';
+        $companyName = $owner->company_name ?? '';
+        $ownerName   = $owner->name ?? '';
+        $phone       = $owner->phone ?? '';
+
+        // Susun nama header: "PT Nama Perusahaan" atau nama arsitek
+        $headerName = '';
+        if ($companyName) {
+            $headerName = ($companyType && $companyType !== 'Perorangan') ? "{$companyType} {$companyName}" : $companyName;
+        } else {
+            $headerName = $ownerName;
+        }
+
+        // Jika tidak ada nama sama sekali, skip
+        if (!$headerName) return $startRow;
+
+        // Susun baris alamat
+        $addressParts  = array_filter([
+            $owner->address ?? '',
+            $owner->village_name ?? '',
+            $owner->district_name ?? '',
+        ]);
+        $addressLine1  = implode(', ', $addressParts);
+
+        $cityParts = array_filter([
+            $owner->city_name    ?? '',
+            $owner->province_name ?? '',
+            $owner->postal_code  ?? '',
+        ]);
+        $addressLine2 = implode(', ', $cityParts);
+
+        $row = $startRow;
+
+        // Garis atas kop
+        $sheet->getStyle("{$colStart}{$row}:{$colEnd}{$row}")->applyFromArray([
+            'borders' => ['top' => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['argb' => 'FF1E293B']]],
+        ]);
+
+        // Nama perusahaan / arsitek — bold besar
+        $this->merge($sheet, "{$colStart}{$row}:{$colEnd}{$row}", $headerName, bold: true, size: 14);
+        $sheet->getRowDimension($row)->setRowHeight(22);
+        $row++;
+
+        // Sub-nama jika ada perusahaan dan nama arsitek berbeda
+        if ($companyName && $ownerName && $ownerName !== $companyName) {
+            $this->merge($sheet, "{$colStart}{$row}:{$colEnd}{$row}", $ownerName, size: 10, italic: true, color: '475569');
+            $row++;
+        }
+
+        // Alamat baris 1
+        if ($addressLine1) {
+            $this->merge($sheet, "{$colStart}{$row}:{$colEnd}{$row}", $addressLine1, size: 9, color: '475569');
+            $row++;
+        }
+
+        // Kota, provinsi + telepon
+        $contactLine = trim(implode('   |   ', array_filter([$addressLine2, $phone ? "Telp: {$phone}" : ''])));
+        if ($contactLine) {
+            $this->merge($sheet, "{$colStart}{$row}:{$colEnd}{$row}", $contactLine, size: 9, color: '475569');
+            $row++;
+        }
+
+        // Garis bawah kop
+        $sheet->getStyle("{$colStart}{$row}:{$colEnd}{$row}")->applyFromArray([
+            'borders' => ['bottom' => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['argb' => 'FF1E293B']]],
+        ]);
+        $row++;
+        $row++; // blank row setelah kop
+
+        return $row;
     }
 
     // ════════════════════════════════════════════════════════════════════════

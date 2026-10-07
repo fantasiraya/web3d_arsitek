@@ -64,6 +64,22 @@ class User extends Authenticatable implements PasskeyUser, MustVerifyEmail
         'subscription_status',
         'status',
         'last_active_at',
+        // Badan usaha
+        'company_type',
+        'company_name',
+        'phone',
+        // Wilayah Indonesia
+        'province_id',
+        'city_id',
+        'district_id',
+        'village_id',
+        'province_name',
+        'city_name',
+        'district_name',
+        'village_name',
+        // Alamat
+        'address',
+        'postal_code',
     ];
 
     /**

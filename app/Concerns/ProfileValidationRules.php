@@ -16,8 +16,24 @@ trait ProfileValidationRules
     protected function profileRules(int|string|null $userId = null): array
     {
         return [
-            'name' => $this->nameRules(),
-            'email' => $this->emailRules($userId),
+            'name'         => $this->nameRules(),
+            'email'        => $this->emailRules($userId),
+            // Badan usaha
+            'company_type' => ['nullable', 'string', 'max:20'],
+            'company_name' => ['nullable', 'string', 'max:255'],
+            'phone'        => ['nullable', 'string', 'max:30'],
+            // Wilayah Indonesia
+            'province_id'   => ['nullable', 'integer'],
+            'city_id'       => ['nullable', 'integer'],
+            'district_id'   => ['nullable', 'integer'],
+            'village_id'    => ['nullable', 'integer'],
+            'province_name' => ['nullable', 'string', 'max:100'],
+            'city_name'     => ['nullable', 'string', 'max:100'],
+            'district_name' => ['nullable', 'string', 'max:100'],
+            'village_name'  => ['nullable', 'string', 'max:100'],
+            // Alamat
+            'address'      => ['nullable', 'string', 'max:1000'],
+            'postal_code'  => ['nullable', 'string', 'max:10'],
         ];
     }
 

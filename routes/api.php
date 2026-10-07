@@ -30,3 +30,15 @@ Route::post('/sanctum/token', function (Request $request) {
 
     return ['token' => $token->plainTextToken];
 });
+
+// ── Wilayah Indonesia (laravolt/indonesia) ─────────────────────────────────
+// Pakai middleware 'auth' (session-based via web guard) agar hanya user login yang bisa akses
+// Data di-cache 24 jam di server, jadi aman dari abuse
+use App\Http\Controllers\IndonesiaRegionController;
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/provinces', [IndonesiaRegionController::class, 'provinces'])->name('api.provinces');
+    Route::get('/cities',    [IndonesiaRegionController::class, 'cities'])->name('api.cities');
+    Route::get('/districts', [IndonesiaRegionController::class, 'districts'])->name('api.districts');
+    Route::get('/villages',  [IndonesiaRegionController::class, 'villages'])->name('api.villages');
+});

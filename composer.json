@@ -19,6 +19,7 @@
         "laravel/socialite": "^5.31",
         "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.14",
+        "laravolt/indonesia": "*",
         "league/csv": "^9.21",
         "midtrans/midtrans-php": "^2.6",
         "phpoffice/phpspreadsheet": "^3.9",

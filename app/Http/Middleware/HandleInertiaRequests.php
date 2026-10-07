@@ -80,11 +80,25 @@ class HandleInertiaRequests extends Middleware
                     'avatar'              => $request->user()->avatar
                         ? (str_starts_with($request->user()->avatar, 'http')
                             ? $request->user()->avatar
-                            : \Illuminate\Support\Facades\Storage::disk('public')->url($request->user()->avatar))
+                            : '/storage/' . $request->user()->avatar)
                         : null,
                     'subscription_status' => $request->user()->subscription_status ?? 'free',
                     'is_pro'              => method_exists($request->user(), 'isPro') ? $request->user()->isPro() : false,
                     'is_admin'            => $isAdmin,
+                    // Profil bisnis & alamat (untuk Settings/Profile.vue)
+                    'company_type'  => $request->user()->company_type,
+                    'company_name'  => $request->user()->company_name,
+                    'phone'         => $request->user()->phone,
+                    'province_id'   => $request->user()->province_id,
+                    'city_id'       => $request->user()->city_id,
+                    'district_id'   => $request->user()->district_id,
+                    'village_id'    => $request->user()->village_id,
+                    'province_name' => $request->user()->province_name,
+                    'city_name'     => $request->user()->city_name,
+                    'district_name' => $request->user()->district_name,
+                    'village_name'  => $request->user()->village_name,
+                    'address'       => $request->user()->address,
+                    'postal_code'   => $request->user()->postal_code,
                 ] : null,
                 'can_access_admin' => $isAdmin,
             ],
