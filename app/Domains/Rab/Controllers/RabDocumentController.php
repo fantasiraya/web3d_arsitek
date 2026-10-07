@@ -35,10 +35,10 @@ class RabDocumentController extends Controller
      */
     public function index(Request $request, Project $project): Response
     {
-        $user = $request->user();
-        abort_unless($this->access->canAccessProject($user, $project), 403);
-
+        $user    = $request->user();
         $isOwner = $project->user_id === $user->id;
+
+        abort_unless($this->access->canAccessProject($user, $project), 403);
 
         $query = RabDocument::where('project_id', $project->id)
             ->withCount('items');
@@ -49,11 +49,23 @@ class RabDocumentController extends Controller
 
         $documents = $query->latest()->get();
 
+        // Templates milik user — untuk dropdown saat buat dokumen baru
+        // Hanya dikirim ke owner yang punya akses RAB
+        $templates = [];
+        if ($isOwner && $this->access->hasPlanAccess($user)) {
+            $templates = \App\Domains\Rab\Models\RabTemplate::where('user_id', $user->id)
+                ->withCount('items')
+                ->orderBy('name')
+                ->get(['id', 'name', 'description'])
+                ->toArray();
+        }
+
         return Inertia::render('Rab/Index', [
-            'project'    => $project->only('id', 'title', 'slug'),
-            'documents'  => $documents,
-            'can_edit'   => $isOwner && $this->access->hasPlanAccess($user),
-            'is_owner'   => $isOwner,
+            'project'      => $project->only('id', 'title', 'slug'),
+            'documents'    => $documents,
+            'templates'    => $templates,
+            'can_edit'     => $isOwner && $this->access->hasPlanAccess($user),
+            'is_owner'     => $isOwner,
             'has_rab_plan' => $this->access->hasPlanAccess($user),
         ]);
     }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { Plus, Pencil, Trash2, X, Save, LayoutList, ChevronRight } from '@lucide/vue';
 import UnifiedLayout from '@/layouts/UnifiedLayout.vue';
 import { Button } from '@/components/ui/button';
@@ -144,6 +144,11 @@ function formatDate(dateStr: string) {
                 <div class="flex items-center justify-between mt-auto pt-2 border-t border-slate-100 dark:border-white/5">
                     <span class="text-xs text-slate-400">{{ formatDate(t.created_at) }}</span>
                     <div class="flex items-center gap-1">
+                        <Link :href="`/rab/templates/${t.id}`">
+                            <Button size="sm" variant="outline" class="h-7 text-xs gap-1 border-sky-200 dark:border-sky-500/30 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-500/10" title="Kelola item">
+                                <LayoutList class="h-3.5 w-3.5" /> Kelola Item
+                            </Button>
+                        </Link>
                         <Button size="icon" variant="ghost" class="h-7 w-7" @click="openEdit(t)" title="Edit">
                             <Pencil class="h-3.5 w-3.5" />
                         </Button>

@@ -82,6 +82,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/rab/templates/{template}', [RabTemplateController::class, 'show'])->name('rab.templates.show');
     Route::put('/rab/templates/{template}', [RabTemplateController::class, 'update'])->name('rab.templates.update');
     Route::delete('/rab/templates/{template}', [RabTemplateController::class, 'destroy'])->name('rab.templates.destroy');
+    // Item template
+    Route::post('/rab/templates/{template}/items', [RabTemplateController::class, 'addItem'])->name('rab.templates.items.store');
+    Route::delete('/rab/templates/{template}/items/{item}', [RabTemplateController::class, 'removeItem'])->name('rab.templates.items.destroy');
+    Route::patch('/rab/templates/{template}/items/reorder', [RabTemplateController::class, 'reorderItems'])->name('rab.templates.items.reorder');
 
     // Dokumen RAB (terikat project)
     Route::get('/projects/{project}/rab', [RabDocumentController::class, 'index'])->name('rab.index');
