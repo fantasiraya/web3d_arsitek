@@ -66,7 +66,7 @@ class ExportRabAction
             $title = 'AHSP ' . ($idx + 1);
             $sheet = $spreadsheet->createSheet();
             $sheet->setTitle($title);
-            $this->buildAhspSheet($sheet, $priceItem, $idx + 1);
+            $this->buildAhspSheet($sheet, $priceItem, $idx + 1, $owner);
         }
 
         $filename = 'RAB_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $document->title)
@@ -246,7 +246,7 @@ class ExportRabAction
     // Sheet 3+ — AHSP per harga satuan
     // Format persis seperti gambar referensi
     // ════════════════════════════════════════════════════════════════════════
-    private function buildAhspSheet($sheet, RabPriceItem $priceItem, int $num): void
+    private function buildAhspSheet($sheet, RabPriceItem $priceItem, int $num, ?User $owner = null): void
     {
         $sheet->getColumnDimension('A')->setWidth(6);   // No
         $sheet->getColumnDimension('B')->setWidth(38);  // Item
@@ -257,6 +257,9 @@ class ExportRabAction
         $sheet->getColumnDimension('G')->setWidth(22);  // Jumlah Harga
 
         $row = 1;
+
+        // Kop surat — center, A:G
+        $row = $this->buildLetterhead($sheet, $owner, 'A', 'G', $row);
 
         // ── Header analisa ──────────────────────────────────────────────────
         $sheet->mergeCells("A{$row}:G{$row}");
@@ -383,12 +386,13 @@ class ExportRabAction
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // Kop Surat Arsitek
+    // Kop Surat Arsitek — tanpa nama personal, semua center
     // ════════════════════════════════════════════════════════════════════════
 
     /**
-     * Tulis kop surat arsitek di atas sheet, return baris berikutnya.
-     * Jika owner tidak punya data profil, skip kop surat.
+     * Tulis kop surat di atas sheet. Semua baris di-center.
+     * Hanya menampilkan nama badan usaha, alamat, dan telepon (tanpa nama personal).
+     * Return baris berikutnya setelah kop.
      */
     private function buildLetterhead($sheet, ?User $owner, string $colStart, string $colEnd, int $startRow): int
     {
@@ -396,68 +400,66 @@ class ExportRabAction
 
         $companyType = $owner->company_type ?? '';
         $companyName = $owner->company_name ?? '';
-        $ownerName   = $owner->name ?? '';
         $phone       = $owner->phone ?? '';
 
-        // Susun nama header: "PT Nama Perusahaan" atau nama arsitek
-        $headerName = '';
+        // Nama header: "PT Nama Perusahaan" atau nama arsitek jika tidak ada badan usaha
         if ($companyName) {
-            $headerName = ($companyType && $companyType !== 'Perorangan') ? "{$companyType} {$companyName}" : $companyName;
+            $headerName = ($companyType && $companyType !== 'Perorangan')
+                ? strtoupper("{$companyType} {$companyName}")
+                : strtoupper($companyName);
         } else {
-            $headerName = $ownerName;
+            return $startRow; // tidak ada nama badan usaha → skip kop
         }
 
-        // Jika tidak ada nama sama sekali, skip
-        if (!$headerName) return $startRow;
-
         // Susun baris alamat
-        $addressParts  = array_filter([
-            $owner->address ?? '',
-            $owner->village_name ?? '',
+        $addressParts = array_filter([
+            $owner->address       ?? '',
+            $owner->village_name  ?? '',
             $owner->district_name ?? '',
         ]);
-        $addressLine1  = implode(', ', $addressParts);
+        $addressLine1 = implode(', ', $addressParts);
 
         $cityParts = array_filter([
-            $owner->city_name    ?? '',
+            $owner->city_name     ?? '',
             $owner->province_name ?? '',
-            $owner->postal_code  ?? '',
+            $owner->postal_code   ?? '',
         ]);
         $addressLine2 = implode(', ', $cityParts);
 
         $row = $startRow;
 
-        // Garis atas kop
-        $sheet->getStyle("{$colStart}{$row}:{$colEnd}{$row}")->applyFromArray([
+        // Garis atas kop (border top medium)
+        $lastCol = $colEnd;
+        $sheet->getStyle("{$colStart}{$row}:{$lastCol}{$row}")->applyFromArray([
             'borders' => ['top' => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['argb' => 'FF1E293B']]],
         ]);
 
-        // Nama perusahaan / arsitek — bold besar
-        $this->merge($sheet, "{$colStart}{$row}:{$colEnd}{$row}", $headerName, bold: true, size: 14);
+        // Nama badan usaha — bold besar, center
+        $this->merge($sheet, "{$colStart}{$row}:{$lastCol}{$row}", $headerName,
+            bold: true, size: 14, center: true);
         $sheet->getRowDimension($row)->setRowHeight(22);
         $row++;
 
-        // Sub-nama jika ada perusahaan dan nama arsitek berbeda
-        if ($companyName && $ownerName && $ownerName !== $companyName) {
-            $this->merge($sheet, "{$colStart}{$row}:{$colEnd}{$row}", $ownerName, size: 10, italic: true, color: '475569');
-            $row++;
-        }
-
-        // Alamat baris 1
+        // Alamat baris 1 — center
         if ($addressLine1) {
-            $this->merge($sheet, "{$colStart}{$row}:{$colEnd}{$row}", $addressLine1, size: 9, color: '475569');
+            $this->merge($sheet, "{$colStart}{$row}:{$lastCol}{$row}", $addressLine1,
+                size: 9, center: true, color: '475569');
             $row++;
         }
 
-        // Kota, provinsi + telepon
-        $contactLine = trim(implode('   |   ', array_filter([$addressLine2, $phone ? "Telp: {$phone}" : ''])));
+        // Kota, provinsi — center; telepon di baris yang sama
+        $contactLine = trim(implode('   |   ', array_filter([
+            $addressLine2,
+            $phone ? "Telp: {$phone}" : '',
+        ])));
         if ($contactLine) {
-            $this->merge($sheet, "{$colStart}{$row}:{$colEnd}{$row}", $contactLine, size: 9, color: '475569');
+            $this->merge($sheet, "{$colStart}{$row}:{$lastCol}{$row}", $contactLine,
+                size: 9, center: true, color: '475569');
             $row++;
         }
 
-        // Garis bawah kop
-        $sheet->getStyle("{$colStart}{$row}:{$colEnd}{$row}")->applyFromArray([
+        // Garis bawah kop (border bottom medium)
+        $sheet->getStyle("{$colStart}{$row}:{$lastCol}{$row}")->applyFromArray([
             'borders' => ['bottom' => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['argb' => 'FF1E293B']]],
         ]);
         $row++;
