@@ -24,6 +24,7 @@ import {
     UserPlus,
     Users,
     X,
+    ClipboardList,
 } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -90,6 +91,7 @@ interface ClientProject {
     current_revision_count: number;
     has_reached_revision_limit: boolean;
     created_at: string;
+    rab_visible_count: number;
 }
 
 interface Stats {
@@ -119,6 +121,9 @@ interface TransactionPage {
     last_page: number;
     per_page: number;
 }
+
+const iconButtonClass =
+    'border-slate-200 bg-white text-xs text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 dark:border-white/15 dark:bg-white/5 dark:text-neutral-300 dark:hover:border-white/30 dark:hover:bg-white/10 dark:hover:text-white'
 
 const props = defineProps<{
     auth?: {
@@ -1041,33 +1046,53 @@ const { isLoading } = usePageLoading(80);
                             </div>
 
                             <!-- Card Footer Actions -->
-                            <div class="border-t border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4 flex items-center gap-2">
-                                <Link
-                                    :href="`/projects/${project.id}/viewer`"
-                                    class="flex-1"
-                                >
-                                    <Button class="w-full text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white shadow-[0_0_20px_rgba(99,102,241,0.3)] transition-all duration-300" size="sm">
-                                        <Box class="mr-1.5 h-3.5 w-3.5" /> Buka 3D Viewer
+                            <div class="flex flex-col gap-2 border-t border-slate-100 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.02]">
+                                <!-- Baris 1: aksi utama -->
+                                <Link :href="`/projects/${project.id}/viewer`" class="block">
+                                    <Button
+                                        size="sm"
+                                        class="w-full whitespace-nowrap bg-indigo-500 text-xs font-semibold text-white shadow-[0_0_20px_rgba(99,102,241,0.3)] transition-all duration-300 hover:bg-indigo-600"
+                                    >
+                                        <Box class="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                                        Buka 3D Viewer
                                     </Button>
                                 </Link>
-                                <Button
-                                    @click="openEditModal(project)"
-                                    variant="outline"
-                                    size="sm"
-                                    class="text-xs border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 text-slate-500 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-white/30"
-                                    title="Edit Data Proyek"
-                                >
-                                    <Pencil class="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                    @click="openClientModal(project)"
-                                    variant="outline"
-                                    size="sm"
-                                    class="text-xs border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 text-slate-500 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-white/30"
-                                    title="Undang / Kelola Klien"
-                                >
-                                    <UserPlus class="h-3.5 w-3.5" />
-                                </Button>
+
+                                <!-- Baris 2: aksi sekunder -->
+                                <div class="grid grid-cols-[1fr_auto_auto] gap-2">
+                                    <!-- Menuju daftar dokumen RAB project ini -->
+                                    <Link :href="`/projects/${project.id}/rab`" class="block">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            title="Rencana Anggaran Biaya"
+                                            class="w-full whitespace-nowrap border-emerald-200 bg-emerald-50 text-xs text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:border-emerald-500/50 dark:hover:bg-emerald-500/20"
+                                        >
+                                            <ClipboardList class="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                                            RAB
+                                        </Button>
+                                    </Link>
+
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        title="Edit Data Proyek"
+                                        :class="iconButtonClass"
+                                        @click="openEditModal(project)"
+                                    >
+                                        <Pencil class="h-3.5 w-3.5" />
+                                    </Button>
+
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        title="Undang / Kelola Klien"
+                                        :class="iconButtonClass"
+                                        @click="openClientModal(project)"
+                                    >
+                                        <UserPlus class="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1161,6 +1186,22 @@ const { isLoading } = usePageLoading(80);
                                     <Link :href="`/projects/${project.id}/viewer`">
                                         <Button class="w-full text-xs font-semibold bg-blue-500 hover:bg-blue-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300" size="sm">
                                             <Box class="mr-1.5 h-3.5 w-3.5" /> Buka & Beri Feedback
+                                        </Button>
+                                    </Link>
+                                    <!-- Tombol Lihat RAB — hanya muncul jika ada RAB yang dibagikan -->
+                                    <Link v-if="project.rab_visible_count > 0"
+                                          :href="`/projects/${project.id}/rab`"
+                                          class="mt-2 block">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            class="w-full text-xs font-semibold border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/60 hover:text-emerald-300 transition-all duration-200"
+                                        >
+                                            <ClipboardList class="mr-1.5 h-3.5 w-3.5" />
+                                            Lihat RAB
+                                            <span class="ml-1.5 rounded-full bg-emerald-500/30 px-1.5 py-0.5 text-[10px] font-bold">
+                                                {{ project.rab_visible_count }}
+                                            </span>
                                         </Button>
                                     </Link>
                                 </div>

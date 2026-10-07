@@ -271,6 +271,11 @@ function fmt(val: number) {
                     <Button size="sm" variant="outline" class="gap-1.5" @click="openMeta">
                         <Pencil class="h-4 w-4" /> Edit
                     </Button>
+                    <Link :href="`/projects/${project.id}/rab/${document.id}/import`">
+                        <Button size="sm" variant="outline" class="gap-1.5">
+                            <FileText class="h-4 w-4" /> Import CSV/Excel
+                        </Button>
+                    </Link>
                     <Button v-if="document.status === 'draft'" size="sm" class="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" @click="finalizeDoc">
                         <CheckCircle2 class="h-4 w-4" /> Finalisasi
                     </Button>

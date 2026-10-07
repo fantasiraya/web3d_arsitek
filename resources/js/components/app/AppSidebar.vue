@@ -5,15 +5,12 @@ import {
     LayoutDashboard, 
     Box, 
     Users, 
-    Settings, 
-    BookOpen, 
-    Server,
-    ChevronRight,
     MoreVertical,
     Receipt,
     User,
     LogOut,
     ClipboardList,
+    FileSpreadsheet,
 } from '@lucide/vue'
 import { useSidebar } from '@/composables/useSidebar'
 
@@ -54,8 +51,15 @@ const showUserDropdown = ref(false)
 
 // Check if current route matches
 const isActiveRoute = (routeName: string) => {
+    if (routeName === 'rab-template') {
+        return page.url.startsWith('/rab/templates')
+    }
     if (routeName === 'rab') {
-        return page.url.startsWith('/rab') || /\/projects\/[^/]+\/rab/.test(page.url);
+        // Aktif untuk semua halaman RAB kecuali template
+        return (
+            (page.url.startsWith('/rab') && !page.url.startsWith('/rab/templates')) ||
+            /\/projects\/[^/]+\/rab/.test(page.url)
+        )
     }
     return page.url === `/${routeName}` || page.url.startsWith(`/${routeName}/`)
 }
@@ -328,6 +332,38 @@ onUnmounted(() => {
                             leave-to-class="opacity-0"
                         >
                             <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">RAB & Lembar Kerja</span>
+                        </Transition>
+                    </div>
+                </Link>
+
+                <!-- RAB Template -->
+                <Link
+                    href="/rab/templates"
+                    :class="[
+                        'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all',
+                        isActiveRoute('rab-template')
+                            ? 'bg-slate-100 dark:bg-white/[0.06] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 shadow-sm'
+                            : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
+                        !isSidebarOpen && 'justify-center'
+                    ]"
+                    :title="!isSidebarOpen ? 'RAB Template' : ''"
+                >
+                    <div v-if="isActiveRoute('rab-template')" class="absolute left-0 top-2 bottom-2 w-1 bg-sky-500 dark:bg-[#38bdf8] rounded-r-full"></div>
+                    <div class="flex items-center gap-3 min-w-0">
+                        <FileSpreadsheet
+                            class="h-[19px] w-[19px] shrink-0 transition-colors"
+                            :class="isActiveRoute('rab-template') ? 'text-sky-600 dark:text-[#38bdf8]' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
+                            :stroke-width="2"
+                        />
+                        <Transition
+                            enter-active-class="transition-opacity duration-200 delay-75"
+                            enter-from-class="opacity-0"
+                            enter-to-class="opacity-100"
+                            leave-active-class="transition-opacity duration-150"
+                            leave-from-class="opacity-100"
+                            leave-to-class="opacity-0"
+                        >
+                            <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">RAB Template</span>
                         </Transition>
                     </div>
                 </Link>

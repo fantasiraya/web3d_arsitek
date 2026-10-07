@@ -5,9 +5,11 @@ namespace App\Domains\Rab\Controllers;
 use App\Domains\Project\Models\Project;
 use App\Domains\Rab\Actions\CreateRabDocumentAction;
 use App\Domains\Rab\Actions\FinalizeRabDocumentAction;
+use App\Domains\Rab\Actions\ImportQuantityTakeoffAction;
 use App\Domains\Rab\Actions\ToggleRabClientVisibilityAction;
 use App\Domains\Rab\Actions\UpdateRabDocumentAction;
 use App\Domains\Rab\Models\RabDocument;
+use App\Domains\Rab\Requests\ImportTakeoffRequest;
 use App\Domains\Rab\Requests\StoreRabDocumentRequest;
 use App\Domains\Rab\Requests\UpdateRabDocumentRequest;
 use App\Domains\Rab\Services\RabAccessService;
@@ -24,6 +26,7 @@ class RabDocumentController extends Controller
         protected UpdateRabDocumentAction      $update,
         protected FinalizeRabDocumentAction    $finalize,
         protected ToggleRabClientVisibilityAction $toggleVisibility,
+        protected ImportQuantityTakeoffAction  $importer,
     ) {}
 
     /**
@@ -166,5 +169,98 @@ class RabDocumentController extends Controller
             : 'RAB disembunyikan dari klien.';
 
         return back()->with('success', $msg);
+    }
+
+    // ── Import Quantity Take-off (Fase B) ─────────────────────────────────────
+
+    /**
+     * STEP 1 — Upload file, parse header, kembalikan preview + auto-suggest kolom.
+     * Response: JSON (dipakai oleh Import.vue via axios/fetch).
+     */
+    public function previewImport(Request $request, Project $project, RabDocument $rab): \Illuminate\Http\JsonResponse
+    {
+        $user = $request->user();
+        $this->access->authorizeEdit($user, $project);
+
+        $request->validate([
+            'file'       => ['required', 'file', 'max:10240', 'mimes:csv,xlsx,xls'],
+            'header_row' => ['sometimes', 'integer', 'min:1', 'max:10'],
+        ]);
+
+        $preview = $this->importer->preview(
+            $user,
+            $request->file('file'),
+            (int) $request->input('header_row', 1),
+        );
+
+        return response()->json($preview);
+    }
+
+    /**
+     * STEP 2 — Dry-run: cocokkan rows ke price items, kembalikan mapped + unmapped.
+     * Response: JSON.
+     */
+    public function dryRunImport(Request $request, Project $project, RabDocument $rab): \Illuminate\Http\JsonResponse
+    {
+        $user = $request->user();
+        $this->access->authorizeEdit($user, $project);
+
+        $request->validate([
+            'file'         => ['required', 'file', 'max:10240', 'mimes:csv,xlsx,xls'],
+            'name_col'     => ['required', 'string'],
+            'qty_col'      => ['required', 'string'],
+            'unit_col'     => ['nullable', 'string'],
+            'material_col' => ['nullable', 'string'],
+            'section_col'  => ['nullable', 'string'],
+            'header_row'   => ['sometimes', 'integer', 'min:1'],
+        ]);
+
+        $result = $this->importer->dryRun(
+            $user,
+            $request->file('file'),
+            $request->input('name_col'),
+            $request->input('qty_col'),
+            $request->input('unit_col', ''),
+            $request->input('material_col', ''),
+            $request->input('section_col', ''),
+            (int) $request->input('header_row', 1),
+        );
+
+        return response()->json($result);
+    }
+
+    /**
+     * STEP 3 — Eksekusi import: simpan items ke dokumen RAB.
+     * Redirect kembali ke halaman show RAB.
+     */
+    public function import(ImportTakeoffRequest $request, Project $project, RabDocument $rab): \Illuminate\Http\RedirectResponse
+    {
+        $user = $request->user();
+        $this->access->authorizeEdit($user, $project);
+
+        // Susun manual_prices menjadi array berindeks row_index
+        $manualPrices = [];
+        foreach ($request->input('manual_prices', []) as $mp) {
+            $manualPrices[(int) $mp['row_index']] = [
+                'unit_price'    => (float) $mp['unit_price'],
+                'price_item_id' => $mp['price_item_id'] ?? null,
+            ];
+        }
+
+        $this->importer->execute(
+            $user,
+            $rab,
+            $request->file('file'),
+            $request->input('name_col'),
+            $request->input('qty_col'),
+            $request->input('unit_col', ''),
+            $request->input('material_col', ''),
+            $request->input('section_col', ''),
+            (int) $request->input('header_row', 1),
+            $manualPrices,
+        );
+
+        return to_route('rab.show', [$project->id, $rab->id])
+            ->with('success', 'Import quantity take-off berhasil. Periksa item yang belum terpetakan.');
     }
 }

@@ -163,7 +163,7 @@
 | UI Editor RAB (`/projects/{id}/rab/{rab}`) | Frontend | 🟢 Completed | `Rab/Show.vue` — item CRUD per section, summary cards, finalize/reopen, toggle visibilitas klien |
 | Menu RAB di AppSidebar | Frontend | 🟢 Completed | Icon `ClipboardList`, active state detection `/rab/*` dan `/projects/*/rab/*` |
 | Pest tests Action RAB | Testing | 🔴 Pending | Dijadwalkan post-MVP |
-| Fase B: Import Quantity Take-off CSV/Excel | Backend & Frontend | 🔴 Pending | `ImportQuantityTakeoffAction`, `TakeoffParserService`, `RabMappingService` |
+| Fase B: Import Quantity Take-off CSV/Excel | Backend & Frontend | 🟢 Completed | `league/csv` 9.28 + `phpspreadsheet` 3.10, `TakeoffParserService`, `RabMappingService`, `ImportQuantityTakeoffAction`, wizard 3-step `Rab/Import.vue` — selesai 2026-10-07 |
 | Fase C: Estimator RAB dari `.glb` | Frontend (Three.js) & Backend | 🔴 Pending | `useGlbQuantities.ts`, `ApplyGlbQuantitiesAction` |
 | Export RAB Excel/PDF | Backend | 🔴 Pending | Perlu persetujuan paket XLSX/PDF |
 | Import IFC | Backend | 🔴 Pending | Could Have |
@@ -184,3 +184,4 @@
 - **2026-09-28:** Sinkronisasi dokumen v2.5 — Update seluruh guide folder agar mencerminkan kondisi aplikasi PitchArch aktual: nama brand PitchArch, Laravel 12 (bukan 13), Inertia.js + Vue 3 (bukan Nuxt 3), MySQL (bukan PostgreSQL), Laravel Fortify (bukan Sanctum), local disk public (bukan Cloudflare R2), queue database driver (bukan Redis), tambah tabel `camera_presets`, email verification sudah diimplementasikan, Admin Panel sudah selesai, fitur billing sudah selesai (kecuali invoice PDF).
 - **2026-10-07:** Sinkronisasi dokumen v2.6 — rancangan modul RAB (`Domains/Rab`) digabung ke PRD, DATABASE_SCHEMA, FOLDER_STRUCTURE, AI_INSTRUCTIONS, RTCF, RISE. Ditulis migration + Action Fase A (🟡, belum dijalankan/diuji di repo).
 - **2026-10-07 (Update):** Implementasi RAB Fase A selesai penuh — 6 migration dijalankan, 6 models, RabAccessService, 5 Form Requests, 9 Actions (RecalculateRabAction sebagai satu sumber kebenaran), 4 Controllers, 20 routes aktif, 4 halaman Vue (PriceItems, Templates, Index, Show), menu sidebar. Vite build sukses 3331 modules, PHP syntax check 18 file OK.
+- **2026-10-07 (Update):** Implementasi RAB Fase B selesai — Install `league/csv` 9.28 + `phpoffice/phpspreadsheet` 3.10. `TakeoffParserService` (CSV auto-detect delimiter + XLSX), `RabMappingService` (exact/wildcard/material match + saveMappings), `ImportQuantityTakeoffAction` (3-step: preview/dryRun/execute). `ImportTakeoffRequest`, 3 method baru di `RabDocumentController`, 4 routes import, halaman wizard `Rab/Import.vue`. Vite build sukses.

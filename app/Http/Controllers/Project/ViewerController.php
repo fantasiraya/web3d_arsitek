@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Project;
 
 use App\Domains\Comment\Models\Comment;
 use App\Domains\Project\Models\Project;
+use App\Domains\Rab\Models\RabDocument;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,12 +14,6 @@ class ViewerController extends Controller
 {
     public function show(Request $request, string $projectId)
     {
-        // Access control is already enforced by ProjectClientAccessMiddleware
-        // on the route — no need to repeat those checks here.
-
-        // Load project with only the columns the viewer needs.
-        // Comments: only root pins (parent_id IS NULL), select specific columns
-        // to avoid loading heavy TEXT/DECIMAL fields unnecessarily.
         $project = Project::select([
             'id', 'user_id', 'title', 'slug', 'description',
             'file_path', 'file_size_bytes', 'is_draco_compressed',
@@ -26,12 +21,10 @@ class ViewerController extends Controller
             'created_at', 'updated_at',
         ])
         ->with([
-            // Only need latest version for viewer to pick the right file
             'versions' => fn ($q) => $q
                 ->select(['id', 'project_id', 'version_number', 'file_path', 'is_draco_compressed'])
                 ->orderBy('version_number', 'desc'),
 
-            // Spatial pin comments — load only necessary columns
             'comments' => fn ($q) => $q
                 ->select([
                     'id', 'project_id', 'user_id', 'parent_id', 'content',
@@ -45,8 +38,7 @@ class ViewerController extends Controller
         ])
         ->findOrFail($projectId);
 
-        // Sync revision count using a single COUNT query.
-        // Only write when stale — avoids unnecessary UPDATE on every view.
+        // Sync revision count — only write when stale
         $actualCount = DB::table('comments')
             ->where('project_id', $project->id)
             ->whereNull('parent_id')
@@ -60,8 +52,26 @@ class ViewerController extends Controller
             $project->current_revision_count = $actualCount;
         }
 
+        $user    = $request->user();
+        $isOwner = $project->user_id === $user?->id;
+
+        // RAB documents visible ke user ini:
+        //  - Owner: semua dokumen RAB project ini
+        //  - Klien accepted: hanya yang is_visible_to_clients = true
+        $rabQuery = RabDocument::where('project_id', $project->id)
+            ->select(['id', 'title', 'status', 'is_visible_to_clients', 'total', 'source'])
+            ->withCount('items');
+
+        if (! $isOwner) {
+            $rabQuery->where('is_visible_to_clients', true);
+        }
+
+        $rabDocuments = $rabQuery->latest()->get();
+
         return Inertia::render('Project/Viewer', [
-            'project' => $project,
+            'project'      => $project,
+            'rabDocuments' => $rabDocuments,
+            'isOwner'      => $isOwner,
         ]);
     }
 }

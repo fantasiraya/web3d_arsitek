@@ -93,6 +93,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/projects/{project}/rab/{rab}/reopen', [RabDocumentController::class, 'reopen'])->name('rab.reopen');
     Route::patch('/projects/{project}/rab/{rab}/visibility', [RabDocumentController::class, 'toggleVisibility'])->name('rab.visibility');
 
+    // Import Quantity Take-off (Fase B) — 3 step
+    Route::post('/projects/{project}/rab/{rab}/import/preview',  [RabDocumentController::class, 'previewImport'])->name('rab.import.preview');
+    Route::post('/projects/{project}/rab/{rab}/import/dry-run',  [RabDocumentController::class, 'dryRunImport'])->name('rab.import.dry-run');
+    Route::post('/projects/{project}/rab/{rab}/import',          [RabDocumentController::class, 'import'])->name('rab.import');
+    Route::get('/projects/{project}/rab/{rab}/import',           fn (\Illuminate\Http\Request $req, $project, $rab) =>
+        \Inertia\Inertia::render('Rab/Import', [
+            'project'  => \App\Domains\Project\Models\Project::findOrFail($project)->only('id', 'title', 'slug'),
+            'document' => \App\Domains\Rab\Models\RabDocument::findOrFail($rab),
+        ])
+    )->name('rab.import.page');
+
     // Item RAB (terikat dokumen RAB)
     Route::post('/projects/{project}/rab/{rab}/items', [RabItemController::class, 'store'])->name('rab.items.store');
     Route::put('/projects/{project}/rab/{rab}/items/{item}', [RabItemController::class, 'update'])->name('rab.items.update');

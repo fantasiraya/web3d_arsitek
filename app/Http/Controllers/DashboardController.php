@@ -6,6 +6,7 @@ use App\Domains\Billing\Models\Transaction;
 use App\Domains\Billing\Services\SubscriptionLimitService;
 use App\Domains\Project\Models\Project;
 use App\Domains\Project\Models\ProjectClient;
+use App\Domains\Rab\Models\RabDocument;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -155,7 +156,19 @@ class DashboardController extends Controller
             }
         }
 
-        $clientProjectsMapped = $clientProjects->map(function (ProjectClient $client) use ($revisionCounts) {
+        // Hitung RAB visible per project untuk klien — satu query, bukan N queries
+        $rabVisibleCounts = [];
+        if (! empty($clientProjectIds)) {
+            $rabVisibleCounts = DB::table('rab_documents')
+                ->selectRaw('project_id, COUNT(*) as cnt')
+                ->whereIn('project_id', $clientProjectIds)
+                ->where('is_visible_to_clients', true)
+                ->groupBy('project_id')
+                ->pluck('cnt', 'project_id')
+                ->toArray();
+        }
+
+        $clientProjectsMapped = $clientProjects->map(function (ProjectClient $client) use ($revisionCounts, $rabVisibleCounts) {
             $project     = $client->project;
             $actualCount = (int) ($revisionCounts[$project->id] ?? $project->current_revision_count);
 
@@ -173,6 +186,7 @@ class DashboardController extends Controller
                 'current_revision_count' => $actualCount,
                 'has_reached_revision_limit' => $actualCount >= $project->max_revisions_allowed,
                 'created_at'             => $project->created_at?->diffForHumans(),
+                'rab_visible_count'      => (int) ($rabVisibleCounts[$project->id] ?? 0),
             ];
         })->values();
 

@@ -50,6 +50,88 @@
                     <span class="hidden sm:inline">{{ isFullscreen ? 'Keluar Penuh' : 'Layar Penuh' }}</span>
                 </button>
 
+                <!-- RAB button — muncul jika ada dokumen RAB yang visible -->
+                <div v-if="hasVisibleRab" class="relative">
+                    <button
+                        type="button"
+                        @click="showRabPanel = !showRabPanel; isChatOpen = false"
+                        class="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
+                        :class="showRabPanel && 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'"
+                    >
+                        <ClipboardList class="h-3.5 w-3.5" :class="showRabPanel ? 'text-emerald-400' : 'text-emerald-300'" />
+                        <span class="hidden sm:inline">RAB</span>
+                        <span class="inline-flex items-center justify-center rounded-full bg-emerald-500/80 px-1.5 text-[9px] font-bold text-white min-w-[16px]">
+                            {{ rabDocuments.length }}
+                        </span>
+                    </button>
+
+                    <!-- RAB dropdown panel -->
+                    <Transition
+                        enter-active-class="transition-all duration-200 ease-out"
+                        enter-from-class="opacity-0 scale-95 translate-y-1"
+                        enter-to-class="opacity-100 scale-100 translate-y-0"
+                        leave-active-class="transition-all duration-150 ease-in"
+                        leave-from-class="opacity-100 scale-100 translate-y-0"
+                        leave-to-class="opacity-0 scale-95 translate-y-1"
+                    >
+                        <div
+                            v-if="showRabPanel"
+                            class="absolute right-0 top-10 z-50 w-80 rounded-2xl border border-white/15 bg-black/95 backdrop-blur-2xl shadow-2xl overflow-hidden"
+                        >
+                            <!-- Header -->
+                            <div class="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                                <div class="flex items-center gap-2">
+                                    <ClipboardList class="h-4 w-4 text-emerald-400" />
+                                    <span class="text-sm font-semibold text-white">Rencana Anggaran Biaya</span>
+                                </div>
+                                <button @click="showRabPanel = false" class="text-neutral-500 hover:text-white transition-colors">
+                                    <X class="h-4 w-4" />
+                                </button>
+                            </div>
+
+                            <!-- RAB document list -->
+                            <div class="divide-y divide-white/5 max-h-80 overflow-y-auto">
+                                <Link
+                                    v-for="doc in rabDocuments"
+                                    :key="doc.id"
+                                    :href="`/projects/${project.id}/rab/${doc.id}`"
+                                    class="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors group"
+                                >
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm font-medium text-white truncate">{{ doc.title }}</p>
+                                        <div class="flex items-center gap-2 mt-0.5">
+                                            <span :class="[
+                                                'text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
+                                                doc.status === 'final'
+                                                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                                    : 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+                                            ]">
+                                                {{ doc.status === 'final' ? 'Final' : 'Draft' }}
+                                            </span>
+                                            <span class="text-[10px] text-neutral-500">{{ doc.items_count }} item</span>
+                                            <span class="text-[10px] font-semibold text-emerald-400">
+                                                {{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(doc.total) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <ExternalLink class="h-3.5 w-3.5 text-neutral-600 group-hover:text-emerald-400 transition-colors shrink-0" />
+                                </Link>
+                            </div>
+
+                            <!-- Footer — owner bisa ke halaman RAB project -->
+                            <div v-if="isOwner" class="border-t border-white/10 px-4 py-2.5">
+                                <Link
+                                    :href="`/projects/${project.id}/rab`"
+                                    class="flex items-center justify-center gap-1.5 text-xs text-neutral-400 hover:text-white transition-colors"
+                                >
+                                    <ClipboardList class="h-3.5 w-3.5" />
+                                    Kelola semua dokumen RAB
+                                </Link>
+                            </div>
+                        </div>
+                    </Transition>
+                </div>
+
                 <!-- Chat toggle — hanya untuk owner dan client, bukan admin viewer -->
                 <button
                     v-if="!isAdminViewer"
@@ -760,8 +842,10 @@ import {
     BookmarkPlus,
     Check,
     CheckCircle2,
+    ClipboardList,
     Eye,
     EyeOff,
+    ExternalLink,
     Focus,
     GripVertical,
     Hand,
@@ -905,6 +989,20 @@ const isOwner = computed(() => {
 const isAdminViewer = computed(() => {
     return (page.props.auth as any)?.user?.is_admin === true && !isOwner.value;
 });
+
+// Dokumen RAB yang boleh dilihat user ini (dikirim dari ViewerController)
+interface RabDocSummary {
+    id: string;
+    title: string;
+    status: 'draft' | 'final';
+    is_visible_to_clients: boolean;
+    total: number;
+    source: string;
+    items_count: number;
+}
+const rabDocuments = computed(() => (page.props.rabDocuments ?? []) as RabDocSummary[]);
+const hasVisibleRab = computed(() => rabDocuments.value.length > 0);
+const showRabPanel  = ref(false);
 
 // Lerp target — sama polanya dengan framing model
 let presetLerpTarget: { pos: THREE.Vector3; tgt: THREE.Vector3 } | null = null;
