@@ -77,7 +77,7 @@ Route::middleware(['auth', 'project.access'])->group(function () {
 });
 
 // ── RAB & Lembar Kerja ──
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', 'rab.access'])->group(function () {
     // Master harga satuan (milik user, tidak terikat project)
     Route::get('/rab/price-items', [RabPriceItemController::class, 'index'])->name('rab.price-items.index');
     Route::post('/rab/price-items', [RabPriceItemController::class, 'store'])->name('rab.price-items.store');

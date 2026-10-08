@@ -547,7 +547,7 @@ function submitPaymentSettings() {
                     </div>
                     <div class="grid gap-4 sm:grid-cols-3">
                         <div class="space-y-1.5">
-                            <Label>Free Tier (MB)</Label>
+                            <Label>Free (MB)</Label>
                             <div class="flex items-center gap-2">
                                 <Input
                                     v-model.number="paymentForm.free_tier_max_file_size_mb"

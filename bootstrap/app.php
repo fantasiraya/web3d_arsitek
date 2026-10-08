@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\CheckAccountStatus;
+use App\Http\Middleware\CheckRabAccess;
 use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -42,6 +43,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => RoleOrPermissionMiddleware::class,
             'account.active' => CheckAccountStatus::class,
             'super_admin' => EnsureSuperAdmin::class,
+            'rab.access' => CheckRabAccess::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

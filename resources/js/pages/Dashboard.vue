@@ -728,7 +728,7 @@ const { isLoading } = usePageLoading(80);
                                 v-else
                                 class="bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-neutral-300 text-xs font-medium border border-slate-200 dark:border-white/15"
                             >
-                                FREE TIER ({{ stats?.owned_count ?? 0 }}/{{ stats?.max_projects ?? 3 }} Proyek)
+                                FREE ({{ stats?.owned_count ?? 0 }}/{{ stats?.max_projects ?? 3 }} Proyek)
                             </Badge>
                         </div>
                         <p class="mt-2 text-sm text-slate-500 dark:text-neutral-300 leading-relaxed">

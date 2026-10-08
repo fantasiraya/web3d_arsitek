@@ -12,6 +12,7 @@ import {
     ClipboardList,
     GitMerge,
     FileSpreadsheet,
+    Lock,
 } from '@lucide/vue'
 import { useSidebar } from '@/composables/useSidebar'
 
@@ -40,6 +41,20 @@ const planLabel = computed<'Free' | 'Pro' | 'Enterprise'>(() => {
     if (name.includes('pro'))        return 'Pro';
     return 'Free';
 });
+
+// Check if user has access to RAB features (Pro and Enterprise only)
+const hasRabAccess = computed(() => planLabel.value !== 'Free');
+
+// Handle RAB feature click
+const handleRabClick = (event: Event, route: string) => {
+    if (!hasRabAccess.value) {
+        event.preventDefault();
+        // Show native confirmation before redirect
+        if (confirm('Fitur RAB & Lembar Kerja hanya tersedia untuk pengguna Pro dan Enterprise.\n\nApakah Anda ingin melihat paket berlangganan kami?')) {
+            router.visit('/plans');
+        }
+    }
+};
 
 // Ukuran file maks per proyek berdasarkan plan (dari PRD: Free=50MB, Pro=100MB)
 const maxFileSizeMb = computed(() => {
@@ -306,22 +321,26 @@ onUnmounted(() => {
                 </Link>
 
                 <!-- RAB & Lembar Kerja -->
-                <Link
-                    href="/rab/price-items"
+                <component
+                    :is="hasRabAccess ? Link : 'button'"
+                    :href="hasRabAccess ? '/rab/price-items' : undefined"
+                    @click="!hasRabAccess ? handleRabClick($event, '/rab/price-items') : null"
                     :class="[
-                        'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all',
-                        (isActiveRoute('rab'))
+                        'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all w-full text-left',
+                        (isActiveRoute('rab') && hasRabAccess)
                             ? 'bg-slate-100 dark:bg-white/[0.06] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 shadow-sm'
-                            : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
+                            : !hasRabAccess
+                                ? 'text-slate-400 dark:text-[#6b7280] opacity-60 cursor-pointer hover:opacity-80'
+                                : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
                         !isSidebarOpen && 'justify-center'
                     ]"
-                    :title="!isSidebarOpen ? 'RAB & Lembar Kerja' : ''"
+                    :title="!isSidebarOpen ? (!hasRabAccess ? 'RAB & Lembar Kerja (Pro)' : 'RAB & Lembar Kerja') : ''"
                 >
-                    <div v-if="isActiveRoute('rab')" class="absolute left-0 top-2 bottom-2 w-1 bg-sky-500 dark:bg-[#38bdf8] rounded-r-full"></div>
-                    <div class="flex items-center gap-3 min-w-0">
+                    <div v-if="isActiveRoute('rab') && hasRabAccess" class="absolute left-0 top-2 bottom-2 w-1 bg-sky-500 dark:bg-[#38bdf8] rounded-r-full"></div>
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
                         <ClipboardList
                             class="h-[19px] w-[19px] shrink-0 transition-colors"
-                            :class="isActiveRoute('rab') ? 'text-sky-600 dark:text-[#38bdf8]' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
+                            :class="(isActiveRoute('rab') && hasRabAccess) ? 'text-sky-600 dark:text-[#38bdf8]' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
                             :stroke-width="2"
                         />
                         <Transition
@@ -335,25 +354,42 @@ onUnmounted(() => {
                             <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">RAB & Lembar Kerja</span>
                         </Transition>
                     </div>
-                </Link>
+                    <Transition
+                        enter-active-class="transition-opacity duration-200 delay-100"
+                        enter-from-class="opacity-0"
+                        enter-to-class="opacity-100"
+                        leave-active-class="transition-opacity duration-150"
+                        leave-from-class="opacity-100"
+                        leave-to-class="opacity-0"
+                    >
+                        <div v-if="isSidebarOpen && !hasRabAccess" class="flex items-center gap-1.5">
+                            <Lock class="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" :stroke-width="2.5" />
+                            <span class="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-400/15 text-amber-600 dark:text-amber-300 border border-amber-200 dark:border-amber-400/25">PRO</span>
+                        </div>
+                    </Transition>
+                </component>
 
                 <!-- RAB Template -->
-                <Link
-                    href="/rab/templates"
+                <component
+                    :is="hasRabAccess ? Link : 'button'"
+                    :href="hasRabAccess ? '/rab/templates' : undefined"
+                    @click="!hasRabAccess ? handleRabClick($event, '/rab/templates') : null"
                     :class="[
-                        'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all',
-                        isActiveRoute('rab-template')
+                        'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all w-full text-left',
+                        (isActiveRoute('rab-template') && hasRabAccess)
                             ? 'bg-slate-100 dark:bg-white/[0.06] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 shadow-sm'
-                            : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
+                            : !hasRabAccess
+                                ? 'text-slate-400 dark:text-[#6b7280] opacity-60 cursor-pointer hover:opacity-80'
+                                : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
                         !isSidebarOpen && 'justify-center'
                     ]"
-                    :title="!isSidebarOpen ? 'RAB Template' : ''"
+                    :title="!isSidebarOpen ? (!hasRabAccess ? 'RAB Template (Pro)' : 'RAB Template') : ''"
                 >
-                    <div v-if="isActiveRoute('rab-template')" class="absolute left-0 top-2 bottom-2 w-1 bg-sky-500 dark:bg-[#38bdf8] rounded-r-full"></div>
-                    <div class="flex items-center gap-3 min-w-0">
+                    <div v-if="isActiveRoute('rab-template') && hasRabAccess" class="absolute left-0 top-2 bottom-2 w-1 bg-sky-500 dark:bg-[#38bdf8] rounded-r-full"></div>
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
                         <FileSpreadsheet
                             class="h-[19px] w-[19px] shrink-0 transition-colors"
-                            :class="isActiveRoute('rab-template') ? 'text-sky-600 dark:text-[#38bdf8]' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
+                            :class="(isActiveRoute('rab-template') && hasRabAccess) ? 'text-sky-600 dark:text-[#38bdf8]' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
                             :stroke-width="2"
                         />
                         <Transition
@@ -367,25 +403,42 @@ onUnmounted(() => {
                             <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">RAB Template</span>
                         </Transition>
                     </div>
-                </Link>
+                    <Transition
+                        enter-active-class="transition-opacity duration-200 delay-100"
+                        enter-from-class="opacity-0"
+                        enter-to-class="opacity-100"
+                        leave-active-class="transition-opacity duration-150"
+                        leave-from-class="opacity-100"
+                        leave-to-class="opacity-0"
+                    >
+                        <div v-if="isSidebarOpen && !hasRabAccess" class="flex items-center gap-1.5">
+                            <Lock class="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" :stroke-width="2.5" />
+                            <span class="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-400/15 text-amber-600 dark:text-amber-300 border border-amber-200 dark:border-amber-400/25">PRO</span>
+                        </div>
+                    </Transition>
+                </component>
 
                 <!-- RAB Mapping -->
-                <Link
-                    href="/rab/mappings"
+                <component
+                    :is="hasRabAccess ? Link : 'button'"
+                    :href="hasRabAccess ? '/rab/mappings' : undefined"
+                    @click="!hasRabAccess ? handleRabClick($event, '/rab/mappings') : null"
                     :class="[
-                        'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all',
-                        page.url.startsWith('/rab/mappings')
+                        'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all w-full text-left',
+                        (page.url.startsWith('/rab/mappings') && hasRabAccess)
                             ? 'bg-slate-100 dark:bg-white/[0.06] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 shadow-sm'
-                            : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
+                            : !hasRabAccess
+                                ? 'text-slate-400 dark:text-[#6b7280] opacity-60 cursor-pointer hover:opacity-80'
+                                : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
                         !isSidebarOpen && 'justify-center'
                     ]"
-                    :title="!isSidebarOpen ? 'Mapping RAB' : ''"
+                    :title="!isSidebarOpen ? (!hasRabAccess ? 'Mapping RAB (Pro)' : 'Mapping RAB') : ''"
                 >
-                    <div v-if="page.url.startsWith('/rab/mappings')" class="absolute left-0 top-2 bottom-2 w-1 bg-sky-500 dark:bg-[#38bdf8] rounded-r-full"></div>
-                    <div class="flex items-center gap-3 min-w-0">
+                    <div v-if="page.url.startsWith('/rab/mappings') && hasRabAccess" class="absolute left-0 top-2 bottom-2 w-1 bg-sky-500 dark:bg-[#38bdf8] rounded-r-full"></div>
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
                         <GitMerge
                             class="h-[19px] w-[19px] shrink-0 transition-colors"
-                            :class="page.url.startsWith('/rab/mappings') ? 'text-sky-600 dark:text-[#38bdf8]' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
+                            :class="(page.url.startsWith('/rab/mappings') && hasRabAccess) ? 'text-sky-600 dark:text-[#38bdf8]' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
                             :stroke-width="2"
                         />
                         <Transition
@@ -399,7 +452,20 @@ onUnmounted(() => {
                             <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">Mapping RAB</span>
                         </Transition>
                     </div>
-                </Link>
+                    <Transition
+                        enter-active-class="transition-opacity duration-200 delay-100"
+                        enter-from-class="opacity-0"
+                        enter-to-class="opacity-100"
+                        leave-active-class="transition-opacity duration-150"
+                        leave-from-class="opacity-100"
+                        leave-to-class="opacity-0"
+                    >
+                        <div v-if="isSidebarOpen && !hasRabAccess" class="flex items-center gap-1.5">
+                            <Lock class="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" :stroke-width="2.5" />
+                            <span class="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-400/15 text-amber-600 dark:text-amber-300 border border-amber-200 dark:border-amber-400/25">PRO</span>
+                        </div>
+                    </Transition>
+                </component>
             </div>
         </div>
 
@@ -511,7 +577,7 @@ onUnmounted(() => {
                                             ? 'bg-violet-50 dark:bg-violet-400/15 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-400/25'
                                             : 'bg-amber-50 dark:bg-amber-400/20 text-amber-600 dark:text-amber-300 border border-amber-200 dark:border-amber-400/30'"
                                     >
-                                        {{ planLabel.toUpperCase() }} TIER
+                                        {{ planLabel.toUpperCase() }}
                                     </span>
                                 </div>
                             </div>
@@ -569,7 +635,7 @@ onUnmounted(() => {
                                                     : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-[#9ca3af] border border-slate-200 dark:border-white/10'
                                             ]"
                                         >
-                                            {{ user?.is_pro ? '⭐ PRO TIER' : 'FREE TIER' }}
+                                            {{ user?.is_pro ? '⭐ PRO' : 'FREE TIER' }}
                                         </span>
                                     </div>
                                 </div>
