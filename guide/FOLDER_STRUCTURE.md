@@ -2,6 +2,8 @@
 
 Dokumen ini adalah acuan resmi struktur folder untuk aplikasi **PitchArch**: monorepo Laravel 12 + Inertia.js + Vue 3 (bukan backend/frontend terpisah).
 
+> **v2.7 Changelog:** Menambahkan file-file baru modul AHSP (`RabPriceItemComponent.php`, `RecalculatePriceItemAction.php`, `RabPriceItemComponentController.php`), Fase B/C RAB (`ImportQuantityTakeoffAction.php`, `ApplyGlbQuantitiesAction.php`, `TakeoffParserService.php`, `RabMappingService.php`), Export (`ExportRabAction.php`), Mapping RAB (`RabMappingController.php`), profil arsitek (`IndonesiaRegionController.php`, `useIndonesiaRegion.ts`, `AddressInput.vue`), halaman baru Rab (`GlbEstimator.vue`, `Import.vue`, `Mappings.vue`, `PriceItemComponents.vue`, `TemplateShow.vue`), composable `useGlbQuantities.ts`. Tambah rencana folder `Domains/Drawing/` (belum dibuat). Update routes baru.
+>
 > **v2.6 Changelog:** Menambahkan `app/Domains/Rab/` dan `resources/js/pages/Rab/` (modul RAB & Lembar Kerja).
 >
 > **v2.5 Changelog:** Diperbarui dari struktur fiktif `backend/` + `frontend/` terpisah ke struktur **monorepo Laravel Inertia** yang aktual. Mengganti referensi Nuxt 3 → Inertia/Vue 3, PostgreSQL → MySQL, Cloudflare R2 → local disk public, Sanctum → Fortify. Menambahkan `camera_presets`, `Events/`, `Middleware/` aktual, layout Inertia (`LandingLayout`, `AdminLayout`, `UnifiedLayout`), dan folder `routes/` aktual.
@@ -114,17 +116,43 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │   │   ├── FinalizeRabDocumentAction.php    # finalize + reopen
 │   │   │   │   ├── ToggleRabClientVisibilityAction.php
 │   │   │   │   ├── SavePriceItemAction.php
-│   │   │   │   └── SaveRabTemplateAction.php        # Fase B/C: ImportQuantityTakeoffAction, ApplyGlbQuantitiesAction
-│   │   │   ├── Models/                              # RabDocument, RabItem, RabPriceItem, RabTemplate, RabTemplateItem, RabMapping
-│   │   │   ├── Requests/                            # StoreRabDocumentRequest, UpsertRabItemRequest, StorePriceItemRequest
+│   │   │   │   ├── SaveRabTemplateAction.php
+│   │   │   │   ├── RecalculatePriceItemAction.php   # AHSP: satu sumber kebenaran kalkulasi unit_price dari komponen
+│   │   │   │   ├── ImportQuantityTakeoffAction.php  # Fase B: import CSV/XLSX
+│   │   │   │   ├── ApplyGlbQuantitiesAction.php     # Fase C: apply hasil Three.js ke RAB (is_estimate=true)
+│   │   │   │   └── ExportRabAction.php              # Multi-sheet XLSX: Rekap, Detail, AHSP per item
+│   │   │   ├── Controllers/
+│   │   │   │   ├── RabDocumentController.php
+│   │   │   │   ├── RabItemController.php
+│   │   │   │   ├── RabPriceItemController.php
+│   │   │   │   ├── RabTemplateController.php
+│   │   │   │   ├── RabMappingController.php         # CRUD mapping RAB (/rab/mappings)
+│   │   │   │   └── RabPriceItemComponentController.php  # AHSP components per price item
+│   │   │   ├── Models/
+│   │   │   │   ├── RabDocument.php
+│   │   │   │   ├── RabItem.php
+│   │   │   │   ├── RabPriceItem.php
+│   │   │   │   ├── RabPriceItemComponent.php        # AHSP sub-komponen (tenaga/bahan/peralatan)
+│   │   │   │   ├── RabTemplate.php
+│   │   │   │   ├── RabTemplateItem.php
+│   │   │   │   └── RabMapping.php
+│   │   │   ├── Requests/                            # StoreRabDocumentRequest, UpsertRabItemRequest, StorePriceItemRequest, dll.
 │   │   │   └── Services/
-│   │   │       └── RabAccessService.php             # Gating can_use_rab + akses lihat (switch klien)
+│   │   │       ├── RabAccessService.php             # Gating can_use_rab + akses lihat (switch klien)
+│   │   │       ├── TakeoffParserService.php         # Parse CSV (auto-detect delimiter) + XLSX via phpspreadsheet
+│   │   │       └── RabMappingService.php            # Pencocokan exact/wildcard/material + saveMappings
 │   │   │
 │   │   └── SystemConfig/       # Konfigurasi Kuota Global & Backoffice Super Admin
 │   │       ├── Models/
 │   │       │   └── AuditLog.php
 │   │       ├── Repositories/                        # SystemSettingRepository.php
 │   │       └── Services/                            # GetSettingsService.php
+│   │
+│   │   # ─── RENCANA v2.7 (belum dibuat) ─────────────────────────────────────
+│   │   # └── Drawing/          # Editor Gambar Teknik 2D — hanya Enterprise
+│   │   #     ├── Actions/      # CreateDrawingSheetAction, ExportDxfAction, ExportSvgAction
+│   │   #     ├── Controllers/  # DrawingSheetController, DrawingElementController
+│   │   #     └── Models/       # DrawingSheet.php, DrawingElement.php
 │   │
 │   ├── Events/                 # Domain Events untuk Broadcasting (Reverb)
 │   │   ├── ChatMessageSent.php             # implements ShouldBroadcast
@@ -147,10 +175,11 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │   │   ├── ProjectController.php            # CRUD project
 │   │   │   │   └── ViewerController.php             # Serve Viewer page + data model
 │   │   │   ├── Settings/
-│   │   │   │   └── ProfileController.php            # Update profile, avatar, dll.
+│   │   │   │   └── ProfileController.php            # Update profile, avatar, badan usaha, alamat wilayah
 │   │   │   ├── BillingController.php
 │   │   │   ├── CheckoutController.php               # Inisiasi Midtrans Snap
 │   │   │   ├── DashboardController.php
+│   │   │   ├── IndonesiaRegionController.php        # API /region/* (provinces,cities,districts,villages) — tanpa auth
 │   │   │   ├── PlansController.php
 │   │   │   ├── ProjectsPageController.php
 │   │   │   ├── TeamsPageController.php
@@ -180,7 +209,7 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   ├── components/         # Reusable UI Components
 │   │   │   ├── app/
 │   │   │   │   ├── AppHeader.vue
-│   │   │   │   └── AppSidebar.vue
+│   │   │   │   └── AppSidebar.vue          # Menu baru: "RAB & Lembar Kerja", "RAB Template", "Mapping RAB"
 │   │   │   ├── landing/        # Apple-Style Landing Page Components
 │   │   │   │   ├── ArchitecturalCinematicSection.vue
 │   │   │   │   ├── BentoGridSection.vue
@@ -192,20 +221,23 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │   │   ├── LandingNavbar.vue
 │   │   │   │   ├── PricingSection.vue
 │   │   │   │   └── ScrollyExperienceSection.vue
-│   │   │   └── ui/             # shadcn/ui Vue port components
-│   │   │       ├── badge/
-│   │   │       ├── button/
-│   │   │       ├── dialog/
-│   │   │       ├── input/
-│   │   │       ├── label/
-│   │   │       ├── skeleton/
-│   │   │       ├── sonner/
-│   │   │       └── spinner/
+│   │   │   ├── ui/             # shadcn/ui Vue port components
+│   │   │   │   ├── badge/
+│   │   │   │   ├── button/
+│   │   │   │   ├── dialog/
+│   │   │   │   ├── input/
+│   │   │   │   ├── label/
+│   │   │   │   ├── skeleton/
+│   │   │   │   ├── sonner/
+│   │   │   │   └── spinner/
+│   │   │   └── AddressInput.vue            # Cascading dropdown wilayah Indonesia (province→city→district→village)
 │   │   │
 │   │   ├── composables/        # Shared Vue Composables
 │   │   │   ├── useConfirm.ts
 │   │   │   ├── usePageLoading.ts
-│   │   │   └── useSidebar.ts
+│   │   │   ├── useSidebar.ts
+│   │   │   ├── useGlbQuantities.ts         # Hitung luas/volume/count per mesh dari .glb (Three.js); baca custom properties Blender
+│   │   │   └── useIndonesiaRegion.ts       # Cascading dropdown wilayah Indonesia via /region/* API
 │   │   │
 │   │   ├── layouts/            # Inertia Page Layouts
 │   │   │   ├── AdminLayout.vue         # Layout untuk halaman /admin/*
@@ -246,10 +278,15 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │   ├── Rab/
 │   │   │   │   ├── Index.vue           # Daftar RAB per project
 │   │   │   │   ├── Show.vue            # Editor/preview RAB + switch visibilitas klien
-│   │   │   │   ├── PriceItems.vue      # Master harga satuan
-│   │   │   │   └── Templates.vue       # Template RAB
+│   │   │   │   ├── PriceItems.vue      # Master harga satuan (tombol FlaskConical → AHSP)
+│   │   │   │   ├── PriceItemComponents.vue  # Tabel AHSP per harga satuan (tenaga/bahan/peralatan)
+│   │   │   │   ├── Templates.vue       # Template RAB
+│   │   │   │   ├── TemplateShow.vue    # Detail/edit item dalam template
+│   │   │   │   ├── Import.vue          # Wizard 3-step import CSV/XLSX (Fase B)
+│   │   │   │   ├── GlbEstimator.vue    # Estimator dari .glb (Fase C) — auto-load, tabel mesh, basis selector
+│   │   │   │   └── Mappings.vue        # Halaman mapping RAB (/rab/mappings)
 │   │   │   └── Settings/
-│   │   │       ├── Profile.vue
+│   │   │       ├── Profile.vue             # Profil + badan usaha + alamat wilayah Indonesia (AddressInput.vue)
 │   │   │       ├── Password.vue
 │   │   │       └── Appearance.vue
 │   │   │
@@ -261,6 +298,8 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │
 ├── routes/                     # Laravel Route Files
 │   ├── web.php                 # Routes utama: landing, dashboard, project, billing, auth
+│   │                           # Tambah v2.7: /region/provinces|cities|districts|villages (tanpa auth)
+│   │                           # Tambah v2.7: /rab/mappings, /rab/price-items/{id}/components, /rab/price-items/{id}/overhead
 │   ├── admin.php               # Routes admin panel (/admin/*) — guard EnsureSuperAdmin
 │   ├── settings.php            # Routes settings (profile, password, appearance)
 │   └── channels.php            # Broadcasting channel authorization (private channels Reverb)

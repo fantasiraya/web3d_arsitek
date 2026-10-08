@@ -2,8 +2,9 @@
 **Project:** PitchArch — Platform Presentasi & Feedback Arsitektur 3D
 **Database Engine:** MySQL
 **Primary Key Standard:** UUID
-**Reference:** PRD v2.5, RTCF, RISE Framework
-**Revision:** v2.6 — ditambah modul RAB (tabel `rab_*`, kolom `plans.can_use_rab`)
+**Reference:** PRD v2.7, RTCF, RISE Framework
+**Revision:** v2.7 — ditambah kolom profil arsitek di `users`, kolom `is_pinned` di `comments`, tabel `rab_price_item_components` (AHSP), kolom `overhead_percent`/`has_components` di `rab_price_items`, tabel wilayah `laravolt/indonesia`, rancangan Drawing 2D
+**v2.6 Changelog:** Menambahkan modul RAB (tabel `rab_*`, kolom `plans.can_use_rab`)
 **v2.5 Changelog:** Mengganti engine dari PostgreSQL ke **MySQL** (aktual). Menambahkan tabel `camera_presets`. Semua tipe `jsonb` → `json` (MySQL syntax). Menyesuaikan catatan storage dari Cloudflare R2 ke **local disk `public`**.
 
 ---
@@ -30,6 +31,7 @@ erDiagram
     RAB_DOCUMENTS ||--o{ RAB_ITEMS : "contains"
     RAB_TEMPLATES ||--o{ RAB_TEMPLATE_ITEMS : "contains"
     RAB_PRICE_ITEMS ||--o{ RAB_ITEMS : "priced by"
+    RAB_PRICE_ITEMS ||--o{ RAB_PRICE_ITEM_COMPONENTS : "has AHSP"
     SYSTEM_SETTINGS {
         string key PK
         string value
@@ -73,6 +75,24 @@ Menyimpan data pengguna beserta status langganan dan autentikasi Google OAuth. *
 | `remember_token` | `string` | `NULLABLE` | Token remember me |
 | `created_at` | `timestamp` | `NULLABLE` | Waktu entri dibuat |
 | `updated_at` | `timestamp` | `NULLABLE` | Waktu entri diperbarui |
+
+> **Kolom Profil Arsitek (v2.7):** Kolom-kolom berikut ditambahkan untuk menyimpan data badan usaha dan alamat wilayah Indonesia. Dipakai sebagai kop surat di Export RAB.
+
+| Field | Type | Modifiers | Description |
+| :--- | :--- | :--- | :--- |
+| `company_type` | `string(30)` | `NULLABLE` | Tipe badan usaha: `perorangan`, `cv`, `pt`, `firma`, dll. |
+| `company_name` | `string` | `NULLABLE` | Nama badan usaha / studio |
+| `phone` | `string(20)` | `NULLABLE` | Nomor telepon |
+| `province_id` | `string` | `NULLABLE` | ID provinsi dari `laravolt/indonesia` |
+| `city_id` | `string` | `NULLABLE` | ID kabupaten/kota |
+| `district_id` | `string` | `NULLABLE` | ID kecamatan |
+| `village_id` | `string` | `NULLABLE` | ID kelurahan/desa |
+| `province_name` | `string` | `NULLABLE` | Nama provinsi (denormalized cache) |
+| `city_name` | `string` | `NULLABLE` | Nama kota (denormalized cache) |
+| `district_name` | `string` | `NULLABLE` | Nama kecamatan (denormalized cache) |
+| `village_name` | `string` | `NULLABLE` | Nama kelurahan (denormalized cache) |
+| `address` | `text` | `NULLABLE` | Alamat jalan lengkap |
+| `postal_code` | `string(10)` | `NULLABLE` | Kode pos |
 
 > **Catatan Sinkronisasi:** `subscription_status` pada `users` bersifat *denormalized cache* agar query middleware cepat tanpa join. Status ini WAJIB di-update setiap kali ada perubahan pada tabel `subscriptions` (lihat Domain Billing). Google OAuth otomatis men-set `email_verified_at` saat `CreateNewUser` (tidak perlu kirim email verifikasi ulang).
 
@@ -216,6 +236,8 @@ Menyimpan feedback komentar beserta titik koordinat spasial 3D $(X, Y, Z)$ dan N
 
 > **Catatan:** Setiap kali client membuat pin komentar *root baru* (bukan reply, bukan komentar dari arsitek sendiri), `Domains/Comment` WAJIB meng-increment `projects.current_revision_count`.
 
+> **v2.7:** Kolom `is_pinned` sudah ada di skema v2.6. Migration `add_is_pinned_to_comments` telah dijalankan.
+
 ---
 
 ### E. Chat Domain (Real-time Messaging)
@@ -325,9 +347,29 @@ Harga satuan master milik user.
 | `code` | `string(50)` | `NULLABLE` | Kode item; UNIQUE bersama `user_id` |
 | `name` | `string` | `NOT NULL` | Nama pekerjaan/material |
 | `unit` | `string(20)` | `NOT NULL` | m², m³, unit, m', ls |
-| `unit_price` | `decimal(14,2)` | `DEFAULT(0)` | Harga satuan |
+| `unit_price` | `decimal(14,2)` | `DEFAULT(0)` | Harga satuan (dikalkulasi dari komponen AHSP jika `has_components = true`) |
+| `overhead_percent` | `decimal(5,2)` | `DEFAULT(0)` | Persentase overhead/profit (dipakai saat `has_components = true`) |
+| `has_components` | `boolean` | `DEFAULT(false)` | True jika `unit_price` dikalkulasi dari `rab_price_item_components` |
 | `category` | `string(100)` | `NULLABLE` | Kategori pekerjaan |
 | `created_at` / `updated_at` | `timestamp` | `NULLABLE` | |
+
+#### `rab_price_item_components` *(AHSP — Analisa Harga Satuan Pekerjaan)*
+Sub-komponen biaya dari sebuah harga satuan. Hanya ada jika `rab_price_items.has_components = true`.
+
+| Field | Type | Modifiers | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `uuid` | `PRIMARY KEY` | Unique Identifier |
+| `rab_price_item_id` | `uuid` | `FOREIGN KEY, NOT NULL, CASCADE` | Relasi ke `rab_price_items.id` |
+| `type` | `string(20)` | `NOT NULL` | Tipe komponen: `tenaga`, `bahan`, `peralatan` |
+| `name` | `string` | `NOT NULL` | Nama komponen (cth: "Tukang Batu", "Semen Portland") |
+| `unit` | `string(20)` | `NOT NULL` | Satuan komponen |
+| `coefficient` | `decimal(14,6)` | `DEFAULT(0)` | Koefisien/indeks kebutuhan per satuan pekerjaan |
+| `unit_price` | `decimal(14,2)` | `DEFAULT(0)` | Harga satuan komponen |
+| `amount` | `decimal(16,2)` | `DEFAULT(0)` | Hasil hitung: `coefficient × unit_price` |
+| `sort_order` | `unsignedInteger` | `DEFAULT(0)` | Urutan tampil |
+| `created_at` / `updated_at` | `timestamp` | `NULLABLE` | |
+
+> **Catatan AHSP:** `RecalculatePriceItemAction` adalah satu sumber kebenaran untuk menghitung `amount` setiap komponen dan `rab_price_items.unit_price` dari penjumlahan semua `amount` + `overhead_percent`. Dilarang menghitung di controller atau frontend sebagai nilai tersimpan.
 
 #### `rab_templates` & `rab_template_items`
 - `rab_templates`: `id`, `user_id` (FK), `name`, `description` (nullable), timestamps.
@@ -395,6 +437,49 @@ Aturan pencocokan nama objek/material/baris CSV ke harga satuan (dipakai Fase B 
 | `cache` | Cache table |
 | `personal_access_tokens` | Tidak dipakai aktif (Fortify session-based, bukan token-based) |
 | `password_reset_tokens` | Token reset password Fortify |
+
+---
+
+### I. Wilayah Indonesia (`laravolt/indonesia`)
+
+Tabel-tabel berikut disediakan dan di-seed oleh package `laravolt/indonesia`. Tidak perlu membuat migration manual.
+
+| Tabel | Keterangan |
+| :--- | :--- |
+| `indonesia_provinces` | Daftar 34 provinsi |
+| `indonesia_cities` | Daftar kabupaten/kota (relasi ke `indonesia_provinces`) |
+| `indonesia_districts` | Daftar kecamatan (relasi ke `indonesia_cities`) |
+| `indonesia_villages` | Daftar kelurahan/desa (relasi ke `indonesia_districts`) |
+
+> **Catatan:** `users` menyimpan `province_id`, `city_id`, `district_id`, `village_id` sebagai string ID (bukan UUID — ikuti konvensi laravolt). Nama wilayah di-denormalize ke kolom `*_name` di `users` agar tidak perlu join saat membaca profil atau mengisi kop surat.
+
+---
+
+### J. Drawing 2D — Rancangan Tabel *(Rencana v2.7 — Belum Dibuat)*
+
+> Tabel-tabel ini **belum diimplementasikan**. Ini adalah rancangan awal untuk fitur Drawing 2D yang akan datang.
+
+#### `drawing_sheets` *(Rencana)*
+| Field | Type | Modifiers | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `uuid` | `PRIMARY KEY` | Unique Identifier |
+| `project_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Relasi ke `projects.id` |
+| `user_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Pemilik (Arsitek) |
+| `title` | `string` | `NOT NULL` | Judul lembar gambar |
+| `type` | `string(20)` | `NOT NULL` | Tipe: `plan`, `elevation`, `section` |
+| `scale` | `string(20)` | `NULLABLE` | Skala gambar (cth: `1:100`) |
+| `sort_order` | `unsignedInteger` | `DEFAULT(0)` | Urutan lembar |
+| `created_at` / `updated_at` | `timestamp` | `NULLABLE` | |
+
+#### `drawing_elements` *(Rencana)*
+| Field | Type | Modifiers | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `uuid` | `PRIMARY KEY` | Unique Identifier |
+| `drawing_sheet_id` | `uuid` | `FOREIGN KEY, NOT NULL, CASCADE` | Relasi ke `drawing_sheets.id` |
+| `type` | `string(30)` | `NOT NULL` | Tipe elemen: `line`, `rect`, `text`, `dimension`, `symbol` |
+| `data` | `json` | `NOT NULL` | Payload konva.js (koordinat, gaya, properti elemen) |
+| `sort_order` | `unsignedInteger` | `DEFAULT(0)` | |
+| `created_at` / `updated_at` | `timestamp` | `NULLABLE` | |
 
 ---
 

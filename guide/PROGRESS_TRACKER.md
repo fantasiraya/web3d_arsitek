@@ -118,6 +118,8 @@
 | Profile Settings (nama, email, avatar) | Backend & Frontend | 🟢 Completed | `ProfileController`, `Settings/Profile.vue` |
 | Password Settings | Backend & Frontend | 🟢 Completed | Fortify built-in, `Settings/Password.vue` |
 | Appearance Settings (dark/light/system) | Frontend | 🟢 Completed | `HandleAppearance` middleware, `Settings/Appearance.vue` |
+| Profil Badan Usaha (company_type, company_name, phone) | Backend & Frontend | 🟢 Completed | Migration kolom baru di `users`, tipe picker (PT/CV/UD/dll), preview kop surat — selesai 2026-10-07 |
+| Alamat Wilayah Indonesia (chained dropdown) | Backend & Frontend | 🟢 Completed | `laravolt/indonesia` seeded (38 provinsi/514 kota/7285 kecamatan/83762 desa), `IndonesiaRegionController`, `/region/*` routes, `useIndonesiaRegion.ts`, `AddressInput.vue` — selesai 2026-10-07 |
 
 ### 8. Landing Page & Public Pages
 | Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
@@ -157,16 +159,36 @@
 | Form Requests RAB | Backend | 🟢 Completed | `StoreRabDocumentRequest`, `UpdateRabDocumentRequest`, `UpsertRabItemRequest`, `StorePriceItemRequest` (unique per user), `StoreRabTemplateRequest` |
 | Actions Fase A | Backend DDD | 🟢 Completed | `RecalculateRabAction` (satu sumber kebenaran), `CreateRabDocumentAction` (salin template + snapshot harga), `UpdateRabDocumentAction`, `UpsertRabItemAction`, `DeleteRabItemAction`, `FinalizeRabDocumentAction` (finalize+reopen), `ToggleRabClientVisibilityAction`, `SavePriceItemAction`, `SaveRabTemplateAction` |
 | Controllers + routes RAB (20 routes) | Backend | 🟢 Completed | `RabDocumentController`, `RabItemController`, `RabPriceItemController`, `RabTemplateController` — verified via `php artisan route:list` |
-| UI Harga Satuan (`/rab/price-items`) | Frontend | 🟢 Completed | `Rab/PriceItems.vue` — grouped by category, search, CRUD modal |
-| UI Template RAB (`/rab/templates`) | Frontend | 🟢 Completed | `Rab/Templates.vue` — grid card, CRUD modal |
-| UI Daftar RAB per Project (`/projects/{id}/rab`) | Frontend | 🟢 Completed | `Rab/Index.vue` — daftar dokumen, buat baru dari template, upgrade notice |
-| UI Editor RAB (`/projects/{id}/rab/{rab}`) | Frontend | 🟢 Completed | `Rab/Show.vue` — item CRUD per section, summary cards, finalize/reopen, toggle visibilitas klien |
-| Menu RAB di AppSidebar | Frontend | 🟢 Completed | Icon `ClipboardList`, active state detection `/rab/*` dan `/projects/*/rab/*` |
+| UI Harga Satuan (`/rab/price-items`) | Frontend | 🟢 Completed | `Rab/PriceItems.vue` — grouped by category, search, CRUD modal, tombol FlaskConical ke AHSP |
+| UI Template RAB (`/rab/templates`) | Frontend | 🟢 Completed | `Rab/Templates.vue` + `Rab/TemplateShow.vue` — grid card, CRUD modal, kelola item template |
+| UI Daftar RAB per Project (`/projects/{id}/rab`) | Frontend | 🟢 Completed | `Rab/Index.vue` — daftar dokumen, buat baru dari template, upgrade notice, tombol Estimasi 3D |
+| UI Editor RAB (`/projects/{id}/rab/{rab}`) | Frontend | 🟢 Completed | `Rab/Show.vue` — item CRUD per section, summary cards, finalize/reopen, toggle visibilitas klien, tombol Import CSV + Estimasi 3D + Export Excel |
+| AHSP (Analisa Harga Satuan Pekerjaan) | Backend & Frontend | 🟢 Completed | `rab_price_item_components`, `RecalculatePriceItemAction`, `RabPriceItemComponentController`, `PriceItemComponents.vue` — 2026-10-07 |
+| Mapping RAB (`/rab/mappings`) | Backend & Frontend | 🟢 Completed | `RabMappingController`, `Mappings.vue` (tipe: exact/wildcard/material), menu sidebar — 2026-10-07 |
+| Menu RAB di AppSidebar | Frontend | 🟢 Completed | Icon `ClipboardList`, menu Mapping RAB (GitMerge), active state detection |
+| Tombol RAB di Viewer | Frontend | 🟢 Completed | Dropdown hijau di top bar Viewer, daftar dokumen RAB visible ke klien |
+| Tombol RAB & Lihat RAB di Dashboard | Frontend | 🟢 Completed | Tombol RAB di kartu proyek arsitek, tombol Lihat RAB di kartu klien |
 | Pest tests Action RAB | Testing | 🔴 Pending | Dijadwalkan post-MVP |
-| Fase B: Import Quantity Take-off CSV/Excel | Backend & Frontend | 🟢 Completed | `league/csv` 9.28 + `phpspreadsheet` 3.10, `TakeoffParserService`, `RabMappingService`, `ImportQuantityTakeoffAction`, wizard 3-step `Rab/Import.vue` — selesai 2026-10-07 |
-| Fase C: Estimator RAB dari `.glb` | Frontend (Three.js) & Backend | 🟢 Completed | `useGlbQuantities.ts` (luas/volume/count per mesh), `ApplyGlbQuantitiesAction` (items is_estimate=true), `GlbEstimator.vue` (auto-load, tabel mesh, basis selector, price item picker) — selesai 2026-10-07 |
-| Export RAB Excel/PDF | Backend | 🟢 Completed | `ExportRabAction` (phpspreadsheet → XLSX, grouped by section, warna estimasi, total row) — selesai 2026-10-07 |
+| Fase B: Import Quantity Take-off CSV/Excel | Backend & Frontend | 🟢 Completed | `league/csv` 9.28 + `phpspreadsheet` 3.10, `TakeoffParserService`, `RabMappingService`, `ImportQuantityTakeoffAction`, wizard 3-step `Rab/Import.vue` — 2026-10-07 |
+| Fase C: Estimator RAB dari `.glb` + Custom Props Blender | Frontend (Three.js) & Backend | 🟢 Completed | `useGlbQuantities.ts` (baca `mesh.userData` custom properties Blender), `ApplyGlbQuantitiesAction`, `GlbEstimator.vue` + panduan format Blender — 2026-10-07 |
+| Export RAB Excel multi-sheet + kop surat | Backend | 🟢 Completed | Sheet 1 Rekapitulasi, Sheet 2 Detail RAB, Sheet 3+ AHSP. Kop: nama badan usaha center, alamat, telepon — 2026-10-07 |
 | Import IFC | Backend | 🔴 Pending | Could Have |
+
+### 11. Drawing 2D (`Domains/Drawing`) — Rencana Enterprise
+| Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
+| :--- | :--- | :---: | :--- |
+| Migration `plans.can_use_drawing` + `drawing_sheets` + `drawing_elements` | Database | 🔴 Pending | Hanya Enterprise |
+| Model `DrawingSheet`, `DrawingElement` | Backend DDD | 🔴 Pending | type: plan/elevation/section |
+| `DrawingAccessService` (gating can_use_drawing) | Backend DDD | 🔴 Pending | |
+| Editor Denah / Plan (konva.js) | Frontend | 🔴 Pending | Grid snap, toolbar: dinding/pintu/jendela/kolom/tangga/dimensi/teks |
+| Editor Tampak / Elevation | Frontend | 🔴 Pending | |
+| Editor Potongan / Section | Frontend | 🔴 Pending | |
+| Library Simbol (pintu swing, jendela, kolom, tangga) | Frontend | 🔴 Pending | Pre-built konva shapes |
+| Dimensi Otomatis & Grid Referensi | Frontend | 🔴 Pending | A/B/C... dan 1/2/3..., anotasi ukuran |
+| Title Block / Kop Gambar dari Profil | Backend & Frontend | 🔴 Pending | Nama badan usaha, no. lembar, skala, tanggal |
+| Export DXF (AutoCAD compatible) | Backend | 🔴 Pending | `nzcreations/dxf`, layer per tipe elemen |
+| Export SVG | Backend | 🔴 Pending | Scalable, bisa dibuka Inkscape/browser |
+| Undo/Redo | Frontend | 🔴 Pending | Stack history konva |
 
 ---
 
@@ -187,3 +209,6 @@
 - **2026-10-07 (Update):** Implementasi RAB Fase B selesai — Install `league/csv` 9.28 + `phpoffice/phpspreadsheet` 3.10. `TakeoffParserService` (CSV auto-detect delimiter + XLSX), `RabMappingService` (exact/wildcard/material match + saveMappings), `ImportQuantityTakeoffAction` (3-step: preview/dryRun/execute). `ImportTakeoffRequest`, 3 method baru di `RabDocumentController`, 4 routes import, halaman wizard `Rab/Import.vue`. Vite build sukses.
 - **2026-10-07 (Update):** Implementasi RAB Fase C selesai — `useGlbQuantities.ts` (load .glb via Three.js GLTFLoader, hitung luas permukaan via triangle area sum, volume via divergence theorem, count per named mesh, scale detection + warnings). `ApplyGlbQuantitiesAction` (buat items `is_estimate=true`, snapshot harga). `ApplyGlbQuantitiesRequest`. 2 routes baru (GET glb-estimator + POST from-glb). Halaman `Rab/GlbEstimator.vue` (auto-load .glb, tabel per mesh, checkbox include, basis selector area/volume/count/length, price item picker modal, sticky submit bar). Tombol "Estimasi 3D" di Show.vue + Index.vue. Vite build 252 modules, 0 error.
 - **2026-10-07 (Update):** Implementasi AHSP (Analisa Harga Satuan Pekerjaan) selesai — migration `add_ahsp_columns_to_rab_price_items` (overhead_percent, has_components) + `create_rab_price_item_components` (tenaga/bahan/peralatan, koefisien, amount). Model `RabPriceItemComponent`, update `RabPriceItem` (+components relation, +computeUnitPrice). `RecalculatePriceItemAction` (saveComponent + execute). `RabPriceItemComponentController` (show/store/update/destroy/updateOverhead). 5 routes AHSP. Halaman `PriceItemComponents.vue` (tabel AHSP standar, grouped per tipe, overhead inline, preview amount). Tombol FlaskConical di `PriceItems.vue`. `ExportRabAction` multi-sheet: Sheet 1 Rekapitulasi, Sheet 2 Detail RAB, Sheet 3+ AHSP per item. Build 256 modules, 0 error.
+- **2026-10-07 (Update):** Mapping RAB selesai — `RabMappingController` (CRUD), routes `/rab/mappings`, halaman `Rab/Mappings.vue` (filter by type, search, modal tipe exact/wildcard/material + basis selector). Menu "Mapping RAB" di sidebar (icon GitMerge).
+- **2026-10-07 (Update):** Profil Arsitek & Wilayah Indonesia selesai — migration `add_profile_columns_to_users_table` (company_type/name, phone, wilayah 8 kolom, address, postal_code). Install `laravolt/indonesia`, seed 38 provinsi/514 kota/7285 kecamatan/83762 desa. `IndonesiaRegionController` (route `/region/*`, publik, cache 24h). `useIndonesiaRegion.ts` (cascading, string ID = code). `AddressInput.vue`. `Settings/Profile.vue` diperbarui (badan usaha + preview kop + alamat). `HandleInertiaRequests` share semua field profil. `ExportRabAction.buildLetterhead` — kop surat center, nama badan usaha saja (tanpa nama personal), di semua sheet (Rekap + Detail + AHSP).
+- **2026-10-07 (Update):** Sinkronisasi dokumen v2.7 — semua file guide (PRD, DATABASE_SCHEMA, FOLDER_STRUCTURE, AI_INSTRUCTIONS, RTCF, RISE, PROGRESS_TRACKER) diperbarui untuk mencerminkan kondisi sistem aktual. Ditambahkan rancangan Drawing 2D (belum diimplementasikan, menunggu perintah).

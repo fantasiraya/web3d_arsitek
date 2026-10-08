@@ -1,3 +1,5 @@
+> **v2.7 Note:** Ditambahkan alur L (Profil Arsitek & Wilayah Indonesia) dan alur M (Drawing 2D — Rencana). Update route structure: tambah `/region/*`, `/rab/mappings`, `/rab/price-items/{id}/components`, `/rab/price-items/{id}/overhead`.
+>
 > **v2.6 Note:** Ditambahkan alur K (RAB & Lembar Kerja) dan route RAB.
 >
 > **v2.5 Note:** File ini diperbarui agar mencerminkan kondisi aplikasi **PitchArch** yang aktual. Perubahan dari v2.4: Laravel 13 → **Laravel 12**, Nuxt 3 → **Inertia.js + Vue 3** (monorepo), PostgreSQL → **MySQL**, Sanctum → **Laravel Fortify**, Cloudflare R2 → **local disk `public`**, queue Redis → **database driver**, tambah Passkeys & Email Verification.
@@ -108,9 +110,27 @@ Sajikan output secara terstruktur dalam format Markdown:
    **K. RAB & Lembar Kerja (`Domains/Rab`)**
    - Gating: `RabAccessService` cek `plans.can_use_rab`; pemilik project saja yang boleh membuat/mengedit.
    - Fase A: harga satuan + template → `CreateRabDocumentAction` (salin item template, snapshot harga) → `UpsertRabItemAction` → `RecalculateRabAction`.
-   - Fase B: upload CSV/XLSX → `ImportQuantityTakeoffAction` → pencocokan `rab_mappings` → review item belum dipetakan.
-   - Fase C: `useGlbQuantities.ts` hitung luas/volume di Three.js → `ApplyGlbQuantitiesAction` → item `is_estimate = true`.
-   - Switch `is_visible_to_clients`: Klien `accepted` melihat RAB read-only bila menyala.
+   - AHSP: `rab_price_item_components` (tenaga/bahan/peralatan) → `RecalculatePriceItemAction` (koefisien × unit_price + overhead_percent → `rab_price_items.unit_price`). `has_components = true` → lock manual input harga.
+   - Fase B: upload CSV/XLSX via `TakeoffParserService` → `ImportQuantityTakeoffAction` → pencocokan `rab_mappings` via `RabMappingService` (exact/wildcard/material) → review item belum dipetakan. Wizard 3-step di `Rab/Import.vue`.
+   - Fase C: `useGlbQuantities.ts` hitung luas/volume di Three.js, baca `mesh.userData` custom properties Blender (`unit_price`, `unit`, `category`, `section`, `quantity_basis`) → `ApplyGlbQuantitiesAction` → item `is_estimate = true`. Halaman `GlbEstimator.vue`.
+   - Export: `ExportRabAction` → XLSX multi-sheet (Rekap, Detail RAB, AHSP per item). Kop surat dari profil arsitek (`company_name`, `address`, `city_name`, `postal_code`, `phone`).
+   - Mapping: `RabMappingController`, route `/rab/mappings`, halaman `Rab/Mappings.vue`. Tipe: `exact`, `name_pattern`, `material`.
+   - Switch `is_visible_to_clients`: Klien `accepted` melihat RAB read-only bila menyala. Tombol RAB di Viewer (hijau, muncul jika ada dokumen visible).
+
+   **L. Profil Arsitek & Wilayah Indonesia**
+   - `ProfileController` diperbarui untuk simpan field badan usaha + alamat wilayah ke `users`.
+   - `IndonesiaRegionController` serve route `/region/provinces|cities|districts|villages` (tanpa auth middleware) untuk cascading dropdown AJAX.
+   - `laravolt/indonesia`: tabel `indonesia_provinces`, `indonesia_cities`, `indonesia_districts`, `indonesia_villages` — sudah di-seed.
+   - Nama wilayah di-denormalize ke kolom `*_name` di `users`. Jangan join tabel wilayah saat baca profil.
+   - `HandleInertiaRequests` di-update untuk share semua field profil baru ke frontend.
+   - `AddressInput.vue` + `useIndonesiaRegion.ts` menangani cascading dropdown di `Settings/Profile.vue`.
+
+   **M. Drawing 2D — Rencana *(Belum Diimplementasikan)***
+   - Domain baru `Domains/Drawing`, tabel `drawing_sheets` (plan/elevation/section) + `drawing_elements`.
+   - Editor frontend: **konva.js** (canvas 2D). Export: DXF (`nzcreations/dxf`) + SVG.
+   - Gating: kolom `plans.can_use_drawing = true`, hanya Enterprise.
+   - Library simbol: pintu, jendela, kolom, tangga (pre-built SVG di konva).
+   - Status: **🔴 Pending** — tunggu perintah implementasi.
 
 2. **Struktur Folder (lihat `FOLDER_STRUCTURE.md` untuk detail lengkap)**
    - Monorepo: `app/Domains/`, `app/Http/`, `resources/js/pages/`, `resources/js/components/`, `resources/js/layouts/`.

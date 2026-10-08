@@ -1,6 +1,9 @@
-# 📄 Product Requirement Document (PRD) v2.6
+# 📄 Product Requirement Document (PRD) v2.7
+
+> **v2.7 Note:** Menambahkan **Section 9 (Profil Arsitek)** dan **Section 10 (Drawing 2D — Rencana)**. Update MoSCoW matrix: RAB Fase A/B/C, AHSP, Export RAB, Mapping RAB → ✅ Selesai. Drawing 2D ditambahkan sebagai Should Have 🔴 Pending.
 
 > **v2.6 Note:** Menambahkan modul **RAB & Lembar Kerja** (`Domains/Rab`): template + harga satuan, import quantity take-off CSV/Excel, estimator dari `.glb`, switch visibilitas RAB ke Klien, gating `plans.can_use_rab`. Lihat Section 8.
+
 ## PitchArch — Platform Presentasi & Feedback Arsitektur 3D Berbasis Web
 
 > **Revision Note:** v2.5 — disinkronkan dengan kondisi aplikasi aktual. Perubahan utama dari v2.4:
@@ -87,13 +90,18 @@ Membangun platform SaaS berbasis Web 3D interaktif bernama **PitchArch** yang me
 | **Should Have** | Sectioning / Clipping Tool di Viewer | 🔴 Pending |
 | **Should Have** | Invoice PDF Download | 🔴 Pending |
 | **Should Have** | Chat Read Receipt & Typing Indicator | 🔴 Pending |
-| **Should Have** | RAB Fase A: Harga Satuan, Template RAB, RAB Manual, Switch Visibilitas Klien | 🟡 In Progress |
-| **Should Have** | RAB Fase B: Import Quantity Take-off (CSV/Excel) | 🔴 Pending |
-| **Should Have** | RAB Fase C: Estimator RAB dari `.glb` (label "Estimasi") | 🔴 Pending |
-| **Should Have** | Export RAB ke Excel/PDF | 🔴 Pending |
+| **Should Have** | RAB Fase A: Harga Satuan, Template RAB, RAB Manual, Switch Visibilitas Klien | ✅ Selesai |
+| **Should Have** | AHSP (Analisa Harga Satuan Pekerjaan) — `rab_price_item_components`, RecalculatePriceItemAction | ✅ Selesai |
+| **Should Have** | RAB Fase B: Import Quantity Take-off (CSV/Excel) via `league/csv` + `phpspreadsheet` | ✅ Selesai |
+| **Should Have** | RAB Fase C: Estimator RAB dari `.glb` (label "Estimasi") — `useGlbQuantities.ts` | ✅ Selesai |
+| **Should Have** | Export RAB ke Excel multi-sheet dengan kop surat arsitek | ✅ Selesai |
+| **Should Have** | Mapping RAB (`/rab/mappings`) — tipe exact/name_pattern/material | ✅ Selesai |
+| **Should Have** | Profil Arsitek Lengkap (badan usaha, phone, alamat wilayah Indonesia) | ✅ Selesai |
+| **Should Have** | Drawing 2D (Denah/Tampak/Potongan, konva.js, export DXF+SVG) — Enterprise only | 🔴 Pending |
 | **Could Have** | First-Person Walkthrough Mode | 🔴 Pending |
 | **Could Have** | Material Swapper | 🔴 Pending |
 | **Could Have** | Import IFC (data BIM) untuk RAB | 🔴 Pending |
+| **Could Have** | Invoice PDF Download | 🔴 Pending |
 | **Won't Have** | In-Browser 3D Mesh Editing | Out of Scope |
 | **Won't Have** | Public Read-Only Link (tanpa login/undangan) | Deprecated |
 | **Won't Have** | Public 3D WebGL Demo di Landing Page | Out of Scope |
@@ -190,7 +198,8 @@ Effective Limit = Custom User Override (jika ada) ?? Plan Limit ?? 1
 | `Domains/Comment` | Spatial pin annotation, pin/unpin, koordinat X/Y/Z |
 | `Domains/Chat` | Real-time messaging Arsitek ↔ Klien per project via Reverb |
 | `Domains/Billing` | Midtrans Snap, webhook handler, subscription management |
-| `Domains/Rab` | Harga satuan, template RAB, dokumen RAB, import take-off, estimator `.glb`, visibilitas ke Klien |
+| `Domains/Rab` | Harga satuan, AHSP (komponen biaya), template RAB, dokumen RAB, import take-off, estimator `.glb`, mapping, visibilitas ke Klien, export Excel |
+| `Domains/Drawing` | *(Rencana v2.7)* Editor denah/tampak/potongan 2D, export DXF+SVG — hanya Enterprise |
 
 ---
 
@@ -205,6 +214,9 @@ Mempercepat Arsitek membuat lembar kerja dan Rencana Anggaran Biaya (RAB) dengan
 | A | Template RAB + harga satuan tersimpan | Input manual Arsitek | Tinggi |
 | B | Import quantity take-off CSV/Excel | Revit / SketchUp | Tinggi |
 | C | Estimator dari `.glb` | Geometri model (Three.js) | Estimasi awal |
+
+### 8.B.1 AHSP (Analisa Harga Satuan Pekerjaan)
+Setiap item harga satuan (`rab_price_items`) dapat memiliki sub-komponen biaya (tenaga, bahan, peralatan) di tabel `rab_price_item_components`. Jika `has_components = true`, `unit_price` dikalkulasi otomatis dari jumlah `amount` semua komponen ditambah `overhead_percent`. `RecalculatePriceItemAction` adalah satu sumber kebenaran untuk kalkulasi ini. Halaman `PriceItemComponents.vue` menampilkan tabel AHSP standar dengan tombol akses dari `PriceItems.vue` (ikon FlaskConical).
 
 ### 8.C Aturan Bisnis
 1. **Gating paket:** kolom `plans.can_use_rab` (default `false`; `pro` dan `enterprise` = `true`). Downgrade tidak menghapus data; hanya memblokir pembuatan/edit baru, pemilik tetap bisa melihat RAB lamanya.
@@ -222,5 +234,63 @@ Mempercepat Arsitek membuat lembar kerja dan Rencana Anggaran Biaya (RAB) dengan
 3. Arsitek mengecek dan mengedit, lalu `final`. Opsional: nyalakan switch agar Klien dapat melihat.
 4. Export ke Excel/PDF.
 
-**Import CSV (Fase B):** upload → pilih kolom Nama/Satuan/Kuantitas → pencocokan lewat `rab_mappings` → review item belum dipetakan → simpan.
-**Estimator `.glb` (Fase C):** luas, volume (hanya mesh tertutup), dan jumlah dihitung di `Viewer.vue` dengan Three.js → dikirim ke server → dipetakan lewat `rab_mappings`. Peringatan otomatis untuk skala tidak wajar, mesh tidak tertutup, dan objek tanpa nama.
+**Import CSV (Fase B):** upload → pilih kolom Nama/Satuan/Kuantitas → pencocokan lewat `rab_mappings` → review item belum dipetakan → simpan. Parser via `TakeoffParserService` mendukung auto-detect delimiter CSV dan format XLSX. `RabMappingService` menangani pencocokan exact/wildcard/material.
+**Estimator `.glb` (Fase C):** luas, volume (hanya mesh tertutup), dan jumlah dihitung di `GlbEstimator.vue` dengan `useGlbQuantities.ts` (Three.js) → dikirim ke server → dipetakan lewat `rab_mappings`. Peringatan otomatis untuk skala tidak wajar, mesh tidak tertutup, dan objek tanpa nama. Item yang dihasilkan selalu `is_estimate = true`.
+**Custom Properties Blender:** file `.glb` dari Blender dapat menyertakan custom properties di setiap mesh melalui `mesh.userData` yang dibaca oleh `useGlbQuantities.ts`. Field yang dibaca: `unit_price`, `unit`, `category`, `section`, `quantity_basis`.
+**Export Excel:** `ExportRabAction` menghasilkan XLSX multi-sheet: Sheet 1 Rekapitulasi RAB, Sheet 2 Daftar RAB Detail, Sheet 3+ AHSP per item harga satuan. Kop surat dari profil arsitek: nama badan usaha, alamat, telepon (center, tanpa nama personal).
+
+---
+
+## 9. Profil Arsitek (`users` — Badan Usaha & Wilayah Indonesia)
+
+### 9.A Tujuan
+Melengkapi profil Arsitek dengan informasi badan usaha (perusahaan/individu) dan alamat terperinci berbasis wilayah administratif Indonesia. Data profil ini dipakai sebagai kop surat pada dokumen yang dihasilkan (misalnya Export RAB Excel).
+
+### 9.B Kolom Baru di Tabel `users`
+| Kolom | Tipe | Keterangan |
+| :--- | :--- | :--- |
+| `company_type` | `string(30)` NULLABLE | Tipe badan usaha: `perorangan`, `cv`, `pt`, `firma`, dll. |
+| `company_name` | `string` NULLABLE | Nama badan usaha / studio / perorangan |
+| `phone` | `string(20)` NULLABLE | Nomor telepon |
+| `province_id` | `string` NULLABLE | ID provinsi dari `laravolt/indonesia` |
+| `city_id` | `string` NULLABLE | ID kabupaten/kota |
+| `district_id` | `string` NULLABLE | ID kecamatan |
+| `village_id` | `string` NULLABLE | ID kelurahan/desa |
+| `province_name` | `string` NULLABLE | Nama provinsi (denormalized cache) |
+| `city_name` | `string` NULLABLE | Nama kota (denormalized cache) |
+| `district_name` | `string` NULLABLE | Nama kecamatan (denormalized cache) |
+| `village_name` | `string` NULLABLE | Nama kelurahan (denormalized cache) |
+| `address` | `text` NULLABLE | Alamat jalan lengkap |
+| `postal_code` | `string(10)` NULLABLE | Kode pos |
+
+### 9.C Integrasi Wilayah via `laravolt/indonesia`
+- Package `laravolt/indonesia` menyediakan tabel `indonesia_provinces`, `indonesia_cities`, `indonesia_districts`, `indonesia_villages` beserta data seed.
+- API route `/region/provinces|cities|districts|villages` tersedia **tanpa middleware auth** (public, web group) untuk keperluan AJAX cascading dropdown.
+- Controller: `IndonesiaRegionController` di `app/Http/Controllers/`.
+- Komponen frontend: `useIndonesiaRegion.ts` (composable) + `AddressInput.vue` (cascading dropdown).
+- `HandleInertiaRequests` diperbarui untuk share semua field profil ke frontend.
+
+### 9.D Kop Surat Export
+`ExportRabAction` membaca `company_name`, `address`, `city_name`, `province_name`, `postal_code`, dan `phone` dari profil pemilik project untuk mengisi baris kop surat di Sheet 1 dan Sheet 2 Export RAB Excel. Kop surat ditampilkan di baris atas, rata tengah, tanpa nama personal.
+
+---
+
+## 10. Drawing 2D — Editor Denah, Tampak & Potongan *(Rencana v2.7 — 🔴 Pending)*
+
+> **Status:** Fitur ini **belum diimplementasikan**. Hanya direncanakan. Tunggu perintah implementasi.
+
+### 10.A Tujuan
+Menyediakan editor gambar teknik 2D (denah, tampak, potongan) langsung di platform tanpa perlu software CAD eksternal. Terbatas untuk paket **Enterprise** (`plans.can_use_drawing = true`).
+
+### 10.B Rancangan Domain
+- Domain baru: `Domains/Drawing`
+- Tabel: `drawing_sheets` (lembar gambar, tipe: `plan | elevation | section`) dan `drawing_elements` (elemen vektor: garis, dimensi, teks, simbol)
+- Library frontend: **konva.js** (canvas 2D, npm)
+- Export: **DXF** (`nzcreations/dxf`, composer) dan **SVG** (built-in konva)
+
+### 10.C Aturan Bisnis (Rencana)
+1. **Gating:** hanya Enterprise — kolom `plans.can_use_drawing = true`.
+2. **Tipe sheet:** `plan` (denah), `elevation` (tampak), `section` (potongan).
+3. **Library simbol:** pintu, jendela, kolom, tangga (pre-built SVG symbols di konva canvas).
+4. **Export format:** DXF (kompatibel AutoCAD) + SVG.
+5. **Kepemilikan:** drawing sheet milik Arsitek pemilik project; Klien hanya bisa melihat (jika switch visibilitas aktif).

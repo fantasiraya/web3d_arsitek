@@ -2,6 +2,8 @@
 
 > **PENTING UNTUK AI:** Sebelum menulis atau memodifikasi kode apa pun di project ini, kamu WAJIB membaca dan mematuhi seluruh panduan yang ada di dalam folder `guide/`. Dilarang keras membuat asumsi, halusinasi arsitektur, atau mengubah konvensi tanpa persetujuan.
 >
+> **v2.7:** Ditambahkan Section N (Drawing 2D Rule — rencana), catatan AHSP di Section M, catatan Custom Properties Blender, dan catatan profil arsitek + wilayah.
+>
 > **v2.6:** Ditambahkan `Domains/Rab` dan Section M (RAB Rule).
 >
 > **v2.5:** Stack aktual diperbarui — Laravel 12 (bukan 13), Inertia.js + Vue 3 (bukan Nuxt 3), MySQL (bukan PostgreSQL), Fortify (bukan Sanctum), local disk public (bukan R2), queue database driver (bukan Redis). Ditambahkan Section K (Email Verification Rule) dan Section L (Inertia & Frontend Rules).
@@ -30,7 +32,8 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
    - `Domains/Comment` (Spatial Pin Annotation & Feedback)
    - `Domains/Chat` (Real-time Messaging Arsitek ↔ Klien per Project)
    - `Domains/Billing` (Transaksi, Subscription & Midtrans)
-   - `Domains/Rab` (RAB & Lembar Kerja: harga satuan, template, import take-off, estimator `.glb`)
+   - `Domains/Rab` (RAB & Lembar Kerja: harga satuan, AHSP, template, import take-off, estimator `.glb`, mapping, export Excel)
+   - `Domains/Drawing` *(Rencana v2.7)* (Editor gambar teknik 2D: denah, tampak, potongan — hanya Enterprise)
 2. **Primary Key UUID:** Selalu gunakan UUID untuk ID tabel database. Gunakan `$table->uuid('id')->primary()` di migration.
 3. **Dynamic Quotas:** Selalu baca batasan kuota Free/Pro Tier dari `system_settings` via database query. **Jangan hardcode** angka kuota di controller atau action.
 4. **No Spaghetti Code:** Terapkan pemisahan tanggung jawab yang jelas (Form Request, Action/Service, Repository).
@@ -156,9 +159,29 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
 4. **Snapshot harga:** `rab_items.unit_price` disalin saat item dibuat. Mengubah harga master dilarang mengubah item RAB yang ada.
 5. **Final lock:** dokumen `final` tidak boleh diedit; hanya `reopen` oleh pemilik. Switch visibilitas boleh diubah kapan saja.
 6. **Estimasi `.glb`:** item dari jalur `.glb` WAJIB `is_estimate = true` dan berlabel "Estimasi" di UI. Jangan menyajikannya sebagai RAB final.
-7. **Perhitungan:** seluruh hitung ulang lewat `RecalculateRabAction` (satu sumber kebenaran); dilarang menghitung total di controller atau frontend sebagai nilai tersimpan.
-8. **Form Request & Test:** Form Request per action di `app/Domains/Rab/Requests/`; setiap Action wajib punya tes Pest di `tests/Feature/Domains/Rab/`.
-9. **Paket baru** (XLSX/PDF export) wajib persetujuan sebelum dipasang.
+7. **Perhitungan RAB:** seluruh hitung ulang lewat `RecalculateRabAction` (satu sumber kebenaran); dilarang menghitung total di controller atau frontend sebagai nilai tersimpan.
+8. **AHSP (`rab_price_item_components`):** sub-komponen biaya dari harga satuan. Jika `rab_price_items.has_components = true`, `unit_price` dikalkulasi dari penjumlahan `amount` semua komponen + `overhead_percent`. `RecalculatePriceItemAction` adalah **satu sumber kebenaran** untuk kalkulasi ini — dilarang menghitung ulang di controller, view, atau frontend sebagai nilai tersimpan.
+9. **Custom Properties Blender (Fase C):** `useGlbQuantities.ts` membaca `mesh.userData` dari file `.glb` untuk field: `unit_price`, `unit`, `category`, `section`, `quantity_basis`. Jika field hadir, digunakan sebagai nilai default saat import estimasi.
+10. **Form Request & Test:** Form Request per action di `app/Domains/Rab/Requests/`; setiap Action wajib punya tes Pest di `tests/Feature/Domains/Rab/`.
+11. **Paket baru** (XLSX/PDF export) wajib persetujuan sebelum dipasang.
+
+### N. Profil Arsitek & Wilayah Indonesia Rule
+1. **Field baru di `users`:** `company_type`, `company_name`, `phone`, `province_id`, `city_id`, `district_id`, `village_id`, `province_name`, `city_name`, `district_name`, `village_name`, `address`, `postal_code`. Migration telah dijalankan.
+2. **API Wilayah:** route `/region/provinces`, `/region/cities?province_id=X`, `/region/districts?city_id=X`, `/region/villages?district_id=X` di-serve oleh `IndonesiaRegionController`. Route ini bersifat **public** (web group, tanpa middleware `auth`) karena dropdown wilayah diperlukan sebelum user tersimpan.
+3. **Package:** `laravolt/indonesia` menyediakan tabel `indonesia_provinces`, `indonesia_cities`, `indonesia_districts`, `indonesia_villages`. Jangan membuat migration atau data wilayah sendiri.
+4. **Denormalized cache:** simpan nama wilayah (`province_name`, `city_name`, dll.) ke kolom `users` saat profil disimpan. Ini menghindari join saat membaca profil atau mengisi kop surat.
+5. **HandleInertiaRequests:** share semua field profil baru ke frontend agar tersedia sebagai `$page.props.auth.user.*`.
+6. **Kop surat export:** `ExportRabAction` membaca `company_name`, `address`, `city_name`, `province_name`, `postal_code`, `phone` dari profil pemilik project — bukan dari nama personal (`users.name`).
+
+### O. Drawing 2D Rule *(Rencana v2.7 — Belum Diimplementasikan)*
+> Aturan ini hanya berlaku saat fitur Drawing 2D mulai diimplementasikan. Jangan mengimplementasikan kode apa pun dari section ini tanpa perintah eksplisit.
+
+1. **Gating:** hanya Enterprise — kolom `plans.can_use_drawing = true`. Cek via service yang setara dengan `RabAccessService`.
+2. **Domain baru:** `Domains/Drawing` — jangan menambahkan logika drawing ke domain lain.
+3. **Tipe sheet:** `plan` (denah), `elevation` (tampak), `section` (potongan) — wajib gunakan nilai enum ini.
+4. **Library:** `konva.js` (npm) untuk canvas editor 2D di frontend. `nzcreations/dxf` (composer) untuk export DXF. Jangan install library konva atau DXF alternatif lain.
+5. **Export:** DXF (kompatibel AutoCAD) dan SVG (via konva). Jangan export ke PDF dalam tahap ini.
+6. **Kepemilikan:** drawing sheet milik Arsitek pemilik project. Klien hanya bisa melihat jika switch visibilitas aktif.
 
 ---
 
@@ -166,7 +189,7 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
 1. Periksa `guide/PROGRESS_TRACKER.md` untuk melihat fitur mana yang perlu dikerjakan selanjutnya.
 2. Baca skema tabel terkait di `guide/DATABASE_SCHEMA.md`.
 3. Baca peta folder di `guide/FOLDER_STRUCTURE.md` untuk menentukan lokasi file yang benar.
-4. Tulis kode sesuai aturan DDD dan konvensi project (termasuk Section H/I/J/K/L/M jika menyentuh Auth, Project, Chat, Frontend, atau RAB).
+4. Tulis kode sesuai aturan DDD dan konvensi project (termasuk Section H/I/J/K/L/M/N/O jika menyentuh Auth, Project, Chat, Frontend, RAB, Profil Wilayah, atau Drawing 2D).
 5. Update `guide/PROGRESS_TRACKER.md` begitu pekerjaan selesai.
 
 ---
@@ -185,3 +208,8 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
 | JSON type | **`json`** (MySQL) | ~~`jsonb`~~ (PostgreSQL only) |
 | Brand | **PitchArch** | ~~Aether 3D~~, ~~SaaS Web 3D~~ |
 | Email | **noreply@pitcharch.id** | email lain |
+| Canvas 2D (Drawing) | **konva.js** (npm) | library canvas lain |
+| Export DXF | **nzcreations/dxf** (composer) | library DXF lain |
+| Wilayah Indonesia | **laravolt/indonesia** | buat tabel sendiri |
+| Kalkulasi harga satuan | **RecalculatePriceItemAction** | hitung di controller/frontend |
+| Kalkulasi total RAB | **RecalculateRabAction** | hitung di controller/frontend |
