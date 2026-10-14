@@ -62,3 +62,68 @@ test('unauthorized user cannot update capture prompt', function () {
     $response->assertForbidden();
 });
 
+test('generate prompt returns fallback prompt when gemini api key is not set', function () {
+    config(['services.gemini.api_key' => null]);
+
+    $user = User::factory()->create();
+    $project = Project::factory()->create(['user_id' => $user->id, 'title' => 'Villa Modern']);
+
+    $response = $this->actingAs($user)->postJson("/projects/{$project->id}/captures/generate-prompt", [
+        'image' => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        'scene_metadata' => [
+            'room_name' => 'Bukaan Kaca & Jendela',
+            'hour' => '16:30',
+            'lighting_desc' => 'golden hour sunset',
+            'clipping_enabled' => false,
+            'camera_perspective' => 'eye-level 35mm',
+            'detected_object' => 'floor-to-ceiling glass window',
+            'detected_materials' => ['clear float glass', 'timber wood frame'],
+        ],
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonStructure(['prompt', 'source']);
+    expect($response->json('source'))->toBe('local-spatial-3d');
+    expect($response->json('prompt'))->toContain('Villa Modern');
+    expect($response->json('prompt'))->toStartWith('Strict image-to-image architectural photorealistic rendering of the attached 3D reference image.');
+});
+
+test('generate prompt calls gemini api when key is set', function () {
+    config([
+        'services.gemini.api_key' => 'fake-gemini-key',
+        'services.gemini.model' => 'gemini-2.5-flash',
+    ]);
+
+    \Illuminate\Support\Facades\Http::fake([
+        'generativelanguage.googleapis.com/*' => \Illuminate\Support\Facades\Http::response([
+            'candidates' => [
+                [
+                    'content' => [
+                        'parts' => [
+                            ['text' => 'Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Maintain 100% of the exact geometry, camera perspective, section-cut lines, AND THE EXACT COLOR PALETTE of every surface as shown in the reference image. Modern tropical pavilion with expansive floor-to-ceiling glass glazing during warm golden hour.'],
+                        ],
+                    ],
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $user = User::factory()->create();
+    $project = Project::factory()->create(['user_id' => $user->id, 'title' => 'Villa Modern']);
+
+    $response = $this->actingAs($user)->postJson("/projects/{$project->id}/captures/generate-prompt", [
+        'image' => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        'scene_metadata' => [
+            'room_name' => 'Bukaan Kaca & Jendela',
+            'hour' => '16:30',
+            'lighting_desc' => 'golden hour sunset',
+            'clipping_enabled' => false,
+        ],
+    ]);
+
+    $response->assertOk();
+    expect($response->json('source'))->toBe('gemini-vision');
+    expect($response->json('prompt'))->toContain('Modern tropical pavilion');
+    expect($response->json('prompt'))->toStartWith('Strict image-to-image architectural photorealistic rendering of the attached 3D reference image.');
+});
+

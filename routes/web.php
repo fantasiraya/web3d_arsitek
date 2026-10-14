@@ -82,6 +82,7 @@ Route::middleware(['auth', 'project.access'])->group(function () {
     Route::delete('/projects/{project}/captures/{capture}', [ProjectCaptureController::class, 'destroy'])->name('projects.captures.destroy');
     Route::patch('/projects/{project}/captures/{capture}/toggle-visibility', [ProjectCaptureController::class, 'toggleVisibility'])->name('projects.captures.toggle-visibility');
     Route::patch('/projects/{project}/captures/{capture}/prompt', [ProjectCaptureController::class, 'updatePrompt'])->name('projects.captures.prompt.update');
+    Route::post('/projects/{project}/captures/generate-prompt', [ProjectCaptureController::class, 'generatePrompt'])->name('projects.captures.generate-prompt');
     Route::patch('/projects/{project}/sun-settings', [ProjectCaptureController::class, 'updateSunSettings'])->name('projects.sun-settings.update');
 });
 

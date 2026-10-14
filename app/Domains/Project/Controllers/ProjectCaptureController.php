@@ -122,5 +122,22 @@ class ProjectCaptureController extends Controller
             ],
         ]);
     }
+
+    public function generatePrompt(
+        Request $request,
+        string $projectId,
+        \App\Domains\Project\Actions\GenerateVisionPromptAction $action
+    ): JsonResponse {
+        $project = Project::findOrFail($projectId);
+
+        $validated = $request->validate([
+            'image'          => ['nullable', 'string'],
+            'scene_metadata' => ['nullable', 'array'],
+        ]);
+
+        $result = $action->execute($request->user(), $project, $validated);
+
+        return response()->json($result);
+    }
 }
 

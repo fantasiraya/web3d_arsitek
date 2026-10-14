@@ -1098,354 +1098,295 @@
             >
                 <div
                     v-if="isCaptureModalOpen"
-                    class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+                    class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-black/85 backdrop-blur-xl overflow-y-auto"
+                    @click.self="closeCaptureModal"
                 >
-                    <div class="relative w-full max-w-lg my-auto rounded-3xl border border-white/15 bg-neutral-950 p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
-                        <!-- Header -->
-                        <div class="flex items-center justify-between border-b border-white/10 pb-3">
-                            <div class="flex items-center gap-2">
-                                <Camera class="h-5 w-5 text-rose-400" />
-                                <h3 class="text-base font-semibold text-white">Ambil Gambar 3D (Snapshot)</h3>
-                            </div>
-                            <button @click="closeCaptureModal" class="text-neutral-400 hover:text-white transition-colors">
-                                <X class="h-5 w-5" />
-                            </button>
-                        </div>
-
-                        <!-- Mode Engine Selector (Tingkat 1 vs Tingkat 2) -->
-                        <div class="flex items-center gap-1.5 p-1 rounded-2xl bg-white/5 border border-white/10 text-xs">
-                            <button
-                                type="button"
-                                @click="renderEngine = 'standard'; refreshCaptureSnapshot()"
-                                class="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl font-medium transition-all"
-                                :class="renderEngine === 'standard'
-                                    ? 'bg-white text-black font-semibold shadow'
-                                    : 'text-neutral-400 hover:text-white'"
-                            >
-                                <Sparkles class="h-3.5 w-3.5" :class="renderEngine === 'standard' ? 'text-emerald-600' : 'text-neutral-400'" />
-                                <span>Real-Time Studio</span>
-                            </button>
-                            <button
-                                type="button"
-                                @click="renderEngine = 'pathtrace'"
-                                class="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl font-medium transition-all"
-                                :class="renderEngine === 'pathtrace'
-                                    ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-black font-semibold shadow-md'
-                                    : 'text-neutral-400 hover:text-white'"
-                            >
-                                <Cpu class="h-3.5 w-3.5" :class="renderEngine === 'pathtrace' ? 'text-black' : 'text-teal-400'" />
-                                <span class="flex items-center gap-1.5">
-                                    <span>Path-Tracing</span>
-                                    <span class="text-[9px] px-1 rounded bg-black/20 text-black font-mono">PRO</span>
-                                </span>
-                            </button>
-                        </div>
-
-                        <!-- Image Preview -->
-                        <div class="relative aspect-video w-full rounded-2xl overflow-hidden border border-white/10 bg-black flex items-center justify-center shadow-inner">
-                            <img
-                                v-if="capturePreviewDataUrl"
-                                :src="capturePreviewDataUrl"
-                                alt="Capture Preview"
-                                class="h-full w-full object-contain"
-                            />
-                            <div v-else class="flex flex-col items-center gap-2 text-neutral-500">
-                                <span class="h-6 w-6 rounded-full border-2 border-rose-400 border-t-transparent animate-spin"></span>
-                                <span class="text-xs">Mengambil snapshot canvas...</span>
-                            </div>
-
-                            <!-- Path Tracing Progress Overlay -->
-                            <div
-                                v-if="isPathTracing"
-                                class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm p-6 text-center space-y-3"
-                            >
-                                <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono">
-                                    <span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
-                                    <span v-if="isCompilingBvh">Membangun BVH Akselerasi: {{ bvhProgress }}%</span>
-                                    <span v-else>Ray-Tracing Sampel: {{ currentSample }} / {{ ptTotalSamples }} ({{ ptProgressPercent }}%)</span>
-                                </div>
-                                <div class="w-full max-w-xs h-2 rounded-full bg-white/10 overflow-hidden">
-                                    <div
-                                        class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-150"
-                                        :style="{ width: `${isCompilingBvh ? bvhProgress : ptProgressPercent}%` }"
-                                    ></div>
-                                </div>
-                                <p class="text-[11px] text-neutral-400 max-w-xs">
-                                    Akumulasi pantulan cahaya fisik & global illumination langsung di GPU...
-                                </p>
-                                <button
-                                    type="button"
-                                    @click="cancelPathTracing"
-                                    class="px-3 py-1 text-xs text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 rounded-lg transition-all"
-                                >
-                                    Hentikan Render
-                                </button>
-                            </div>
-
-                            <!-- Overlay badges -->
-                            <div class="absolute bottom-2 left-2 flex items-center gap-1.5">
-                                <span class="px-2 py-0.5 rounded-full bg-black/80 border border-white/15 text-[10px] font-medium text-white backdrop-blur">
-                                    {{ captureRoomName || 'Sudut Bebas' }}
-                                </span>
-                                <span class="px-2 py-0.5 rounded-full bg-black/80 border border-white/15 text-[10px] font-mono text-amber-300 backdrop-blur">
-                                    {{ captureHour }}
-                                </span>
-                                <span
-                                    v-if="renderEngine === 'pathtrace'"
-                                    class="px-2 py-0.5 rounded-full bg-emerald-500/80 text-black text-[10px] font-bold font-mono shadow-sm"
-                                >
-                                    PATH-TRACED
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- Form Options -->
-                        <div class="grid grid-cols-2 gap-3 text-xs">
-                            <!-- Preset / Ruangan -->
-                            <div>
-                                <label class="text-[11px] font-medium text-neutral-400 block mb-1">Ruangan / Sudut</label>
-                                <select
-                                    v-model="selectedPresetForCapture"
-                                    @change="onCapturePresetChange"
-                                    class="w-full h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-white focus:outline-none focus:border-rose-400"
-                                >
-                                    <option value="current" class="bg-neutral-900 text-white">Sudut Saat Ini</option>
-                                    <option
-                                        v-for="preset in cameraPresets"
-                                        :key="preset.id"
-                                        :value="preset.id"
-                                        class="bg-neutral-900 text-white"
-                                    >
-                                        {{ preset.name }}
-                                    </option>
-                                </select>
-                            </div>
-
-                            <!-- Jam -->
-                            <div>
-                                <label class="text-[11px] font-medium text-neutral-400 block mb-1">Jam Pencahayaan</label>
-                                <input
-                                    type="text"
-                                    v-model="captureHour"
-                                    class="w-full h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-white focus:outline-none focus:border-rose-400 font-mono"
-                                />
-                            </div>
-
-                            <!-- Resolusi -->
-                            <div>
-                                <label class="text-[11px] font-medium text-neutral-400 block mb-1">Resolusi Render</label>
-                                <select
-                                    v-model="captureResolution"
-                                    @change="renderEngine === 'standard' && refreshCaptureSnapshot()"
-                                    class="w-full h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-white focus:outline-none focus:border-rose-400"
-                                >
-                                    <option value="viewport" class="bg-neutral-900 text-white">Viewport (Layar)</option>
-                                    <option value="1080p" class="bg-neutral-900 text-white">1080p Full HD (1920×1080)</option>
-                                    <option value="4k" class="bg-neutral-900 text-white">4K Ultra HD (3840×2160)</option>
-                                </select>
-                            </div>
-
-                            <!-- Ruangan Nama Input Custom -->
-                            <div>
-                                <label class="text-[11px] font-medium text-neutral-400 block mb-1">Label Ruangan</label>
-                                <input
-                                    type="text"
-                                    v-model="captureRoomName"
-                                    placeholder="Contoh: Ruang Tamu"
-                                    class="w-full h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-white placeholder:text-neutral-600 focus:outline-none focus:border-rose-400"
-                                />
-                            </div>
-                        </div>
-
-                        <!-- Engine Specific Control -->
-                        <!-- If Path-Tracing PRO -->
-                        <div v-if="renderEngine === 'pathtrace'" class="p-3 rounded-2xl border border-teal-500/30 bg-teal-950/20 space-y-3">
+                    <div class="relative w-full max-w-6xl my-auto rounded-3xl border border-white/15 bg-neutral-950/95 shadow-2xl overflow-hidden flex flex-col lg:flex-row max-h-[92vh]">
+                        <!-- SEBELAH KIRI: GAMBAR PREVIEW .GLB + KONTROL ENGINE & DOWNLOAD PREVIEW REFERENCE -->
+                        <div class="lg:w-[54%] p-5 sm:p-6 flex flex-col justify-between space-y-4 bg-black/60 border-b lg:border-b-0 lg:border-r border-white/10 overflow-y-auto">
+                            <!-- Header Kiri -->
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-2">
-                                    <div class="p-1.5 rounded-lg bg-teal-500/20 text-teal-300">
-                                        <Cpu class="h-4 w-4" />
-                                    </div>
-                                    <div>
-                                        <p class="text-xs font-semibold text-white">Path-Tracing GPU Engine</p>
-                                        <p class="text-[10px] text-neutral-400">Global Illumination sejati, pantulan cermin fisik, dan pencahayaan akurat.</p>
-                                    </div>
+                                    <Camera class="h-4 w-4 text-rose-400" />
+                                    <span class="text-xs font-semibold text-white tracking-wide uppercase">Preview Tangkapan 3D</span>
                                 </div>
-                                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30">three-gpu-pathtracer</span>
+
+                                <!-- Engine Selector Switcher -->
+                                <div class="flex items-center gap-1 p-0.5 rounded-xl bg-white/10 border border-white/10 text-[11px]">
+                                    <button
+                                        type="button"
+                                        @click="renderEngine = 'standard'; refreshCaptureSnapshot()"
+                                        class="px-2.5 py-1 rounded-lg font-medium transition-all"
+                                        :class="renderEngine === 'standard' ? 'bg-white text-black font-semibold shadow' : 'text-neutral-400 hover:text-white'"
+                                    >
+                                        Studio HD
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="renderEngine = 'pathtrace'"
+                                        class="px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1"
+                                        :class="renderEngine === 'pathtrace' ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-black font-semibold shadow' : 'text-neutral-400 hover:text-white'"
+                                    >
+                                        <span>Path-Tracing</span>
+                                        <span class="text-[9px] px-1 rounded bg-black/20 font-mono">PRO</span>
+                                    </button>
+                                </div>
                             </div>
 
-                            <div class="flex items-center justify-between pt-1 border-t border-white/10">
-                                <div class="flex items-center gap-2 text-xs">
-                                    <span class="text-neutral-400">Sampel:</span>
-                                    <div class="flex items-center gap-1">
-                                        <button
-                                            type="button"
-                                            @click="pathTraceTargetSamples = 15"
-                                            class="px-2 py-1 rounded text-[11px] transition-all"
-                                            :class="pathTraceTargetSamples === 15 ? 'bg-teal-500 text-black font-semibold' : 'bg-white/10 text-neutral-300 hover:bg-white/20'"
-                                        >
-                                            15 (Cepat)
-                                        </button>
-                                        <button
-                                            type="button"
-                                            @click="pathTraceTargetSamples = 30"
-                                            class="px-2 py-1 rounded text-[11px] transition-all"
-                                            :class="pathTraceTargetSamples === 30 ? 'bg-teal-500 text-black font-semibold' : 'bg-white/10 text-neutral-300 hover:bg-white/20'"
-                                        >
-                                            30 (Standar)
-                                        </button>
-                                        <button
-                                            type="button"
-                                            @click="pathTraceTargetSamples = 60"
-                                            class="px-2 py-1 rounded text-[11px] transition-all"
-                                            :class="pathTraceTargetSamples === 60 ? 'bg-teal-500 text-black font-semibold' : 'bg-white/10 text-neutral-300 hover:bg-white/20'"
-                                        >
-                                            60 (Ultra)
-                                        </button>
-                                    </div>
+                            <!-- Preview Image Canvas Screen -->
+                            <div class="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/15 bg-black flex items-center justify-center shadow-2xl">
+                                <img
+                                    v-if="capturePreviewDataUrl"
+                                    :src="capturePreviewDataUrl"
+                                    alt="Capture Preview"
+                                    class="h-full w-full object-contain"
+                                />
+                                <div v-else class="flex flex-col items-center gap-2 text-neutral-500">
+                                    <span class="h-6 w-6 rounded-full border-2 border-rose-400 border-t-transparent animate-spin"></span>
+                                    <span class="text-xs">Mengambil snapshot canvas...</span>
                                 </div>
 
+                                <!-- Path-Tracing Overlay -->
+                                <div
+                                    v-if="isPathTracing"
+                                    class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm p-4 text-center space-y-2"
+                                >
+                                    <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono">
+                                        <span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                        <span v-if="isCompilingBvh">BVH: {{ bvhProgress }}%</span>
+                                        <span v-else>Sampel: {{ currentSample }}/{{ ptTotalSamples }} ({{ ptProgressPercent }}%)</span>
+                                    </div>
+                                    <div class="w-full max-w-xs h-1.5 rounded-full bg-white/10 overflow-hidden">
+                                        <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-400" :style="{ width: `${isCompilingBvh ? bvhProgress : ptProgressPercent}%` }"></div>
+                                    </div>
+                                    <button type="button" @click="cancelPathTracing" class="px-2.5 py-1 text-[11px] text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 rounded-lg">
+                                        Batal
+                                    </button>
+                                </div>
+
+                                <!-- Overlay Badge Sudut & Waktu -->
+                                <div class="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 pointer-events-none">
+                                    <span class="px-2.5 py-0.5 rounded-full bg-black/80 border border-white/15 text-[10px] font-medium text-white backdrop-blur">
+                                        {{ captureRoomName || 'Sudut Bebas' }}
+                                    </span>
+                                    <span class="px-2 py-0.5 rounded-full bg-black/80 border border-white/15 text-[10px] font-mono text-amber-300 backdrop-blur">
+                                        {{ captureHour }}
+                                    </span>
+                                    <span v-if="renderEngine === 'pathtrace'" class="px-2 py-0.5 rounded-full bg-emerald-500 text-black text-[9px] font-bold font-mono">
+                                        PATH-TRACED
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Path-Tracing Sampling Controller (jika mode pathtrace) -->
+                            <div v-if="renderEngine === 'pathtrace'" class="p-2.5 rounded-xl border border-teal-500/30 bg-teal-950/20 flex items-center justify-between text-xs">
+                                <div class="flex items-center gap-1 text-[11px]">
+                                    <span class="text-neutral-400">Kualitas:</span>
+                                    <button type="button" @click="pathTraceTargetSamples = 15" class="px-2 py-0.5 rounded" :class="pathTraceTargetSamples === 15 ? 'bg-teal-500 text-black font-semibold' : 'bg-white/10 text-neutral-300'">15</button>
+                                    <button type="button" @click="pathTraceTargetSamples = 30" class="px-2 py-0.5 rounded" :class="pathTraceTargetSamples === 30 ? 'bg-teal-500 text-black font-semibold' : 'bg-white/10 text-neutral-300'">30</button>
+                                    <button type="button" @click="pathTraceTargetSamples = 60" class="px-2 py-0.5 rounded" :class="pathTraceTargetSamples === 60 ? 'bg-teal-500 text-black font-semibold' : 'bg-white/10 text-neutral-300'">60</button>
+                                </div>
                                 <button
                                     type="button"
                                     :disabled="isPathTracing"
                                     @click="startPathTraceRender"
-                                    class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-black text-xs font-semibold hover:brightness-110 transition-all shadow-md disabled:opacity-50"
+                                    class="px-3 py-1 rounded-lg bg-teal-500 text-black text-xs font-semibold hover:brightness-110 disabled:opacity-50"
                                 >
-                                    <Sparkles class="h-3.5 w-3.5 text-black" />
-                                    <span>{{ isPathTracing ? 'Sedang Merender...' : 'Mulai Render' }}</span>
+                                    {{ isPathTracing ? 'Merender...' : 'Mulai Render' }}
                                 </button>
                             </div>
-                        </div>
 
-                        <!-- If Standard Studio HD -->
-                        <div v-else class="flex items-center justify-between p-3 rounded-2xl border border-emerald-500/20 bg-emerald-950/20">
-                            <div class="flex items-center gap-2.5">
-                                <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                    <Sparkles class="h-4 w-4" />
-                                </div>
-                                <div>
+                            <!-- Download Gambar Preview (Reference / ControlNet) Button -->
+                            <div class="p-3 rounded-2xl bg-white/5 border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                <div class="text-left">
                                     <p class="text-xs font-medium text-white flex items-center gap-1.5">
-                                        Render Studio HD (GTAO & Bloom)
-                                        <span class="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Three.js</span>
+                                        <Download class="h-3.5 w-3.5 text-rose-400" />
+                                        <span>Download Gambar Preview</span>
                                     </p>
-                                    <p class="text-[10px] text-neutral-400">Bayangan sudut realistis (GTAO) & efek pendaran cahaya alami.</p>
+                                    <p class="text-[10px] text-neutral-400">
+                                        Siap diunggah sebagai Image Reference / ControlNet di Midjourney, Flux, atau SDXL.
+                                    </p>
                                 </div>
-                            </div>
-                            <button
-                                type="button"
-                                @click="isEnhancedRenderingActive = !isEnhancedRenderingActive; refreshCaptureSnapshot()"
-                                class="relative h-6 w-11 rounded-full transition-all duration-200"
-                                :class="isEnhancedRenderingActive ? 'bg-emerald-500' : 'bg-white/15'"
-                                title="Aktifkan/nonaktifkan post-processing render studio"
-                            >
-                                <span
-                                    class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200"
-                                    :class="isEnhancedRenderingActive ? 'left-[22px]' : 'left-0.5'"
-                                ></span>
-                            </button>
-                        </div>
-
-                        <!-- Prompt AI Generator & Editor -->
-                        <div class="p-3.5 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 space-y-2">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <Sparkles class="h-4 w-4 text-indigo-400" />
-                                    <span class="text-xs font-semibold text-white">Prompt AI Arsitektur</span>
-                                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Auto-Generated</span>
-                                </div>
-                                <div class="flex items-center gap-1.5">
-                                    <button
-                                        type="button"
-                                        @click="capturePrompt = generatePromptForCurrentView()"
-                                        class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
-                                        title="Buat ulang prompt sesuai sudut & pencahayaan saat ini"
-                                    >
-                                        <RefreshCw class="h-3 w-3" />
-                                        <span>Reset</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        @click="copyPromptText(capturePrompt)"
-                                        class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shadow-sm"
-                                        :class="copiedPromptModal
-                                            ? 'bg-emerald-500 text-black'
-                                            : 'bg-indigo-600 hover:bg-indigo-500 text-white'"
-                                    >
-                                        <Check v-if="copiedPromptModal" class="h-3 w-3" />
-                                        <Copy v-else class="h-3 w-3" />
-                                        <span>{{ copiedPromptModal ? 'Tersalin!' : 'Salin Prompt' }}</span>
-                                    </button>
-                                </div>
-                            </div>
-                            <textarea
-                                v-model="capturePrompt"
-                                rows="3"
-                                placeholder="Prompt deskripsi arsitektural untuk Midjourney, DALL-E, atau ChatGPT..."
-                                class="w-full rounded-xl border border-white/10 bg-black/40 p-2.5 text-xs text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400 leading-relaxed font-sans resize-y"
-                            ></textarea>
-                            <p class="text-[10px] text-neutral-400 flex items-center justify-between">
-                                <span>💡 Dapat diedit bebas sebelum disimpan. Siap disalin ke Midjourney / ChatGPT / SD.</span>
-                                <span class="font-mono text-neutral-500">{{ capturePrompt.length }} karakter</span>
-                            </p>
-                        </div>
-
-                        <!-- Visibility Switch (Architect Only) -->
-                        <div v-if="isOwner" class="flex items-center justify-between p-3 rounded-2xl border border-white/10 bg-white/5">
-                            <div>
-                                <p class="text-xs font-medium text-white">Tampilkan ke Klien</p>
-                                <p class="text-[10px] text-neutral-400">Klien terundang dapat melihat gambar ini di galeri proyek.</p>
-                            </div>
-                            <button
-                                type="button"
-                                @click="captureVisibleToClients = !captureVisibleToClients"
-                                class="relative h-6 w-11 rounded-full transition-all duration-200"
-                                :class="captureVisibleToClients ? 'bg-emerald-500' : 'bg-white/15'"
-                            >
-                                <span
-                                    class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200"
-                                    :class="captureVisibleToClients ? 'left-[22px]' : 'left-0.5'"
-                                ></span>
-                            </button>
-                        </div>
-
-                        <!-- Client Notice -->
-                        <div v-else class="p-3 rounded-2xl border border-white/10 bg-white/5 text-[11px] text-neutral-400">
-                            Hanya arsitek pemilik proyek yang dapat menyimpan gambar ke galeri proyek. Anda dapat mengunduh gambar PNG ini secara langsung.
-                        </div>
-
-                        <!-- Error Message -->
-                        <p v-if="captureError" class="text-xs text-rose-400">{{ captureError }}</p>
-
-                        <!-- Actions -->
-                        <div class="flex items-center justify-between pt-2">
-                            <!-- Quota badge for owner -->
-                            <div v-if="isOwner && quotaInfo" class="text-[11px] text-neutral-400">
-                                <span>Kuota: </span>
-                                <span class="font-semibold text-white">{{ quotaInfo.current_count }} / {{ quotaInfo.max_captures ?? '∞' }} gambar</span>
-                            </div>
-                            <div v-else></div>
-
-                            <div class="flex items-center gap-2">
                                 <button
                                     type="button"
-                                    :disabled="isPathTracing || !capturePreviewDataUrl"
+                                    :disabled="!capturePreviewDataUrl"
                                     @click="downloadCurrentCapture"
-                                    class="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-white/15 bg-white/5 text-xs font-medium text-white hover:bg-white/10 transition-all disabled:opacity-40"
+                                    class="w-full sm:w-auto flex-shrink-0 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black text-xs font-semibold transition-all shadow disabled:opacity-40"
                                 >
                                     <Download class="h-3.5 w-3.5" />
                                     <span>Unduh PNG</span>
                                 </button>
+                            </div>
+                        </div>
+
+                        <!-- SEBELAH KANAN: STATUS BADGES + UNIVERSAL AI PROMPT (VISION AI) + ACTIONS -->
+                        <div class="lg:w-[46%] p-5 sm:p-6 flex flex-col justify-between space-y-4 bg-neutral-900/70 overflow-y-auto">
+                            <!-- Header Kanan & Close Button -->
+                            <div class="flex items-start justify-between gap-3 border-b border-white/10 pb-3">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <Sparkles class="h-4 w-4 text-indigo-400" />
+                                        <h3 class="text-sm font-semibold text-white tracking-tight">Prompt AI Universal</h3>
+                                        <span
+                                            class="text-[9px] font-mono px-1.5 py-0.5 rounded border"
+                                            :class="promptSource === 'gemini-vision'
+                                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                                : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'"
+                                        >
+                                            {{ promptSource === 'gemini-vision' ? '✨ Gemini Vision AI' : '⚡ Spasial 3D' }}
+                                        </span>
+                                    </div>
+                                    <p class="text-[10px] text-neutral-400 mt-0.5">
+                                        Diformulasikan untuk Midjourney v6, Flux.1, SDXL, dan DALL-E 3.
+                                    </p>
+                                </div>
 
                                 <button
-                                    v-if="isOwner"
                                     type="button"
-                                    :disabled="isPathTracing || isSavingCapture || !capturePreviewDataUrl"
-                                    @click="saveCaptureToGallery"
-                                    class="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 text-xs font-semibold text-white hover:bg-rose-500 transition-all shadow-md disabled:opacity-40"
+                                    @click="closeCaptureModal"
+                                    class="p-1.5 rounded-xl text-neutral-400 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
                                 >
-                                    <Check v-if="!isSavingCapture" class="h-3.5 w-3.5" />
-                                    <span v-else class="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
-                                    <span>Simpan ke Galeri</span>
+                                    <X class="h-5 w-5" />
                                 </button>
+                            </div>
+
+                            <!-- Detected Feature Status Badges -->
+                            <div class="space-y-1.5">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 block">Status Fitur Terdeteksi Otomatis:</span>
+                                <div class="flex flex-wrap gap-1.5">
+                                    <span
+                                        v-for="(badge, bIdx) in detectedSceneBadges"
+                                        :key="bIdx"
+                                        class="px-2 py-0.5 rounded-lg text-[10px] font-medium border flex items-center gap-1 shadow-sm"
+                                        :class="badge.type === 'mode'
+                                            ? (badge.active ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 font-semibold' : 'bg-white/5 text-neutral-300 border-white/10')
+                                            : badge.type === 'time'
+                                            ? 'bg-orange-500/15 text-orange-300 border-orange-500/30 font-mono'
+                                            : badge.type === 'angle'
+                                            ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                                            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'"
+                                    >
+                                        {{ badge.label }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Prompt Box & Copy CTA -->
+                            <div class="flex-1 flex flex-col p-3.5 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[11px] font-semibold text-white">Universal Architectural Prompt</span>
+                                        <span v-if="isGeneratingVisionPrompt" class="text-[10px] text-amber-300 font-mono animate-pulse flex items-center gap-1">
+                                            <span class="h-2 w-2 rounded-full bg-amber-400 animate-ping"></span>
+                                            <span>Menganalisis Vision AI...</span>
+                                        </span>
+                                    </div>
+
+                                    <div class="flex items-center gap-1.5">
+                                        <!-- Regenerate / Refresh Button -->
+                                        <button
+                                            type="button"
+                                            :disabled="isGeneratingVisionPrompt"
+                                            @click="triggerVisionAiPromptGeneration"
+                                            class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-neutral-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-40"
+                                            title="Generate ulang prompt dengan Vision AI"
+                                        >
+                                            <RefreshCw class="h-3 w-3" :class="isGeneratingVisionPrompt ? 'animate-spin' : ''" />
+                                            <span>{{ isGeneratingVisionPrompt ? 'Proses...' : 'Re-roll' }}</span>
+                                        </button>
+
+                                        <!-- Copy Prompt Button -->
+                                        <button
+                                            type="button"
+                                            @click="copyPromptText(capturePrompt)"
+                                            class="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shadow-md"
+                                            :class="copiedPromptModal
+                                                ? 'bg-emerald-500 text-black'
+                                                : 'bg-indigo-600 hover:bg-indigo-500 text-white'"
+                                            title="Salin Prompt ke Clipboard"
+                                        >
+                                            <Check v-if="copiedPromptModal" class="h-3.5 w-3.5" />
+                                            <Copy v-else class="h-3.5 w-3.5" />
+                                            <span>{{ copiedPromptModal ? 'Tersalin!' : 'Copy Prompt' }}</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Textarea Editor -->
+                                <textarea
+                                    v-model="capturePrompt"
+                                    rows="6"
+                                    placeholder="Menghasilkan prompt arsitektur dari Gemini Vision AI..."
+                                    class="w-full flex-1 min-h-[120px] rounded-xl border border-white/10 bg-black/50 p-2.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-indigo-400 leading-relaxed font-sans resize-y"
+                                ></textarea>
+
+                                <p class="text-[10px] text-neutral-400 flex items-center justify-between">
+                                    <span>💡 Dapat diedit bebas sebelum disalin atau disimpan.</span>
+                                    <span class="font-mono text-neutral-500">{{ capturePrompt.length }} karakter</span>
+                                </p>
+                            </div>
+
+                            <!-- Settings: Label Ruangan, Jam, Resolusi -->
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <label class="text-[10px] font-medium text-neutral-400 block mb-1">Label Ruangan</label>
+                                    <input
+                                        type="text"
+                                        v-model="captureRoomName"
+                                        placeholder="Contoh: Dapur & Meja Makan"
+                                        class="w-full h-8 rounded-xl border border-white/10 bg-white/5 px-2.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-rose-400"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="text-[10px] font-medium text-neutral-400 block mb-1">Resolusi Simpan</label>
+                                    <select
+                                        v-model="captureResolution"
+                                        @change="renderEngine === 'standard' && refreshCaptureSnapshot()"
+                                        class="w-full h-8 rounded-xl border border-white/10 bg-white/5 px-2 text-xs text-white focus:outline-none focus:border-rose-400"
+                                    >
+                                        <option value="viewport" class="bg-neutral-900 text-white">Viewport</option>
+                                        <option value="1080p" class="bg-neutral-900 text-white">1080p Full HD</option>
+                                        <option value="4k" class="bg-neutral-900 text-white">4K Ultra HD</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Owner Action & Gallery Save -->
+                            <div class="pt-2 border-t border-white/10 space-y-2">
+                                <div v-if="isOwner" class="flex items-center justify-between px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs">
+                                    <span class="text-[11px] text-neutral-300">Tampilkan ke Klien di Galeri</span>
+                                    <button
+                                        type="button"
+                                        @click="captureVisibleToClients = !captureVisibleToClients"
+                                        class="relative h-5 w-9 rounded-full transition-all duration-200"
+                                        :class="captureVisibleToClients ? 'bg-emerald-500' : 'bg-white/15'"
+                                    >
+                                        <span
+                                            class="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200"
+                                            :class="captureVisibleToClients ? 'left-[18px]' : 'left-0.5'"
+                                        ></span>
+                                    </button>
+                                </div>
+
+                                <div class="flex items-center justify-between gap-2">
+                                    <div v-if="isOwner && quotaInfo" class="text-[10px] text-neutral-400">
+                                        <span>Kuota Galeri: </span>
+                                        <span class="font-semibold text-white">{{ quotaInfo.current_count }} / {{ quotaInfo.max_captures ?? '∞' }}</span>
+                                    </div>
+                                    <div v-else></div>
+
+                                    <button
+                                        v-if="isOwner"
+                                        type="button"
+                                        :disabled="isPathTracing || isSavingCapture || !capturePreviewDataUrl"
+                                        @click="saveCaptureToGallery"
+                                        class="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 text-xs font-semibold text-white hover:bg-rose-500 transition-all shadow-md disabled:opacity-40"
+                                    >
+                                        <Check v-if="!isSavingCapture" class="h-3.5 w-3.5" />
+                                        <span v-else class="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
+                                        <span>Simpan ke Galeri</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2566,40 +2507,56 @@ function analyzeSceneFromCamera(): Analyzed3DView | null {
 function generatePromptForCurrentView(providedAnalysis?: Analyzed3DView | null): string {
     const analysis = providedAnalysis !== undefined ? providedAnalysis : analyzeSceneFromCamera();
 
+    const mandatoryPrefix = 'Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Maintain 100% of the exact geometry, camera perspective, section-cut lines, AND THE EXACT COLOR PALETTE of every surface as shown in the reference image.';
+
     const hourStr = captureHour.value || '12:00';
     const hourNum = parseFloat(hourStr.replace(':', '.'));
 
-    let lightingContext = 'balanced architectural daylight, neutral color balance';
+    let lightingContext = 'crisp bright mid-day sun, sharp geometric architectural shadows, neutral white balance, accurate true-to-life surface colors without heavy color tinting';
     if (hourNum >= 5 && hourNum < 8.5) {
-        lightingContext = 'early morning sunrise light, soft warm sun rays penetrating through glazing, gentle long shadows, peaceful morning ambiance';
+        lightingContext = 'directional morning sunlight from east casting elongated architectural shadows, neutral white balance, accurate true-to-life surface colors without heavy color tinting';
     } else if (hourNum >= 8.5 && hourNum < 15) {
-        lightingContext = 'crisp bright mid-day sun, clear natural daylight, sharp geometric architectural shadows, vibrant material reflections';
+        lightingContext = 'crisp bright mid-day overhead sun, sharp geometric architectural shadows, neutral white balance, accurate true-to-life surface colors without heavy color tinting';
     } else if (hourNum >= 15 && hourNum < 18.5) {
-        lightingContext = 'dramatic golden hour sunset, warm ambient sunlight, long soft shadows, cozy architectural glow, warm atmospheric tones';
+        lightingContext = 'directional afternoon sunlight from west casting defined architectural shadows, neutral white balance, accurate true-to-life surface colors without heavy color tinting';
     } else if (hourNum >= 18.5 && hourNum < 20.5) {
-        lightingContext = 'twilight blue hour, deep indigo sky, warm interior tungsten lighting glow, glowing linear LED architectural accents';
+        lightingContext = 'twilight ambient illumination with interior warm spotlights and linear LED accents, neutral white balance, accurate true-to-life surface colors without heavy color tinting';
     } else {
-        lightingContext = 'nighttime architectural visual, warm interior ceiling spotlights, subtle LED strip lighting, deep evening shadows with cozy interior lamps';
+        lightingContext = 'nighttime architectural lighting with interior ceiling spotlights and linear LED accents, neutral white balance, accurate true-to-life surface colors without heavy color tinting';
     }
 
     const renderStyle = renderEngine.value === 'pathtrace'
-        ? 'ultra-realistic path-traced raytracing, physically accurate global illumination, sub-surface light bounce, 8k resolution, architectural design magazine photography'
-        : 'photorealistic architectural photography, ambient occlusion in crevices, soft natural bloom highlights, Hasselblad H6D-100c, f/8, 8k resolution, award-winning architectural showcase';
+        ? 'ultra-realistic path-traced raytracing, physically accurate global illumination, sub-surface light bounce, 8k resolution, architectural showcase'
+        : 'photorealistic architectural photography, ambient occlusion crevices, raytraced reflections, Hasselblad H6D-100c, f/8, 8k resolution, award-winning architectural showcase';
 
     const projectContext = project.value.title ? `for ${project.value.title}` : '';
 
+    const isClip = clippingEnabled.value;
+    const clipAxis = clippingAxis.value || 'y';
+    const clipVal = clippingValue.value;
+    let clipContext = 'unclipped solid complete architectural geometry';
+    if (isClip) {
+        clipContext = clipAxis === 'y'
+            ? `architectural vertical section cut through Y-axis (${clipVal.toFixed(1)}m) exposing floor levels and room layouts`
+            : (clipAxis === 'x'
+                ? `architectural longitudinal cross-section cut along X-axis (${clipVal.toFixed(1)}m) exposing internal heights`
+                : `architectural transverse section cut along Z-axis (${clipVal.toFixed(1)}m)`);
+    }
+
     if (analysis) {
         const subjectPhrase = analysis.subjectEn;
-        const materialsPhrase = analysis.materialsEn.length > 0 ? `, featuring ${analysis.materialsEn.slice(0, 3).join(', ')}` : '';
+        const materialsPhrase = analysis.materialsEn.length > 0
+            ? `Preserve visible material palette: ${analysis.materialsEn.slice(0, 4).join(', ')}.`
+            : 'Preserve authentic visible surface colors and textures without altering materials.';
         const roomContext = captureRoomName.value && captureRoomName.value !== 'Sudut Bebas' && captureRoomName.value !== analysis.labelId
             ? `in ${captureRoomName.value}`
             : '';
 
-        return `Architectural photograph of ${subjectPhrase} ${roomContext} ${projectContext}${materialsPhrase}, ${analysis.shotTypeEn}, ${analysis.perspectiveEn}, ${lightingContext}, ${renderStyle}, highly detailed architecture, cinematic composition`;
+        return `${mandatoryPrefix} Viewport capture of ${subjectPhrase} ${roomContext} ${projectContext}. Section state: ${clipContext}. Camera framing: ${analysis.perspectiveEn}, ${analysis.shotTypeEn}. Lighting: ${lightingContext}. ${materialsPhrase} ${renderStyle}, highly detailed architecture, cinematic composition.`;
     }
 
     const room = captureRoomName.value || 'Ruangan Arsitektur';
-    return `Architectural photograph of ${room} ${projectContext}, ${lightingContext}, ${renderStyle}, highly detailed interior architecture, cinematic composition, award-winning architectural showcase`;
+    return `${mandatoryPrefix} Viewport capture of ${room} ${projectContext}. Section state: ${clipContext}. Lighting: ${lightingContext}. Preserve authentic visible surface colors and textures. ${renderStyle}, highly detailed interior architecture, cinematic composition, award-winning architectural showcase.`;
 }
 
 function copyPromptText(text?: string | null) {
@@ -2697,8 +2654,178 @@ async function loadCaptures() {
     }
 }
 
+interface SceneTechnicalMetadata {
+    room_name: string;
+    hour: string;
+    lighting_desc: string;
+    clipping_enabled: boolean;
+    clipping_axis: 'x' | 'y' | 'z';
+    clipping_value: number;
+    clipping_desc: string;
+    camera_perspective: string;
+    camera_distance: number;
+    shot_type: string;
+    camera_fov: number;
+    detected_object: string;
+    detected_materials: string[];
+    project_title: string;
+    render_engine: 'standard' | 'pathtrace';
+    detected_object_id: string;
+    cut_keywords: string;
+    angle_keywords: string;
+    lighting_keywords: string;
+}
+
+const isGeneratingVisionPrompt = ref(false);
+const promptSource = ref<'gemini-vision' | 'local-spatial-3d'>('local-spatial-3d');
+const detectedSceneBadges = ref<{ label: string; type: 'mode' | 'time' | 'angle' | 'focus'; active?: boolean }[]>([]);
+
+function extractSceneMetadata(): SceneTechnicalMetadata {
+    const analysis = analyzeSceneFromCamera();
+
+    // 1. Potongan / Clipping Status
+    const isClip = clippingEnabled.value;
+    const clipAxis = clippingAxis.value || 'y';
+    const clipVal = clippingValue.value;
+    let clippingDesc = 'Solid intact architectural massing, unclipped complete geometry';
+    let clipLabel = '[Mode: Geometri Utuh]';
+
+    if (isClip) {
+        if (clipAxis === 'y') {
+            clippingDesc = `Architectural vertical section cut through Y-axis (height: ${clipVal.toFixed(1)}m), exposed internal floor levels, room volumes and interior circulation layout`;
+            clipLabel = `[Mode: Potong Sumbu Y (Denah/Lantai)]`;
+        } else if (clipAxis === 'x') {
+            clippingDesc = `Architectural longitudinal cross-section cut along X-axis (offset: ${clipVal.toFixed(1)}m), exposed interior profile revealing room heights and structural slabs`;
+            clipLabel = `[Mode: Potong Sumbu X (Longitudinal)]`;
+        } else {
+            clippingDesc = `Architectural transverse section cut along Z-axis (offset: ${clipVal.toFixed(1)}m), exposed architectural cross-section showing structural depth`;
+            clipLabel = `[Mode: Potong Sumbu Z (Transversal)]`;
+        }
+    }
+
+    // 2. Pencahayaan / Jam
+    const hourStr = captureHour.value || '12:00';
+    const hourNum = parseFloat(hourStr.replace(':', '.'));
+    let lightingDesc = 'crisp bright mid-day sun, sharp geometric architectural shadows, neutral white balance, accurate true-to-life surface colors without heavy color tinting';
+    let timeLabel = `[Waktu: ${hourStr} - Siang Terang]`;
+
+    if (hourNum >= 5 && hourNum < 8.5) {
+        lightingDesc = 'directional morning sunlight from east casting elongated architectural shadows, neutral white balance, accurate true-to-life surface colors without heavy color tinting';
+        timeLabel = `[Waktu: ${hourStr} - Pagi Sunrise]`;
+    } else if (hourNum >= 8.5 && hourNum < 15) {
+        lightingDesc = 'crisp bright mid-day overhead sun, sharp geometric architectural shadows, neutral white balance, accurate true-to-life surface colors without heavy color tinting';
+        timeLabel = `[Waktu: ${hourStr} - Siang Hari]`;
+    } else if (hourNum >= 15 && hourNum < 18.5) {
+        lightingDesc = 'directional afternoon sunlight from west casting defined architectural shadows, neutral white balance, accurate true-to-life surface colors without heavy color tinting';
+        timeLabel = `[Waktu: ${hourStr} - Golden Hour]`;
+    } else if (hourNum >= 18.5 && hourNum < 20.5) {
+        lightingDesc = 'twilight ambient illumination with interior warm spotlights and linear LED accents, neutral white balance, accurate true-to-life surface colors without heavy color tinting';
+        timeLabel = `[Waktu: ${hourStr} - Senja Blue Hour]`;
+    } else {
+        lightingDesc = 'nighttime architectural lighting with interior ceiling spotlights and linear LED accents, neutral white balance, accurate true-to-life surface colors without heavy color tinting';
+        timeLabel = `[Waktu: ${hourStr} - Malam Hari]`;
+    }
+
+    // 3. Kamera & Sudut
+    let cameraPerspective = analysis?.perspectiveEn || 'straight-on rectilinear architectural framing';
+    let shotType = analysis?.shotTypeEn || 'eye-level medium perspective shot, 35mm lens';
+    let cameraDistance = analysis?.distance ?? 5;
+    let angleLabel = '[Sudut: Eye-Level 35mm]';
+
+    if (camera) {
+        const dir = new THREE.Vector3();
+        camera.getWorldDirection(dir);
+        if (dir.y < -0.35) {
+            angleLabel = "[Sudut: Elevated Bird's Eye]";
+        } else if (dir.y > 0.35) {
+            angleLabel = '[Sudut: Low-Angle Heroic]';
+        } else if (cameraDistance < 2.5) {
+            angleLabel = '[Sudut: Close-Up Detail 50mm]';
+        } else if (cameraDistance > 10) {
+            angleLabel = '[Sudut: Wide-Angle 24mm]';
+        }
+    }
+
+    // 4. Fokus Objek & Material
+    const detectedObject = analysis?.subjectEn || 'architectural space';
+    const detectedObjectId = analysis?.labelId || 'Objek Arsitektur';
+    const detectedMaterials = analysis?.materialsEn || [];
+    const focusLabel = `[Fokus: ${detectedObjectId}]`;
+
+    // 5. Update UI badges
+    detectedSceneBadges.value = [
+        { label: clipLabel, type: 'mode', active: isClip },
+        { label: timeLabel, type: 'time' },
+        { label: angleLabel, type: 'angle' },
+        { label: focusLabel, type: 'focus' },
+    ];
+
+    const angleKeywords = `${cameraPerspective}, ${shotType}`;
+    const cutKeywords = clippingDesc;
+    const lightingKeywords = lightingDesc;
+
+    return {
+        room_name: captureRoomName.value || detectedObjectId,
+        hour: hourStr,
+        lighting_desc: lightingDesc,
+        clipping_enabled: isClip,
+        clipping_axis: clipAxis,
+        clipping_value: clipVal,
+        clipping_desc: clippingDesc,
+        camera_perspective: cameraPerspective,
+        camera_distance: Number(cameraDistance.toFixed(1)),
+        shot_type: shotType,
+        camera_fov: camera?.fov ?? 45,
+        detected_object: detectedObject,
+        detected_materials: detectedMaterials,
+        project_title: project.value.title || 'Architectural Project',
+        render_engine: renderEngine.value,
+        detected_object_id: detectedObjectId,
+        cut_keywords: cutKeywords,
+        angle_keywords: angleKeywords,
+        lighting_keywords: lightingKeywords,
+    };
+}
+
+async function triggerVisionAiPromptGeneration() {
+    isGeneratingVisionPrompt.value = true;
+    const meta = extractSceneMetadata();
+
+    try {
+        const res = await fetch(`/projects/${project.value.id}/captures/generate-prompt`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+                image: capturePreviewDataUrl.value,
+                scene_metadata: meta,
+            }),
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            if (data.prompt) {
+                capturePrompt.value = data.prompt;
+                promptSource.value = data.source === 'gemini-vision' ? 'gemini-vision' : 'local-spatial-3d';
+            }
+        }
+    } catch (err) {
+        console.error('[Vision AI] Generate prompt error:', err);
+    } finally {
+        isGeneratingVisionPrompt.value = false;
+    }
+}
+
 function captureCanvasSnapshot(targetRes: 'viewport' | '1080p' | '4k'): string {
     return renderHighQualitySnapshot(targetRes, viewerContainer.value);
+}
+
+function refreshCaptureSnapshot() {
+    capturePreviewDataUrl.value = captureCanvasSnapshot(captureResolution.value);
 }
 
 function openCaptureModal() {
@@ -2709,32 +2836,31 @@ function openCaptureModal() {
     captureVisibleToClients.value = false;
     renderEngine.value = 'standard';
 
-    // Deteksi elemen arsitektur 3D spesifik yang sedang diarahkan kamera
-    const analysis = analyzeSceneFromCamera();
-    if (analysis) {
-        captureRoomName.value = analysis.labelId;
-    } else {
-        captureRoomName.value = 'Sudut Bebas';
-    }
+    // 1. Bekukan snapshot preview canvas seketika
+    refreshCaptureSnapshot();
 
-    capturePrompt.value = generatePromptForCurrentView(analysis);
+    // 2. Ekstrak status fitur aplikasi (kamera, potongan, cahaya, objek)
+    const meta = extractSceneMetadata();
+    captureRoomName.value = meta.detected_object_id || 'Sudut Bebas';
+
+    // 3. Set prompt lokal instan agar user tidak menunggu dengan kotak kosong
+    capturePrompt.value = generatePromptForCurrentView();
+    promptSource.value = 'local-spatial-3d';
     isCaptureModalOpen.value = true;
 
+    // 4. Kirim Preview & Metadata ke Vision AI (Auto-Prompt Gemini) di latar belakang
     nextTick(() => {
-        refreshCaptureSnapshot();
+        triggerVisionAiPromptGeneration();
     });
-}
-
-function refreshCaptureSnapshot() {
-    capturePreviewDataUrl.value = captureCanvasSnapshot(captureResolution.value);
 }
 
 function onCapturePresetChange() {
     if (selectedPresetForCapture.value === 'current') {
-        const analysis = analyzeSceneFromCamera();
-        captureRoomName.value = analysis?.labelId || 'Sudut Bebas';
-        capturePrompt.value = generatePromptForCurrentView(analysis);
         refreshCaptureSnapshot();
+        const meta = extractSceneMetadata();
+        captureRoomName.value = meta.detected_object_id || 'Sudut Bebas';
+        capturePrompt.value = generatePromptForCurrentView();
+        triggerVisionAiPromptGeneration();
         return;
     }
 
@@ -2744,9 +2870,10 @@ function onCapturePresetChange() {
         applyPreset(preset);
 
         setTimeout(() => {
-            const analysis = analyzeSceneFromCamera();
-            capturePrompt.value = generatePromptForCurrentView(analysis);
             refreshCaptureSnapshot();
+            extractSceneMetadata();
+            capturePrompt.value = generatePromptForCurrentView();
+            triggerVisionAiPromptGeneration();
         }, 350);
     }
 }
@@ -4076,7 +4203,7 @@ function initializeViewer(): void {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.0;
 
     // Inisialisasi Post-Processing Composer (GTAO + Bloom + Tone Mapping)
     const initW = viewerContainer.value.clientWidth || 1280;
