@@ -18,6 +18,7 @@ import {
     Settings,
     ShieldAlert,
     ShieldCheck,
+    Sparkles,
     Sun,
     User,
     Users,
@@ -259,6 +260,14 @@ function closeMobileMenu() {
                                     <div class="popup-item-text">
                                         <span class="popup-item-label">Keamanan</span>
                                         <span class="popup-item-desc">Password & autentikasi</span>
+                                    </div>
+                                </Link>
+
+                                <Link href="/admin/settings/ai" class="popup-item" @click="closeUserPopup">
+                                    <Sparkles class="popup-icon-svg text-amber-500" />
+                                    <div class="popup-item-text">
+                                        <span class="popup-item-label">Pengaturan AI</span>
+                                        <span class="popup-item-desc">API Key & Provider Vision AI</span>
                                     </div>
                                 </Link>
 

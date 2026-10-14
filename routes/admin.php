@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AiSettingController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\PlanController;
@@ -54,4 +55,9 @@ Route::middleware(['auth', 'verified', 'super_admin'])->prefix('admin')->name('a
 
     Route::get('/settings/security', [SettingsSecurityController::class, 'editAdmin'])
         ->name('settings.security');
+
+    // AI Vision Settings
+    Route::get('/settings/ai', [AiSettingController::class, 'edit'])->name('settings.ai');
+    Route::patch('/settings/ai', [AiSettingController::class, 'update'])->name('settings.ai.update');
+    Route::post('/settings/ai/test', [AiSettingController::class, 'testConnection'])->name('settings.ai.test');
 });

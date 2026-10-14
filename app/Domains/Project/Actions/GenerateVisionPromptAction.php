@@ -4,11 +4,18 @@ namespace App\Domains\Project\Actions;
 
 use App\Domains\Auth\Models\User;
 use App\Domains\Project\Models\Project;
+use App\Domains\SystemConfig\Repositories\SystemSettingRepository;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class GenerateVisionPromptAction
 {
+    public function __construct(
+        protected ?SystemSettingRepository $settingsRepo = null
+    ) {
+        $this->settingsRepo = $settingsRepo ?? app(SystemSettingRepository::class);
+    }
+
     public function execute(?User $user, Project $project, array $data): array
     {
         $metadata = $data['scene_metadata'] ?? [];
@@ -16,20 +23,28 @@ class GenerateVisionPromptAction
 
         $fallbackPrompt = $this->buildFallbackPrompt($project, $metadata);
 
-        $apiKey = config('services.gemini.api_key');
+        // 1. Resolusi Konfigurasi: Database (Prioritas) -> Config .env (Fallback)
+        $aiConfig = $this->resolveAiConfig();
+        $provider = $aiConfig['provider'];
+        $apiKey = $aiConfig['api_key'] ?? '';
+        $model = $aiConfig['model'] ?? '';
+
         if (empty($apiKey)) {
+            $providerUpper = strtoupper($provider);
             return [
-                'prompt' => $fallbackPrompt,
-                'source' => 'local-spatial-3d',
-                'notice' => 'GEMINI_API_KEY belum disetel di file .env. Menggunakan generator spasial 3D internal.',
+                'prompt'   => $fallbackPrompt,
+                'source'   => 'local-spatial-3d',
+                'provider' => $provider,
+                'notice'   => "API Key untuk provider {$providerUpper} belum disetel di Database maupun .env. Menggunakan generator spasial 3D internal.",
             ];
         }
 
         if (empty($rawImage)) {
             return [
-                'prompt' => $fallbackPrompt,
-                'source' => 'local-spatial-3d',
-                'notice' => 'Gambar kanvas tidak tersedia. Menggunakan generator spasial 3D.',
+                'prompt'   => $fallbackPrompt,
+                'source'   => 'local-spatial-3d',
+                'provider' => $provider,
+                'notice'   => 'Gambar kanvas tidak tersedia. Menggunakan generator spasial 3D.',
             ];
         }
 
@@ -42,9 +57,6 @@ class GenerateVisionPromptAction
                 $mimeType = 'image/png';
                 $base64Data = $rawImage;
             }
-
-            $model = config('services.gemini.model', 'gemini-2.5-flash');
-            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
 
             $systemInstruction = <<<TEXT
 You are an expert Architectural Visualization Prompt Engineer. Analyze the attached 3D .glb viewport screenshot and generate ONE single image-to-image rendering prompt in English.
@@ -79,77 +91,264 @@ CRITICAL RULES FOR STRUCTURE & COLOR ACCURACY:
 5. Output ONLY the final prompt text without markdown or explanations.
 PROMPT;
 
-            $response = Http::timeout(25)->post($url, [
-                'system_instruction' => [
+            // Dispatch ke Provider aktif
+            $rawResponseText = match ($provider) {
+                'openai' => $this->callOpenAi($aiConfig, $systemInstruction, $userPrompt, $mimeType, $base64Data),
+                'claude' => $this->callClaude($aiConfig, $systemInstruction, $userPrompt, $mimeType, $base64Data),
+                'ollama' => $this->callOllama($aiConfig, $systemInstruction, $userPrompt, $base64Data),
+                default  => $this->callGemini($aiConfig, $systemInstruction, $userPrompt, $mimeType, $base64Data),
+            };
+
+            if (!empty($rawResponseText)) {
+                $cleanedText = $this->sanitizePromptText($rawResponseText);
+
+                return [
+                    'prompt'   => $cleanedText,
+                    'source'   => "{$provider}-vision",
+                    'provider' => $provider,
+                    'model'    => $model,
+                ];
+            }
+
+            return [
+                'prompt'   => $fallbackPrompt,
+                'source'   => 'local-spatial-3d',
+                'provider' => $provider,
+                'notice'   => "Layanan Vision AI ({$provider}) sedang sibuk. Menggunakan generator spasial 3D internal.",
+            ];
+        } catch (\Throwable $e) {
+            Log::error("Vision AI exception [{$provider}]", [
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'prompt'   => $fallbackPrompt,
+                'source'   => 'local-spatial-3d',
+                'provider' => $provider,
+                'notice'   => "Gagal menghubungi Vision AI ({$provider}). Menggunakan generator spasial 3D internal.",
+            ];
+        }
+    }
+
+    /**
+     * Resolusi konfigurasi: Database (tabel system_settings) -> .env (config/services.php)
+     */
+    protected function resolveAiConfig(): array
+    {
+        $dbProvider = $this->getSetting('vision_ai_provider');
+        $provider = strtolower($dbProvider ?: config('services.vision_ai.provider', 'gemini'));
+
+        return match ($provider) {
+            'openai' => [
+                'provider' => 'openai',
+                'api_key'  => $this->getSetting('openai_api_key', config('services.vision_ai.providers.openai.api_key')),
+                'model'    => $this->getSetting('openai_model', config('services.vision_ai.providers.openai.model', 'gpt-4o-mini')),
+                'base_url' => $this->getSetting('openai_base_url', config('services.vision_ai.providers.openai.base_url', 'https://api.openai.com/v1')),
+            ],
+            'claude' => [
+                'provider' => 'claude',
+                'api_key'  => $this->getSetting('claude_api_key', config('services.vision_ai.providers.claude.api_key')),
+                'model'    => $this->getSetting('claude_model', config('services.vision_ai.providers.claude.model', 'claude-3-5-sonnet-20241022')),
+            ],
+            'ollama' => [
+                'provider' => 'ollama',
+                'api_key'  => 'ollama-local',
+                'model'    => $this->getSetting('ollama_model', config('services.vision_ai.providers.ollama.model', 'llava')),
+                'base_url' => $this->getSetting('ollama_base_url', config('services.vision_ai.providers.ollama.base_url', 'http://localhost:11434')),
+            ],
+            default => [
+                'provider' => 'gemini',
+                'api_key'  => $this->getSetting('gemini_api_key', config('services.vision_ai.providers.gemini.api_key') ?: config('services.gemini.api_key')),
+                'model'    => $this->getSetting('gemini_model', config('services.vision_ai.providers.gemini.model') ?: config('services.gemini.model', 'gemini-2.5-flash')),
+            ],
+        };
+    }
+
+    protected function getSetting(string $key, mixed $default = null): mixed
+    {
+        try {
+            $val = $this->settingsRepo?->get($key);
+            if (!empty($val)) {
+                return $val;
+            }
+        } catch (\Throwable) {
+            // Abaikan jika DB belum siap
+        }
+        return $default;
+    }
+
+    protected function callGemini(array $config, string $systemInstruction, string $userPrompt, string $mimeType, string $base64Data): ?string
+    {
+        $apiKey = $config['api_key'];
+        $model = $config['model'] ?: 'gemini-2.5-flash';
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
+
+        $response = Http::timeout(25)->post($url, [
+            'system_instruction' => [
+                'parts' => [
+                    ['text' => $systemInstruction],
+                ],
+            ],
+            'contents' => [
+                [
+                    'role' => 'user',
                     'parts' => [
-                        ['text' => $systemInstruction],
+                        ['text' => $userPrompt],
+                        [
+                            'inline_data' => [
+                                'mime_type' => $mimeType,
+                                'data' => $base64Data,
+                            ],
+                        ],
                     ],
                 ],
-                'contents' => [
+            ],
+            'generationConfig' => [
+                'temperature' => 0.2,
+                'maxOutputTokens' => 1024,
+            ],
+        ]);
+
+        if ($response->successful()) {
+            return $response->json('candidates.0.content.parts.0.text');
+        }
+
+        Log::warning('Gemini Vision API error', [
+            'status' => $response->status(),
+            'body'   => substr($response->body(), 0, 500),
+        ]);
+
+        return null;
+    }
+
+    protected function callOpenAi(array $config, string $systemInstruction, string $userPrompt, string $mimeType, string $base64Data): ?string
+    {
+        $apiKey = $config['api_key'];
+        $model = $config['model'] ?: 'gpt-4o-mini';
+        $baseUrl = rtrim($config['base_url'] ?: 'https://api.openai.com/v1', '/');
+        $url = "{$baseUrl}/chat/completions";
+
+        $response = Http::timeout(25)
+            ->withToken($apiKey)
+            ->post($url, [
+                'model' => $model,
+                'messages' => [
+                    ['role' => 'system', 'content' => $systemInstruction],
                     [
                         'role' => 'user',
-                        'parts' => [
-                            ['text' => $userPrompt],
+                        'content' => [
+                            ['type' => 'text', 'text' => $userPrompt],
                             [
-                                'inline_data' => [
-                                    'mime_type' => $mimeType,
-                                    'data' => $base64Data,
+                                'type' => 'image_url',
+                                'image_url' => [
+                                    'url' => "data:{$mimeType};base64,{$base64Data}",
                                 ],
                             ],
                         ],
                     ],
                 ],
-                'generationConfig' => [
-                    'temperature' => 0.2,
-                    'maxOutputTokens' => 1024,
+                'temperature' => 0.2,
+                'max_tokens'  => 1024,
+            ]);
+
+        if ($response->successful()) {
+            return $response->json('choices.0.message.content');
+        }
+
+        Log::warning('OpenAI Vision API error', [
+            'status' => $response->status(),
+            'body'   => substr($response->body(), 0, 500),
+        ]);
+
+        return null;
+    }
+
+    protected function callClaude(array $config, string $systemInstruction, string $userPrompt, string $mimeType, string $base64Data): ?string
+    {
+        $apiKey = $config['api_key'];
+        $model = $config['model'] ?: 'claude-3-5-sonnet-20241022';
+        $url = 'https://api.anthropic.com/v1/messages';
+
+        $response = Http::timeout(25)
+            ->withHeaders([
+                'x-api-key'         => $apiKey,
+                'anthropic-version' => '2023-06-01',
+                'content-type'      => 'application/json',
+            ])
+            ->post($url, [
+                'model'      => $model,
+                'max_tokens' => 1024,
+                'system'     => $systemInstruction,
+                'messages'   => [
+                    [
+                        'role' => 'user',
+                        'content' => [
+                            [
+                                'type' => 'image',
+                                'source' => [
+                                    'type'       => 'base64',
+                                    'media_type' => $mimeType,
+                                    'data'       => $base64Data,
+                                ],
+                            ],
+                            ['type' => 'text', 'text' => $userPrompt],
+                        ],
+                    ],
                 ],
             ]);
 
-            if ($response->successful()) {
-                $candidateText = $response->json('candidates.0.content.parts.0.text');
-                if (!empty($candidateText)) {
-                    $cleanedText = trim($candidateText);
-                    // Hapus tanda petik awal/akhir atau backticks jika ada
-                    $cleanedText = preg_replace('/^```[a-z]*\s*|\s*```$/i', '', $cleanedText);
-                    $cleanedText = trim($cleanedText);
-                    $cleanedText = preg_replace('/^"|"$/', '', $cleanedText);
-                    $cleanedText = trim($cleanedText);
-
-                    // Pastikan kalimat pembuka wajib selalu ada di awal prompt
-                    $mandatoryPrefix = 'Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Maintain 100% of the exact geometry, camera perspective, section-cut lines, AND THE EXACT COLOR PALETTE of every surface as shown in the reference image.';
-                    if (!str_starts_with($cleanedText, 'Strict image-to-image')) {
-                        $cleanedText = $mandatoryPrefix . ' ' . $cleanedText;
-                    }
-
-                    return [
-                        'prompt' => $cleanedText,
-                        'source' => 'gemini-vision',
-                        'model'  => $model,
-                    ];
-                }
-            }
-
-            Log::warning('Gemini Vision API returned unexpected response', [
-                'status' => $response->status(),
-                'body'   => substr($response->body(), 0, 500),
-            ]);
-
-            return [
-                'prompt' => $fallbackPrompt,
-                'source' => 'local-spatial-3d',
-                'notice' => 'Layanan Gemini Vision sedang sibuk. Menggunakan generator spasial 3D internal.',
-            ];
-        } catch (\Throwable $e) {
-            Log::error('Gemini Vision API exception', [
-                'error' => $e->getMessage(),
-            ]);
-
-            return [
-                'prompt' => $fallbackPrompt,
-                'source' => 'local-spatial-3d',
-                'notice' => 'Gagal menghubungi Gemini Vision. Menggunakan generator spasial 3D internal.',
-            ];
+        if ($response->successful()) {
+            return $response->json('content.0.text');
         }
+
+        Log::warning('Claude Vision API error', [
+            'status' => $response->status(),
+            'body'   => substr($response->body(), 0, 500),
+        ]);
+
+        return null;
+    }
+
+    protected function callOllama(array $config, string $systemInstruction, string $userPrompt, string $base64Data): ?string
+    {
+        $model = $config['model'] ?: 'llava';
+        $baseUrl = rtrim($config['base_url'] ?: 'http://localhost:11434', '/');
+        $url = "{$baseUrl}/api/generate";
+
+        $response = Http::timeout(35)->post($url, [
+            'model'  => $model,
+            'system' => $systemInstruction,
+            'prompt' => $userPrompt,
+            'images' => [$base64Data],
+            'stream' => false,
+        ]);
+
+        if ($response->successful()) {
+            return $response->json('response');
+        }
+
+        Log::warning('Ollama Vision API error', [
+            'status' => $response->status(),
+            'body'   => substr($response->body(), 0, 500),
+        ]);
+
+        return null;
+    }
+
+    protected function sanitizePromptText(string $candidateText): string
+    {
+        $cleanedText = trim($candidateText);
+        $cleanedText = preg_replace('/^```[a-z]*\s*|\s*```$/i', '', $cleanedText);
+        $cleanedText = trim($cleanedText);
+        $cleanedText = preg_replace('/^"|"$/', '', $cleanedText);
+        $cleanedText = trim($cleanedText);
+
+        $mandatoryPrefix = 'Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Maintain 100% of the exact geometry, camera perspective, section-cut lines, AND THE EXACT COLOR PALETTE of every surface as shown in the reference image.';
+        if (!str_starts_with($cleanedText, 'Strict image-to-image')) {
+            $cleanedText = $mandatoryPrefix . ' ' . $cleanedText;
+        }
+
+        return $cleanedText;
     }
 
     private function buildFallbackPrompt(Project $project, array $metadata): string

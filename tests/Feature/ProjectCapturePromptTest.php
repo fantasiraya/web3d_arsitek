@@ -152,3 +152,53 @@ test('user can download capture image as attachment', function () {
     expect($response->headers->get('content-disposition'))->toContain('pitcharch-ruang-keluarga-15-30.png');
 });
 
+test('generate prompt uses database setting to override env provider', function () {
+    // Set .env to gemini
+    config([
+        'services.vision_ai.provider' => 'gemini',
+        'services.vision_ai.providers.gemini.api_key' => 'fake-gemini-key',
+    ]);
+
+    // Simpan di Database tabel system_settings bahwa provider aktif adalah openai
+    \App\Domains\SystemConfig\Models\SystemSetting::updateOrCreate(
+        ['key' => 'vision_ai_provider'],
+        ['value' => 'openai', 'type' => 'string']
+    );
+    \App\Domains\SystemConfig\Models\SystemSetting::updateOrCreate(
+        ['key' => 'openai_api_key'],
+        ['value' => 'fake-openai-db-key', 'type' => 'string']
+    );
+    \App\Domains\SystemConfig\Models\SystemSetting::updateOrCreate(
+        ['key' => 'openai_model'],
+        ['value' => 'gpt-4o-mini', 'type' => 'string']
+    );
+
+    \Illuminate\Support\Facades\Http::fake([
+        'api.openai.com/*' => \Illuminate\Support\Facades\Http::response([
+            'choices' => [
+                [
+                    'message' => [
+                        'content' => 'Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Maintain 100% of the exact geometry, camera perspective, section-cut lines, AND THE EXACT COLOR PALETTE of every surface as shown in the reference image. Contemporary Scandinavian wooden house generated via OpenAI GPT-4o.',
+                    ],
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $user = User::factory()->create();
+    $project = Project::factory()->create(['user_id' => $user->id, 'title' => 'Villa Skandinavia']);
+
+    $response = $this->actingAs($user)->postJson("/projects/{$project->id}/captures/generate-prompt", [
+        'image' => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        'scene_metadata' => [
+            'room_name' => 'Fasad Utama',
+            'hour' => '10:00',
+        ],
+    ]);
+
+    $response->assertOk();
+    expect($response->json('source'))->toBe('openai-vision');
+    expect($response->json('provider'))->toBe('openai');
+    expect($response->json('prompt'))->toContain('OpenAI GPT-4o');
+});
+

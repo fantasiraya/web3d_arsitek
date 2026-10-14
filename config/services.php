@@ -46,4 +46,26 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
     ],
 
+    'vision_ai' => [
+        'provider' => env('VISION_AI_PROVIDER', 'gemini'),
+        'providers' => [
+            'gemini' => [
+                'api_key' => env('GEMINI_API_KEY'),
+                'model'   => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+            ],
+            'openai' => [
+                'api_key'  => env('OPENAI_API_KEY'),
+                'model'    => env('OPENAI_MODEL', 'gpt-4o-mini'),
+                'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+            ],
+            'claude' => [
+                'api_key' => env('ANTHROPIC_API_KEY'),
+                'model'   => env('ANTHROPIC_MODEL', 'claude-3-5-sonnet-20241022'),
+            ],
+            'ollama' => [
+                'base_url' => env('OLLAMA_BASE_URL', 'http://localhost:11434'),
+                'model'    => env('OLLAMA_MODEL', 'llava'),
+            ],
+        ],
+    ],
 ];
