@@ -34,6 +34,7 @@ class PlanController extends Controller
             // Limit per tier
             'free_tier_max_file_size_mb', 'pro_tier_max_file_size_mb', 'enterprise_tier_max_file_size_mb',
             'free_tier_max_projects', 'pro_tier_max_projects',
+            'free_tier_max_captures', 'pro_tier_max_captures',
         ])->pluck('value', 'key');
 
         return Inertia::render('Admin/Plans/Index', [
@@ -98,6 +99,8 @@ class PlanController extends Controller
             'free_tier_max_file_size_mb'       => ['required', 'integer', 'min:1', 'max:500'],
             'pro_tier_max_file_size_mb'        => ['required', 'integer', 'min:1', 'max:500'],
             'enterprise_tier_max_file_size_mb' => ['required', 'integer', 'min:1', 'max:500'],
+            'free_tier_max_captures'           => ['required', 'integer', 'min:1', 'max:1000'],
+            'pro_tier_max_captures'            => ['required', 'integer', 'min:1', 'max:5000'],
         ]);
 
         // Key-key yang tidak boleh di-overwrite jika dikirim kosong

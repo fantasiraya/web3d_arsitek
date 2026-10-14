@@ -62,6 +62,8 @@ interface PaymentSettings {
     free_tier_max_file_size_mb: string;
     pro_tier_max_file_size_mb: string;
     enterprise_tier_max_file_size_mb: string;
+    free_tier_max_captures?: string;
+    pro_tier_max_captures?: string;
 }
 
 const props = defineProps<{
@@ -158,6 +160,8 @@ const paymentForm = useForm({
     free_tier_max_file_size_mb:       parseInt(ps.free_tier_max_file_size_mb ?? '15'),
     pro_tier_max_file_size_mb:        parseInt(ps.pro_tier_max_file_size_mb ?? '100'),
     enterprise_tier_max_file_size_mb: parseInt(ps.enterprise_tier_max_file_size_mb ?? '100'),
+    free_tier_max_captures:           parseInt(ps.free_tier_max_captures ?? '5'),
+    pro_tier_max_captures:            parseInt(ps.pro_tier_max_captures ?? '50'),
 });
 
 // Status tersimpan (placeholder informatif)
@@ -594,6 +598,62 @@ function submitPaymentSettings() {
                     </div>
                     <div class="rounded-lg bg-indigo-500/5 border border-indigo-500/20 px-3 py-2 text-[11px] text-indigo-600 dark:text-indigo-400">
                         ℹ Perubahan berlaku langsung saat user upload proyek baru. Upload yang sudah ada tidak terpengaruh.
+                    </div>
+                </div>
+
+                <!-- ── BATAS KUOTA GAMBAR (CAPTURES) PER PAKET ─────────────────── -->
+                <div class="rounded-xl border border-border bg-muted/20 p-4 space-y-4">
+                    <div>
+                        <p class="text-sm font-semibold text-foreground">Batas Kuota Simpan Gambar 3D (Captures per Paket)</p>
+                        <p class="text-xs text-muted-foreground mt-0.5">
+                            Batas maksimal jumlah tangkapan snapshot kamera 3D yang dapat disimpan oleh arsitek ke server galeri per akun.
+                        </p>
+                    </div>
+                    <div class="grid gap-4 sm:grid-cols-3">
+                        <div class="space-y-1.5">
+                            <Label>Free Tier (Gambar)</Label>
+                            <div class="flex items-center gap-2">
+                                <Input
+                                    v-model.number="paymentForm.free_tier_max_captures"
+                                    type="number"
+                                    min="1"
+                                    max="1000"
+                                    class="w-full"
+                                    placeholder="5"
+                                />
+                                <span class="text-xs text-muted-foreground shrink-0">Gbr</span>
+                            </div>
+                            <p class="text-[10px] text-muted-foreground">Default: 5 gambar</p>
+                        </div>
+                        <div class="space-y-1.5">
+                            <Label>Pro Tier (Gambar)</Label>
+                            <div class="flex items-center gap-2">
+                                <Input
+                                    v-model.number="paymentForm.pro_tier_max_captures"
+                                    type="number"
+                                    min="1"
+                                    max="5000"
+                                    class="w-full"
+                                    placeholder="50"
+                                />
+                                <span class="text-xs text-muted-foreground shrink-0">Gbr</span>
+                            </div>
+                            <p class="text-[10px] text-muted-foreground">Default: 50 gambar</p>
+                        </div>
+                        <div class="space-y-1.5">
+                            <Label>Enterprise Tier</Label>
+                            <div class="flex items-center gap-2">
+                                <Input
+                                    disabled
+                                    value="Unlimited (∞)"
+                                    class="w-full bg-muted/40 cursor-not-allowed opacity-80"
+                                />
+                            </div>
+                            <p class="text-[10px] text-muted-foreground">Tanpa batas</p>
+                        </div>
+                    </div>
+                    <div class="rounded-lg bg-amber-500/5 border border-amber-500/20 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400">
+                        ℹ Klien hanya bisa mengunduh PNG secara lokal dan tidak menggunakan kuota server. Kuota hanya dihitung saat arsitek menyimpan gambar ke galeri.
                     </div>
                 </div>
 
