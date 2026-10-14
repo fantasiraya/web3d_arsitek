@@ -18,6 +18,7 @@ class ViewerController extends Controller
             'id', 'user_id', 'title', 'slug', 'description',
             'file_path', 'file_size_bytes', 'is_draco_compressed',
             'share_token', 'max_revisions_allowed', 'current_revision_count',
+            'latitude', 'longitude', 'north_angle', 'solar_date',
             'created_at', 'updated_at',
         ])
         ->with([

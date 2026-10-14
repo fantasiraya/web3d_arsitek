@@ -37,6 +37,10 @@ class CreateProjectAction
             'share_token' => Str::random(32),
             'max_revisions_allowed' => (int) ($data['max_revisions_allowed'] ?? $maxRevisions),
             'current_revision_count' => 0,
+            'latitude' => (float) ($data['latitude'] ?? -6.2088),
+            'longitude' => (float) ($data['longitude'] ?? 106.8456),
+            'north_angle' => (float) ($data['north_angle'] ?? 0.0),
+            'solar_date' => $data['solar_date'] ?? now()->toDateString(),
         ]);
     }
 }

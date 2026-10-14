@@ -50,7 +50,25 @@ class Project extends Model
         'share_token',
         'max_revisions_allowed',
         'current_revision_count',
+        'latitude',
+        'longitude',
+        'north_angle',
+        'solar_date',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'latitude'               => 'float',
+            'longitude'              => 'float',
+            'north_angle'            => 'float',
+            'solar_date'             => 'date:Y-m-d',
+            'max_revisions_allowed'  => 'integer',
+            'current_revision_count' => 'integer',
+            'file_size_bytes'        => 'integer',
+            'is_draco_compressed'    => 'boolean',
+        ];
+    }
 
     protected static function booted(): void
     {
@@ -79,16 +97,6 @@ class Project extends Model
                 $disk->deleteDirectory($projectFolder);
             }
         });
-    }
-
-    protected function casts(): array
-    {
-        return [
-            'is_draco_compressed' => 'boolean',
-            'file_size_bytes' => 'integer',
-            'max_revisions_allowed' => 'integer',
-            'current_revision_count' => 'integer',
-        ];
     }
 
     /**
@@ -149,6 +157,26 @@ class Project extends Model
     public function chatMessages(): HasMany
     {
         return $this->hasMany(ChatMessage::class, 'project_id')->orderBy('created_at', 'asc');
+    }
+
+    /**
+     * 3D Snapshot captures on this project.
+     *
+     * @return HasMany<ProjectCapture, $this>
+     */
+    public function captures(): HasMany
+    {
+        return $this->hasMany(ProjectCapture::class, 'project_id')->latest();
+    }
+
+    /**
+     * Saved camera presets on this project.
+     *
+     * @return HasMany<ProjectCameraPreset, $this>
+     */
+    public function cameraPresets(): HasMany
+    {
+        return $this->hasMany(ProjectCameraPreset::class, 'project_id')->orderBy('sort_order', 'asc');
     }
 
     /**

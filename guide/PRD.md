@@ -1,5 +1,7 @@
-# 📄 Product Requirement Document (PRD) v2.7
+# 📄 Product Requirement Document (PRD) v2.8
 
+> **v2.8 Note:** Menambahkan **Section 11 (Pencahayaan Real-Time di Viewer & Snapshot Captures)**. Update MoSCoW matrix: Real-Time Solar Lighting Simulation (Three.js + SunCalc) & 3D Snapshot Captures → ✅ Selesai.
+>
 > **v2.7 Note:** Menambahkan **Section 9 (Profil Arsitek)** dan **Section 10 (Drawing 2D — Rencana)**. Update MoSCoW matrix: RAB Fase A/B/C, AHSP, Export RAB, Mapping RAB → ✅ Selesai. Drawing 2D ditambahkan sebagai Should Have 🔴 Pending.
 
 > **v2.6 Note:** Menambahkan modul **RAB & Lembar Kerja** (`Domains/Rab`): template + harga satuan, import quantity take-off CSV/Excel, estimator dari `.glb`, switch visibilitas RAB ke Klien, gating `plans.can_use_rab`. Lihat Section 8.
@@ -97,6 +99,8 @@ Membangun platform SaaS berbasis Web 3D interaktif bernama **PitchArch** yang me
 | **Should Have** | Export RAB ke Excel multi-sheet dengan kop surat arsitek | ✅ Selesai |
 | **Should Have** | Mapping RAB (`/rab/mappings`) — tipe exact/name_pattern/material | ✅ Selesai |
 | **Should Have** | Profil Arsitek Lengkap (badan usaha, phone, alamat wilayah Indonesia) | ✅ Selesai |
+| **Should Have** | Real-Time Solar Lighting Simulation (Three.js + SunCalc, arah utara, night mode LAMPU_*) | ✅ Selesai |
+| **Should Have** | 3D Snapshot Captures (Viewport/FHD PNG, kuota gambar, galeri per-ruangan & jam, switch visibilitas klien) | ✅ Selesai |
 | **Should Have** | Drawing 2D (Denah/Tampak/Potongan, konva.js, export DXF+SVG) — Enterprise only | 🔴 Pending |
 | **Could Have** | First-Person Walkthrough Mode | 🔴 Pending |
 | **Could Have** | Material Swapper | 🔴 Pending |
@@ -294,3 +298,16 @@ Menyediakan editor gambar teknik 2D (denah, tampak, potongan) langsung di platfo
 3. **Library simbol:** pintu, jendela, kolom, tangga (pre-built SVG symbols di konva canvas).
 4. **Export format:** DXF (kompatibel AutoCAD) + SVG.
 5. **Kepemilikan:** drawing sheet milik Arsitek pemilik project; Klien hanya bisa melihat (jika switch visibilitas aktif).
+
+---
+
+## 11. Pencahayaan Real-Time di Viewer & 3D Snapshot Captures (`Domains/Project`)
+
+### 11.A Tujuan
+1. **Pencahayaan Matahari Real-Time:** Menghitung posisi matahari dari jam (00:00–23:59), tanggal, lokasi geografis (latitude/longitude), dan arah orientasi utara (`north_angle` 0°–360°). Menggerakkan `DirectionalLight` (matahari), soft shadow mapping (PCFSoftShadowMap), dan interpolasi warna langit/ambient.
+2. **Night Mode Otomatis:** Saat matahari berada di bawah ufuk (altitude < 0) atau preset malam: matahari dinonaktifkan, ambient diredupkan, dan objek mesh dengan prefix nama `LAMPU_*` atau `lampu_*` menyala secara otomatis (emissive material + point lights).
+3. **Preset Cepat:** Pagi (08:00), Siang (12:00), Sore (17:00), dan Malam (20:00), plus slider scrub interaktif agar klien bisa menggeser jam sendiri di browser secara lokal tanpa biaya server.
+4. **Pengaturan Lokasi & Arah Utara:** Hanya Arsitek yang berhak mengubah koordinat (lat/long), arah utara, dan tanggal simulasi matahari per-project. Default lokasi proyek di-fallback ke koordinat Indonesia (Jakarta: -6.2088, 106.8456) jika profil arsitek belum diisi.
+5. **3D Snapshot Captures:** Mengambil tangkapan layar langsung dari canvas Three.js (`preserveDrawingBuffer: true`), mendukung resolusi Viewport dan Full HD (1920x1080). Snapshot dikaitkan dengan Camera Preset (ruangan) dan jam simulasi.
+6. **Batas Kuota Simpan:** Hanya Arsitek yang boleh menyimpan gambar ke server (`SaveCaptureAction`). Batas kuota dihitung **per-gambar** (Free Tier: 5 gambar, Pro Tier: 50 gambar, Enterprise: unlimited). Klien hanya bisa mengunduh PNG secara lokal.
+7. **Galeri Snapshot:** Drawer galeri di Viewer untuk melihat, unduh PNG, menghapus (arsitek saja), dan switch toggle visibilitas ke klien (`is_visible_to_clients`).

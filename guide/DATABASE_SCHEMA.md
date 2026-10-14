@@ -149,6 +149,10 @@ Menyimpan metadata file 3D `.glb` yang diunggah oleh Arsitek.
 | `share_token` | `string` | `UNIQUE, NOT NULL` | Token URL undangan privat (`/p/{share_token}`) — membuka URL ini tetap WAJIB login & lolos validasi email di `project_clients` |
 | `max_revisions_allowed` | `integer` | `NOT NULL, DEFAULT(3)` | Batas maksimum revisi client. Default dari `system_settings`, dapat di-override arsitek |
 | `current_revision_count` | `integer` | `NOT NULL, DEFAULT(0)` | Jumlah revisi yang sudah terpakai |
+| `latitude` | `decimal(10,7)` | `DEFAULT(-6.2088000)` | Koordinat lintang lokasi proyek (default Jakarta) |
+| `longitude` | `decimal(10,7)` | `DEFAULT(106.8456000)` | Koordinat bujur lokasi proyek (default Jakarta) |
+| `north_angle` | `float` | `DEFAULT(0.0)` | Rotasi arah utara bangunan (0°–360°) |
+| `solar_date` | `date` | `NULLABLE` | Tanggal kalender simulasi matahari |
 | `created_at` | `timestamp` | `NULLABLE` | Waktu entri dibuat |
 | `updated_at` | `timestamp` | `NULLABLE` | Waktu entri diperbarui |
 
@@ -208,6 +212,27 @@ Menyimpan sudut/angle kamera yang disimpan Arsitek pada project tertentu untuk m
 | `target_z` | `decimal(10,6)` | `NOT NULL` | Titik target/look-at kamera Z |
 | `created_at` | `timestamp` | `NULLABLE` | Waktu entri dibuat |
 | `updated_at` | `timestamp` | `NULLABLE` | Waktu entri diperbarui |
+
+---
+
+#### `project_captures`
+Menyimpan snapshot gambar 3D yang diambil dari WebGL Canvas Three.js per ruangan dan per jam pencahayaan.
+
+| Field | Type | Modifiers | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `uuid` | `PRIMARY KEY` | Unique Identifier |
+| `project_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Relasi ke `projects.id` |
+| `user_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Relasi ke `users.id` (Arsitek pemilik proyek) |
+| `title` | `string` | `NULLABLE` | Judul opsional capture |
+| `room_name` | `string` | `NOT NULL, DEFAULT('Sudut Bebas')` | Nama ruangan / preset sudut kamera |
+| `captured_hour` | `string(10)` | `NOT NULL, DEFAULT('12:00')` | Jam pencahayaan simulasi matahari saat capture |
+| `file_path` | `string` | `NOT NULL` | Path file PNG di storage (`projects/{id}/captures/{uuid}.png`) |
+| `file_size_bytes` | `bigInteger` | `NOT NULL, DEFAULT(0)` | Ukuran file dalam bytes |
+| `width` | `integer` | `NOT NULL, DEFAULT(1920)` | Resolusi lebar gambar (piksel) |
+| `height` | `integer` | `NOT NULL, DEFAULT(1080)` | Resolusi tinggi gambar (piksel) |
+| `is_visible_to_clients` | `boolean` | `NOT NULL, DEFAULT(false)` | Switch apakah gambar tampil di galeri Klien |
+| `created_at` | `timestamp` | `NULLABLE` | Waktu capture dibuat |
+| `updated_at` | `timestamp` | `NULLABLE` | Waktu capture diperbarui |
 
 ---
 

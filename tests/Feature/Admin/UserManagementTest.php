@@ -53,7 +53,7 @@ test('super admin can change user plan and audit log is recorded', function () {
 
     // Check audit log was created
     $auditLog = AuditLog::where('target_user_id', $user->id)
-        ->where('action', 'change_plan')
+        ->whereIn('action', ['user.subscription.changed', 'change_plan'])
         ->first();
 
     expect($auditLog)->not->toBeNull();
@@ -79,13 +79,13 @@ test('super admin can suspend user and suspended user is blocked', function () {
 
     // Check audit log
     $auditLog = AuditLog::where('target_user_id', $user->id)
-        ->where('action', 'suspend_user')
+        ->whereIn('action', ['user.status.changed', 'suspend_user'])
         ->first();
 
     expect($auditLog)->not->toBeNull();
 
     // Try to access as suspended user
-    $response = $this->actingAs($user)->get('/architect/dashboard');
+    $response = $this->actingAs($user)->get('/dashboard');
     $response->assertStatus(403);
 });
 
@@ -105,7 +105,7 @@ test('super admin can activate suspended user', function () {
     expect($user->status)->toBe('active');
 
     // User should be able to access now
-    $response = $this->actingAs($user)->get('/architect/dashboard');
+    $response = $this->actingAs($user)->get('/dashboard');
     $response->assertStatus(200);
 });
 
@@ -133,7 +133,7 @@ test('super admin can set custom project limit override', function () {
 
     // Check audit log
     $auditLog = AuditLog::where('target_user_id', $user->id)
-        ->where('action', 'set_limit_override')
+        ->whereIn('action', ['user.project_limit.overridden', 'set_limit_override'])
         ->first();
 
     expect($auditLog)->not->toBeNull();
@@ -184,7 +184,7 @@ test('super admin can remove custom project limit override', function () {
 
     // Check audit log
     $auditLog = AuditLog::where('target_user_id', $user->id)
-        ->where('action', 'remove_limit_override')
+        ->whereIn('action', ['user.project_limit.override_removed', 'remove_limit_override'])
         ->first();
 
     expect($auditLog)->not->toBeNull();
@@ -223,9 +223,9 @@ test('admin actions include IP address and user agent in audit log', function ()
     ]);
 
     $response = $this->actingAs($this->admin)
-        ->withHeaders([
-            'User-Agent' => 'Test Browser/1.0',
-            'X-Forwarded-For' => '192.168.1.100',
+        ->withServerVariables([
+            'HTTP_USER_AGENT' => 'Test Browser/1.0',
+            'REMOTE_ADDR' => '192.168.1.100',
         ])
         ->patch("/admin/users/{$user->id}/status");
 

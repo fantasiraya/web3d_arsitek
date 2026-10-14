@@ -132,11 +132,29 @@
                     </Transition>
                 </div>
 
+                <!-- Galeri Capture toggle -->
+                <button
+                    type="button"
+                    @click="isGalleryOpen = !isGalleryOpen; isChatOpen = false; isDrawerOpen = false; showRabPanel = false"
+                    class="relative flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
+                    :class="isGalleryOpen && 'border-amber-500/50 bg-amber-500/10 text-amber-300'"
+                    title="Galeri Hasil Ambil Gambar 3D"
+                >
+                    <Image class="h-3.5 w-3.5" :class="isGalleryOpen ? 'text-amber-400' : 'text-neutral-300'" />
+                    <span class="hidden sm:inline">Galeri</span>
+                    <span
+                        v-if="captures.length > 0"
+                        class="inline-flex items-center justify-center rounded-full bg-amber-500/80 px-1.5 text-[9px] font-bold text-white min-w-[16px]"
+                    >
+                        {{ captures.length }}
+                    </span>
+                </button>
+
                 <!-- Chat toggle — hanya untuk owner dan client, bukan admin viewer -->
                 <button
                     v-if="!isAdminViewer"
                     type="button"
-                    @click="isChatOpen = !isChatOpen; isDrawerOpen = false"
+                    @click="isChatOpen = !isChatOpen; isDrawerOpen = false; isGalleryOpen = false"
                     class="relative flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
                     :class="isChatOpen && 'border-indigo-500/50 bg-indigo-500/10 text-indigo-300'"
                 >
@@ -253,6 +271,39 @@
                     <Scissors class="h-3.5 w-3.5" :class="clippingEnabled ? 'text-cyan-400' : ''" />
                     <span>Potong</span>
                     <span v-if="clippingEnabled" class="ml-0.5 h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                </button>
+
+                <div class="h-4 w-px bg-white/15 mx-0.5"></div>
+
+                <!-- Tombol Cahaya / Matahari -->
+                <button
+                    type="button"
+                    @click="isSunPanelOpen = !isSunPanelOpen; isClipPanelOpen = false; isPresetPanelOpen = false; isChatOpen = false"
+                    class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all"
+                    :class="isSunPanelOpen
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white'"
+                    title="Simulasi Pencahayaan Real-time Matahari"
+                >
+                    <Sun v-if="!isNight" class="h-3.5 w-3.5 text-amber-400" />
+                    <Moon v-else class="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Cahaya</span>
+                    <span class="ml-0.5 text-[10px] font-mono px-1 rounded bg-white/10 text-neutral-300">
+                        {{ formattedTime }}
+                    </span>
+                </button>
+
+                <div class="h-4 w-px bg-white/15 mx-0.5"></div>
+
+                <!-- Tombol Ambil Gambar -->
+                <button
+                    type="button"
+                    @click="openCaptureModal"
+                    class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 transition-all shadow-sm"
+                    title="Ambil Gambar dari Sudut Kamera Saat Ini"
+                >
+                    <Camera class="h-3.5 w-3.5 text-rose-400" />
+                    <span>Ambil Gambar</span>
                 </button>
             </div>
 
@@ -821,6 +872,564 @@
                 </div>
             </Transition>
 
+            <!-- ── SUN & LIGHTING PANEL ── -->
+            <Transition
+                enter-active-class="transition-all duration-300 ease-out"
+                enter-from-class="opacity-0 -translate-x-4 scale-95"
+                enter-to-class="opacity-100 translate-x-0 scale-100"
+                leave-active-class="transition-all duration-200 ease-in"
+                leave-from-class="opacity-100 translate-x-0 scale-100"
+                leave-to-class="opacity-0 -translate-x-4 scale-95"
+            >
+                <div
+                    v-if="isSunPanelOpen"
+                    class="absolute top-16 left-4 z-30 w-80 max-w-[92vw] rounded-2xl border border-white/15 bg-black/90 backdrop-blur-2xl shadow-2xl overflow-hidden"
+                >
+                    <!-- Header -->
+                    <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                        <div class="flex items-center gap-2">
+                            <Sun v-if="!isNight" class="h-4 w-4 text-amber-400" />
+                            <Moon v-else class="h-4 w-4 text-indigo-400" />
+                            <span class="text-xs font-bold uppercase tracking-wider text-white">Pencahayaan Matahari</span>
+                        </div>
+                        <button type="button" @click="isSunPanelOpen = false" class="text-neutral-400 hover:text-white transition-colors">
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
+
+                    <div class="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
+                        <!-- Presets (Pagi, Siang, Sore, Malam) -->
+                        <div>
+                            <p class="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-2">Preset Waktu</p>
+                            <div class="grid grid-cols-4 gap-1.5">
+                                <button
+                                    type="button"
+                                    @click="setPreset('pagi')"
+                                    class="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl border text-xs font-medium transition-all"
+                                    :class="activePreset === 'pagi'
+                                        ? 'bg-amber-500/25 border-amber-500/50 text-amber-300'
+                                        : 'bg-white/5 border-white/10 text-neutral-300 hover:bg-white/10 hover:text-white'"
+                                >
+                                    <Sunrise class="h-4 w-4 text-amber-400" />
+                                    <span class="text-[10px]">Pagi</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="setPreset('siang')"
+                                    class="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl border text-xs font-medium transition-all"
+                                    :class="activePreset === 'siang'
+                                        ? 'bg-amber-500/25 border-amber-500/50 text-amber-300'
+                                        : 'bg-white/5 border-white/10 text-neutral-300 hover:bg-white/10 hover:text-white'"
+                                >
+                                    <Sun class="h-4 w-4 text-amber-300" />
+                                    <span class="text-[10px]">Siang</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="setPreset('sore')"
+                                    class="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl border text-xs font-medium transition-all"
+                                    :class="activePreset === 'sore'
+                                        ? 'bg-orange-500/25 border-orange-500/50 text-orange-300'
+                                        : 'bg-white/5 border-white/10 text-neutral-300 hover:bg-white/10 hover:text-white'"
+                                >
+                                    <Sunset class="h-4 w-4 text-orange-400" />
+                                    <span class="text-[10px]">Sore</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="setPreset('malam')"
+                                    class="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl border text-xs font-medium transition-all"
+                                    :class="activePreset === 'malam'
+                                        ? 'bg-indigo-500/25 border-indigo-500/50 text-indigo-300'
+                                        : 'bg-white/5 border-white/10 text-neutral-300 hover:bg-white/10 hover:text-white'"
+                                >
+                                    <Moon class="h-4 w-4 text-indigo-400" />
+                                    <span class="text-[10px]">Malam</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Clock & Slider -->
+                        <div class="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2.5">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-neutral-400">Jam Simulasi</span>
+                                <span class="text-base font-mono font-bold text-white bg-black/60 px-2 py-0.5 rounded-lg border border-white/10">
+                                    {{ formattedTime }}
+                                </span>
+                            </div>
+
+                            <input
+                                type="range"
+                                min="0"
+                                max="23.9"
+                                step="0.1"
+                                :value="currentHour"
+                                @input="onHourSliderChange"
+                                class="w-full accent-amber-400 h-1.5 bg-white/20 rounded-lg cursor-pointer"
+                            />
+
+                            <!-- Status night / lamps -->
+                            <div class="flex items-center justify-between text-[11px] pt-1">
+                                <span v-if="isNight" class="text-indigo-300 flex items-center gap-1">
+                                    <span>🌙 Mode Malam</span>
+                                    <span v-if="lampNodes.length > 0" class="text-amber-300 font-medium">({{ lampNodes.length }} Lampu Nyala)</span>
+                                </span>
+                                <span v-else class="text-amber-300 flex items-center gap-1">
+                                    <span>☀️ Matahari Aktif</span>
+                                    <span class="text-neutral-400 text-[10px]">({{ (sunAltitude * 180 / Math.PI).toFixed(0) }}°)</span>
+                                </span>
+                                <span class="text-[10px] text-neutral-500">Geser untuk bayangan</span>
+                            </div>
+                        </div>
+
+                        <!-- Project Settings Section (Architect only) -->
+                        <div v-if="isOwner" class="border-t border-white/10 pt-3 space-y-3">
+                            <button
+                                type="button"
+                                @click="showSunGeoSettings = !showSunGeoSettings"
+                                class="w-full flex items-center justify-between text-xs font-semibold text-neutral-300 hover:text-white"
+                            >
+                                <span class="flex items-center gap-1.5">
+                                    <Compass class="h-3.5 w-3.5 text-amber-400" />
+                                    <span>Lokasi & Arah Utara</span>
+                                </span>
+                                <span class="text-[10px] text-amber-400 font-mono">{{ showSunGeoSettings ? 'Tutup ▲' : 'Atur ▼' }}</span>
+                            </button>
+
+                            <div v-if="showSunGeoSettings" class="space-y-3 pt-1 text-xs">
+                                <!-- Arah Utara -->
+                                <div class="space-y-1">
+                                    <div class="flex justify-between text-[11px]">
+                                        <span class="text-neutral-400">Rotasi Arah Utara:</span>
+                                        <span class="font-mono text-amber-400">{{ northAngle }}°</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="360"
+                                        step="1"
+                                        v-model.number="northAngle"
+                                        @input="updateSunPosition"
+                                        class="w-full accent-amber-400 h-1.5 bg-white/20 rounded-lg cursor-pointer"
+                                    />
+                                </div>
+
+                                <!-- Latitude / Longitude -->
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="text-[10px] text-neutral-400 block mb-0.5">Latitude</label>
+                                        <input
+                                            type="number"
+                                            step="0.0001"
+                                            v-model.number="latitude"
+                                            @change="updateSunPosition"
+                                            class="w-full h-7 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] text-neutral-400 block mb-0.5">Longitude</label>
+                                        <input
+                                            type="number"
+                                            step="0.0001"
+                                            v-model.number="longitude"
+                                            @change="updateSunPosition"
+                                            class="w-full h-7 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                                        />
+                                    </div>
+                                </div>
+
+                                <!-- Tanggal -->
+                                <div>
+                                    <label class="text-[10px] text-neutral-400 block mb-0.5">Tanggal Simulasi</label>
+                                    <input
+                                        type="date"
+                                        v-model="solarDate"
+                                        @change="updateSunPosition"
+                                        class="w-full h-7 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white focus:outline-none focus:border-amber-400"
+                                    />
+                                </div>
+
+                                <!-- Tombol Simpan Pengaturan Project -->
+                                <button
+                                    type="button"
+                                    :disabled="isSavingSunSettings"
+                                    @click="saveSunSettings"
+                                    class="w-full py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 font-medium transition-all disabled:opacity-50 text-xs flex items-center justify-center gap-1.5"
+                                >
+                                    <Check v-if="!isSavingSunSettings" class="h-3.5 w-3.5" />
+                                    <span v-else class="h-3 w-3 rounded-full border-2 border-amber-400 border-t-transparent animate-spin"></span>
+                                    <span>Simpan ke Proyek</span>
+                                </button>
+                                <p v-if="sunSettingsMessage" class="text-[10px] text-emerald-400 text-center">{{ sunSettingsMessage }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+
+            <!-- ── CAPTURE MODAL ── -->
+            <Transition
+                enter-active-class="transition-all duration-300 ease-out"
+                enter-from-class="opacity-0 scale-95"
+                enter-to-class="opacity-100 scale-100"
+                leave-active-class="transition-all duration-200 ease-in"
+                leave-from-class="opacity-100 scale-100"
+                leave-to-class="opacity-0 scale-95"
+            >
+                <div
+                    v-if="isCaptureModalOpen"
+                    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                >
+                    <div class="relative w-full max-w-lg rounded-3xl border border-white/15 bg-neutral-950 p-6 shadow-2xl space-y-4">
+                        <!-- Header -->
+                        <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                            <div class="flex items-center gap-2">
+                                <Camera class="h-5 w-5 text-rose-400" />
+                                <h3 class="text-base font-semibold text-white">Ambil Gambar 3D (Snapshot)</h3>
+                            </div>
+                            <button @click="isCaptureModalOpen = false" class="text-neutral-400 hover:text-white transition-colors">
+                                <X class="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <!-- Image Preview -->
+                        <div class="relative aspect-video w-full rounded-2xl overflow-hidden border border-white/10 bg-black flex items-center justify-center shadow-inner">
+                            <img
+                                v-if="capturePreviewDataUrl"
+                                :src="capturePreviewDataUrl"
+                                alt="Capture Preview"
+                                class="h-full w-full object-contain"
+                            />
+                            <div v-else class="flex flex-col items-center gap-2 text-neutral-500">
+                                <span class="h-6 w-6 rounded-full border-2 border-rose-400 border-t-transparent animate-spin"></span>
+                                <span class="text-xs">Mengambil snapshot canvas...</span>
+                            </div>
+
+                            <!-- Overlay badges -->
+                            <div class="absolute bottom-2 left-2 flex items-center gap-1.5">
+                                <span class="px-2 py-0.5 rounded-full bg-black/80 border border-white/15 text-[10px] font-medium text-white backdrop-blur">
+                                    {{ captureRoomName || 'Sudut Bebas' }}
+                                </span>
+                                <span class="px-2 py-0.5 rounded-full bg-black/80 border border-white/15 text-[10px] font-mono text-amber-300 backdrop-blur">
+                                    {{ captureHour }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Form Options -->
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <!-- Preset / Ruangan -->
+                            <div>
+                                <label class="text-[11px] font-medium text-neutral-400 block mb-1">Ruangan / Sudut</label>
+                                <select
+                                    v-model="selectedPresetForCapture"
+                                    @change="onCapturePresetChange"
+                                    class="w-full h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-white focus:outline-none focus:border-rose-400"
+                                >
+                                    <option value="current" class="bg-neutral-900 text-white">Sudut Saat Ini</option>
+                                    <option
+                                        v-for="preset in cameraPresets"
+                                        :key="preset.id"
+                                        :value="preset.id"
+                                        class="bg-neutral-900 text-white"
+                                    >
+                                        {{ preset.name }}
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- Jam -->
+                            <div>
+                                <label class="text-[11px] font-medium text-neutral-400 block mb-1">Jam Pencahayaan</label>
+                                <input
+                                    type="text"
+                                    v-model="captureHour"
+                                    class="w-full h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-white focus:outline-none focus:border-rose-400 font-mono"
+                                />
+                            </div>
+
+                            <!-- Resolusi -->
+                            <div>
+                                <label class="text-[11px] font-medium text-neutral-400 block mb-1">Resolusi Gambar</label>
+                                <select
+                                    v-model="captureResolution"
+                                    @change="refreshCaptureSnapshot"
+                                    class="w-full h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-white focus:outline-none focus:border-rose-400"
+                                >
+                                    <option value="viewport" class="bg-neutral-900 text-white">Viewport (Layar)</option>
+                                    <option value="1080p" class="bg-neutral-900 text-white">1080p Full HD (1920×1080)</option>
+                                </select>
+                            </div>
+
+                            <!-- Ruangan Nama Input Custom -->
+                            <div>
+                                <label class="text-[11px] font-medium text-neutral-400 block mb-1">Label Ruangan</label>
+                                <input
+                                    type="text"
+                                    v-model="captureRoomName"
+                                    placeholder="Contoh: Ruang Tamu"
+                                    class="w-full h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-white placeholder:text-neutral-600 focus:outline-none focus:border-rose-400"
+                                />
+                            </div>
+                        </div>
+
+                        <!-- Visibility Switch (Architect Only) -->
+                        <div v-if="isOwner" class="flex items-center justify-between p-3 rounded-2xl border border-white/10 bg-white/5">
+                            <div>
+                                <p class="text-xs font-medium text-white">Tampilkan ke Klien</p>
+                                <p class="text-[10px] text-neutral-400">Klien terundang dapat melihat gambar ini di galeri proyek.</p>
+                            </div>
+                            <button
+                                type="button"
+                                @click="captureVisibleToClients = !captureVisibleToClients"
+                                class="relative h-6 w-11 rounded-full transition-all duration-200"
+                                :class="captureVisibleToClients ? 'bg-emerald-500' : 'bg-white/15'"
+                            >
+                                <span
+                                    class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200"
+                                    :class="captureVisibleToClients ? 'left-[22px]' : 'left-0.5'"
+                                ></span>
+                            </button>
+                        </div>
+
+                        <!-- Client Notice -->
+                        <div v-else class="p-3 rounded-2xl border border-white/10 bg-white/5 text-[11px] text-neutral-400">
+                            Hanya arsitek pemilik proyek yang dapat menyimpan gambar ke galeri proyek. Anda dapat mengunduh gambar PNG ini secara langsung.
+                        </div>
+
+                        <!-- Error Message -->
+                        <p v-if="captureError" class="text-xs text-rose-400">{{ captureError }}</p>
+
+                        <!-- Actions -->
+                        <div class="flex items-center justify-between pt-2">
+                            <!-- Quota badge for owner -->
+                            <div v-if="isOwner && quotaInfo" class="text-[11px] text-neutral-400">
+                                <span>Kuota: </span>
+                                <span class="font-semibold text-white">{{ quotaInfo.current_count }} / {{ quotaInfo.max_captures ?? '∞' }} gambar</span>
+                            </div>
+                            <div v-else></div>
+
+                            <div class="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    @click="downloadCurrentCapture"
+                                    class="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-white/15 bg-white/5 text-xs font-medium text-white hover:bg-white/10 transition-all"
+                                >
+                                    <Download class="h-3.5 w-3.5" />
+                                    <span>Unduh PNG</span>
+                                </button>
+
+                                <button
+                                    v-if="isOwner"
+                                    type="button"
+                                    :disabled="isSavingCapture || !capturePreviewDataUrl"
+                                    @click="saveCaptureToGallery"
+                                    class="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 text-xs font-semibold text-white hover:bg-rose-500 transition-all shadow-md disabled:opacity-50"
+                                >
+                                    <Check v-if="!isSavingCapture" class="h-3.5 w-3.5" />
+                                    <span v-else class="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
+                                    <span>Simpan ke Galeri</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+
+            <!-- ── CAPTURE GALLERY DRAWER ── -->
+            <Transition
+                enter-active-class="transition-all duration-300 ease-out"
+                enter-from-class="opacity-0 translate-x-full"
+                enter-to-class="opacity-100 translate-x-0"
+                leave-active-class="transition-all duration-200 ease-in"
+                leave-from-class="opacity-100 translate-x-0"
+                leave-to-class="opacity-0 translate-x-full"
+            >
+                <div
+                    v-if="isGalleryOpen"
+                    class="absolute top-14 right-0 bottom-0 z-40 w-96 max-w-[95vw] border-l border-white/15 bg-neutral-950/95 backdrop-blur-2xl shadow-2xl flex flex-col"
+                >
+                    <!-- Header -->
+                    <div class="flex items-center justify-between border-b border-white/10 px-4 py-3 shrink-0">
+                        <div class="flex items-center gap-2">
+                            <Image class="h-4 w-4 text-amber-400" />
+                            <span class="text-xs font-bold uppercase tracking-wider text-white">Galeri Gambar 3D</span>
+                            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-neutral-300">
+                                {{ filteredCaptures.length }}
+                            </span>
+                        </div>
+                        <button type="button" @click="isGalleryOpen = false" class="text-neutral-400 hover:text-white transition-colors">
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
+
+                    <!-- Filter Bar -->
+                    <div class="p-3 border-b border-white/5 grid grid-cols-2 gap-2 shrink-0">
+                        <select
+                            v-model="galleryRoomFilter"
+                            class="h-7 rounded-lg border border-white/10 bg-white/5 px-2 text-[11px] text-white focus:outline-none focus:border-amber-400"
+                        >
+                            <option value="all" class="bg-neutral-900 text-white">Semua Ruangan</option>
+                            <option
+                                v-for="room in uniqueRooms"
+                                :key="room"
+                                :value="room"
+                                class="bg-neutral-900 text-white"
+                            >
+                                {{ room }}
+                            </option>
+                        </select>
+
+                        <select
+                            v-model="galleryHourFilter"
+                            class="h-7 rounded-lg border border-white/10 bg-white/5 px-2 text-[11px] text-white focus:outline-none focus:border-amber-400"
+                        >
+                            <option value="all" class="bg-neutral-900 text-white">Semua Jam</option>
+                            <option
+                                v-for="hour in uniqueHours"
+                                :key="hour"
+                                :value="hour"
+                                class="bg-neutral-900 text-white"
+                            >
+                                {{ hour }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Gallery Content List -->
+                    <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                        <div v-if="filteredCaptures.length === 0" class="flex flex-col items-center justify-center py-16 gap-3 text-center px-4">
+                            <Camera class="h-10 w-10 text-neutral-700" />
+                            <p class="text-xs text-neutral-400 leading-relaxed max-w-[220px]">
+                                Belum ada gambar tersimpan. Klik tombol <span class="text-rose-400 font-semibold">"Ambil Gambar"</span> di toolbar untuk menyimpan hasil render ruangan dan jam.
+                            </p>
+                        </div>
+
+                        <div
+                            v-for="capture in filteredCaptures"
+                            :key="capture.id"
+                            class="rounded-2xl border border-white/10 bg-white/5 overflow-hidden group hover:border-white/20 transition-all shadow-md"
+                        >
+                            <!-- Thumbnail with click-to-preview -->
+                            <div
+                                class="relative aspect-video w-full bg-black cursor-pointer overflow-hidden"
+                                @click="activeLightboxCapture = capture"
+                            >
+                                <img
+                                    :src="capture.url"
+                                    :alt="capture.room_name"
+                                    class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                />
+                                <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity flex items-end justify-between p-2.5">
+                                    <span class="text-xs font-semibold text-white drop-shadow">{{ capture.room_name }}</span>
+                                    <span class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-[10px] font-mono text-amber-300">
+                                        {{ capture.captured_hour }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Footer actions -->
+                            <div class="p-3 flex items-center justify-between text-xs">
+                                <!-- Visibility toggle (Architect only) -->
+                                <div v-if="isOwner" class="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        @click="toggleCaptureVisibility(capture)"
+                                        class="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all"
+                                        :class="capture.is_visible_to_clients
+                                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                            : 'bg-white/5 text-neutral-400 border border-white/10'"
+                                        title="Ubah visibilitas ke klien"
+                                    >
+                                        <Eye v-if="capture.is_visible_to_clients" class="h-3 w-3" />
+                                        <EyeOff v-else class="h-3 w-3" />
+                                        <span>{{ capture.is_visible_to_clients ? 'Tampil Klien' : 'Privat' }}</span>
+                                    </button>
+                                </div>
+                                <span v-else class="text-[10px] text-neutral-500">
+                                    {{ new Date(capture.created_at).toLocaleDateString('id-ID') }}
+                                </span>
+
+                                <div class="flex items-center gap-1">
+                                    <a
+                                        :href="capture.url"
+                                        download
+                                        target="_blank"
+                                        class="p-1.5 rounded-lg text-neutral-300 hover:text-white hover:bg-white/10 transition-colors"
+                                        title="Unduh PNG"
+                                    >
+                                        <Download class="h-3.5 w-3.5" />
+                                    </a>
+
+                                    <button
+                                        v-if="isOwner"
+                                        type="button"
+                                        @click="deleteCapture(capture)"
+                                        class="p-1.5 rounded-lg text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                                        title="Hapus gambar"
+                                    >
+                                        <Trash2 class="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+
+            <!-- ── LIGHTBOX MODAL ── -->
+            <Transition
+                enter-active-class="transition-all duration-200 ease-out"
+                enter-from-class="opacity-0 scale-95"
+                enter-to-class="opacity-100 scale-100"
+                leave-active-class="transition-all duration-150 ease-in"
+                leave-from-class="opacity-100 scale-100"
+                leave-to-class="opacity-0 scale-95"
+            >
+                <div
+                    v-if="activeLightboxCapture"
+                    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl"
+                    @click.self="activeLightboxCapture = null"
+                >
+                    <div class="relative max-w-5xl w-full flex flex-col items-center gap-3">
+                        <button
+                            @click="activeLightboxCapture = null"
+                            class="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
+                        >
+                            <X class="h-6 w-6" />
+                        </button>
+
+                        <img
+                            :src="activeLightboxCapture.url"
+                            :alt="activeLightboxCapture.room_name"
+                            class="max-h-[80vh] w-auto rounded-2xl border border-white/15 shadow-2xl object-contain"
+                        />
+
+                        <div class="flex items-center justify-between w-full max-w-xl px-4 py-2 rounded-2xl bg-black/80 border border-white/15 backdrop-blur text-xs">
+                            <div class="flex items-center gap-2">
+                                <span class="font-semibold text-white">{{ activeLightboxCapture.room_name }}</span>
+                                <span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono text-[10px]">
+                                    {{ activeLightboxCapture.captured_hour }}
+                                </span>
+                                <span class="text-neutral-500 text-[10px]">
+                                    {{ (activeLightboxCapture.file_size_bytes / 1024).toFixed(0) }} KB
+                                </span>
+                            </div>
+
+                            <a
+                                :href="activeLightboxCapture.url"
+                                download
+                                target="_blank"
+                                class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium transition-all"
+                            >
+                                <Download class="h-3.5 w-3.5" />
+                                <span>Unduh Gambar</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+
             <!-- ── CHAT PANEL (realtime) ── -->
             <ChatPanel
                 ref="chatPanelRef"
@@ -840,34 +1449,48 @@ import {
     ArrowLeft,
     Bookmark,
     BookmarkPlus,
+    Camera,
     Check,
     CheckCircle2,
     ClipboardList,
+    Compass,
+    Download,
     Eye,
     EyeOff,
     ExternalLink,
     Focus,
+    Globe,
     GripVertical,
     Hand,
+    Image,
+    Layers,
+    Lock,
     MapPin,
     Maximize2,
     MessageCircle,
     MessageSquare,
     Minimize2,
+    Moon,
     Pencil,
     PinOff,
     Plus,
     RotateCw,
     Scissors,
     Send,
+    Sliders,
     Sparkles,
+    Sun,
+    Sunrise,
+    Sunset,
     Trash2,
+    Unlock,
     X,
 } from '@lucide/vue';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useRaycast } from '@/composables/useRaycast';
+import { useSunSimulation } from '@/composables/useSunSimulation';
 import RevisionBadge from '@/components/RevisionBadge.vue';
 import ChatPanel from '@/components/ChatPanel.vue';
 import {
@@ -927,6 +1550,10 @@ const project = computed(() => (page.props.project ?? {}) as {
     file_path: string;
     current_revision_count: number;
     max_revisions_allowed: number;
+    latitude?: number;
+    longitude?: number;
+    north_angle?: number;
+    solar_date?: string;
     comments?: Comment[];
 });
 
@@ -978,6 +1605,315 @@ const isDeletingPresetId  = ref<string | null>(null);
 const newPresetName       = ref('');
 const presetError         = ref('');
 const presetInputRef      = ref<HTMLInputElement | null>(null);
+
+// ── Sun & Lighting Simulation ────────────────────────────
+const isSunPanelOpen      = ref(false);
+const showSunGeoSettings  = ref(false);
+const isSavingSunSettings = ref(false);
+const sunSettingsMessage  = ref('');
+
+const {
+    currentHour,
+    latitude,
+    longitude,
+    northAngle,
+    solarDate,
+    sunAltitude,
+    sunAzimuth,
+    isNight,
+    formattedTime,
+    activePreset,
+    lampNodes,
+    initSunLighting,
+    scanLampObjects,
+    updateSunPosition,
+    setPreset,
+    setHour,
+    updateSettings: updateSunSettingsState,
+} = useSunSimulation();
+
+function onHourSliderChange(e: Event) {
+    const val = parseFloat((e.target as HTMLInputElement).value);
+    setHour(val);
+}
+
+async function saveSunSettings() {
+    isSavingSunSettings.value = true;
+    sunSettingsMessage.value = '';
+    try {
+        const res = await fetch(`/projects/${project.value.id}/sun-settings`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+                latitude: latitude.value,
+                longitude: longitude.value,
+                north_angle: northAngle.value,
+                solar_date: solarDate.value,
+            }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            sunSettingsMessage.value = 'Pengaturan berhasil disimpan!';
+            setTimeout(() => { sunSettingsMessage.value = ''; }, 3000);
+        } else {
+            sunSettingsMessage.value = data.message || 'Gagal menyimpan pengaturan.';
+        }
+    } catch {
+        sunSettingsMessage.value = 'Koneksi error.';
+    } finally {
+        isSavingSunSettings.value = false;
+    }
+}
+
+// ── Captures & Gallery ───────────────────────────────────
+interface ProjectCaptureItem {
+    id: string;
+    project_id: string;
+    user_id: string;
+    title: string | null;
+    room_name: string;
+    captured_hour: string;
+    file_path: string;
+    file_size_bytes: number;
+    width: number;
+    height: number;
+    is_visible_to_clients: boolean;
+    url: string;
+    created_at: string;
+}
+
+const captures = ref<ProjectCaptureItem[]>([]);
+const quotaInfo = ref<{ max_captures: number | null; current_count: number; can_capture: boolean } | null>(null);
+const isCaptureModalOpen = ref(false);
+const isGalleryOpen = ref(false);
+const activeLightboxCapture = ref<ProjectCaptureItem | null>(null);
+
+const selectedPresetForCapture = ref<string>('current');
+const captureRoomName = ref('Sudut Bebas');
+const captureHour = ref('12:00');
+const captureTitle = ref('');
+const captureResolution = ref<'viewport' | '1080p'>('viewport');
+const captureVisibleToClients = ref(false);
+const capturePreviewDataUrl = ref('');
+const isSavingCapture = ref(false);
+const captureError = ref('');
+
+const galleryRoomFilter = ref('all');
+const galleryHourFilter = ref('all');
+
+const uniqueRooms = computed(() => {
+    return Array.from(new Set(captures.value.map(c => c.room_name).filter(Boolean)));
+});
+
+const uniqueHours = computed(() => {
+    return Array.from(new Set(captures.value.map(c => c.captured_hour).filter(Boolean)));
+});
+
+const filteredCaptures = computed(() => {
+    return captures.value.filter(c => {
+        if (galleryRoomFilter.value !== 'all' && c.room_name !== galleryRoomFilter.value) {
+            return false;
+        }
+        if (galleryHourFilter.value !== 'all' && c.captured_hour !== galleryHourFilter.value) {
+            return false;
+        }
+        return true;
+    });
+});
+
+async function loadCaptures() {
+    try {
+        const res = await fetch(`/projects/${project.value.id}/captures`, {
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+        if (res.ok) {
+            const data = await res.json();
+            captures.value = data.data ?? [];
+            quotaInfo.value = data.quota ?? null;
+        }
+    } catch (err) {
+        console.error('[Captures] load error:', err);
+    }
+}
+
+function captureCanvasSnapshot(targetRes: 'viewport' | '1080p'): string {
+    if (!renderer || !scene || !camera) return '';
+
+    if (targetRes === 'viewport') {
+        renderer.render(scene, camera);
+        return renderer.domElement.toDataURL('image/png');
+    } else {
+        // High-resolution 1080p render
+        const targetW = 1920;
+        const targetH = 1080;
+
+        renderer.setSize(targetW, targetH, false);
+        camera.aspect = targetW / targetH;
+        camera.updateProjectionMatrix();
+
+        renderer.render(scene, camera);
+        const dataUrl = renderer.domElement.toDataURL('image/png');
+
+        // Restore viewport size
+        if (viewerContainer.value) {
+            const { clientWidth: w, clientHeight: h } = viewerContainer.value;
+            renderer.setSize(w, h);
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+        }
+        renderer.render(scene, camera);
+
+        return dataUrl;
+    }
+}
+
+function openCaptureModal() {
+    selectedPresetForCapture.value = 'current';
+    captureHour.value = formattedTime.value;
+    captureRoomName.value = 'Sudut Bebas';
+    captureTitle.value = '';
+    captureError.value = '';
+    captureVisibleToClients.value = false;
+    isCaptureModalOpen.value = true;
+
+    nextTick(() => {
+        refreshCaptureSnapshot();
+    });
+}
+
+function refreshCaptureSnapshot() {
+    capturePreviewDataUrl.value = captureCanvasSnapshot(captureResolution.value);
+}
+
+function onCapturePresetChange() {
+    if (selectedPresetForCapture.value === 'current') {
+        captureRoomName.value = 'Sudut Bebas';
+        refreshCaptureSnapshot();
+        return;
+    }
+
+    const preset = cameraPresets.value.find(p => p.id === selectedPresetForCapture.value);
+    if (preset) {
+        captureRoomName.value = preset.name;
+        applyPreset(preset);
+
+        setTimeout(() => {
+            refreshCaptureSnapshot();
+        }, 350);
+    }
+}
+
+function downloadCurrentCapture() {
+    if (!capturePreviewDataUrl.value) return;
+    const a = document.createElement('a');
+    a.href = capturePreviewDataUrl.value;
+    const roomSlug = (captureRoomName.value || 'snapshot').replace(/\s+/g, '-').toLowerCase();
+    const timeSlug = (captureHour.value || '12-00').replace(':', '-');
+    a.download = `pitcharch-${roomSlug}-${timeSlug}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+async function saveCaptureToGallery() {
+    if (!capturePreviewDataUrl.value) return;
+
+    isSavingCapture.value = true;
+    captureError.value = '';
+
+    const payload = {
+        image: capturePreviewDataUrl.value,
+        room_name: captureRoomName.value || 'Sudut Bebas',
+        captured_hour: captureHour.value || '12:00',
+        title: captureTitle.value || null,
+        width: captureResolution.value === '1080p' ? 1920 : (renderer?.domElement.width ?? 1280),
+        height: captureResolution.value === '1080p' ? 1080 : (renderer?.domElement.height ?? 720),
+        is_visible_to_clients: captureVisibleToClients.value,
+    };
+
+    try {
+        const res = await fetch(`/projects/${project.value.id}/captures`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            captures.value.unshift(data.data);
+            if (quotaInfo.value) {
+                quotaInfo.value.current_count++;
+            }
+            isCaptureModalOpen.value = false;
+        } else {
+            captureError.value = data.message || 'Gagal menyimpan gambar.';
+        }
+    } catch {
+        captureError.value = 'Koneksi error saat menyimpan gambar.';
+    } finally {
+        isSavingCapture.value = false;
+    }
+}
+
+async function toggleCaptureVisibility(capture: ProjectCaptureItem) {
+    const nextState = !capture.is_visible_to_clients;
+    try {
+        const res = await fetch(`/projects/${project.value.id}/captures/${capture.id}/toggle-visibility`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({ is_visible_to_clients: nextState }),
+        });
+        if (res.ok) {
+            capture.is_visible_to_clients = nextState;
+        }
+    } catch (err) {
+        console.error('[Captures] toggle error:', err);
+    }
+}
+
+async function deleteCapture(capture: ProjectCaptureItem) {
+    if (!confirm(`Hapus gambar "${capture.room_name} (${capture.captured_hour})"?`)) return;
+
+    try {
+        const res = await fetch(`/projects/${project.value.id}/captures/${capture.id}`, {
+            method: 'DELETE',
+            headers: {
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+        if (res.ok) {
+            captures.value = captures.value.filter(c => c.id !== capture.id);
+            if (quotaInfo.value && quotaInfo.value.current_count > 0) {
+                quotaInfo.value.current_count--;
+            }
+            if (activeLightboxCapture.value?.id === capture.id) {
+                activeLightboxCapture.value = null;
+            }
+        }
+    } catch (err) {
+        console.error('[Captures] delete error:', err);
+    }
+}
 
 // Apakah user adalah arsitek pemilik project
 const isOwner = computed(() => {
@@ -2054,7 +2990,14 @@ function loadModel(): void {
         modelUrl,
         (gltf: { scene: any }) => {
             model = gltf.scene;
+            model.traverse((child: any) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
             scene?.add(model);
+            scanLampObjects(model);
             frameModel();
             updateClippingRangeFromModel();
             applyClippingToRenderer();
@@ -2117,21 +3060,25 @@ function initializeViewer(): void {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x06070a);
 
-    // Studio Lighting
-    scene.add(new THREE.AmbientLight(0xffffff, 1.8));
-
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
-    keyLight.position.set(8, 12, 10);
-    scene.add(keyLight);
-
-    const fillLight = new THREE.DirectionalLight(0x93c5fd, 1.2);
-    fillLight.position.set(-8, 6, -8);
-    scene.add(fillLight);
+    // Dynamic Sun & Sky Lighting (SunCalc + DirectionalLight with shadows & ambient)
+    initSunLighting(scene, {
+        latitude: (project.value as any)?.latitude ?? -6.2088,
+        longitude: (project.value as any)?.longitude ?? 106.8456,
+        north_angle: (project.value as any)?.north_angle ?? 0,
+        solar_date: (project.value as any)?.solar_date,
+    });
 
     scene.add(markerGroup);
 
     camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: false,
+        powerPreference: 'high-performance',
+        preserveDrawingBuffer: true,
+    });
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -2163,6 +3110,7 @@ onMounted(async () => {
     restoreViewerPreferences();
     initializeViewer();
     loadCameraPresets();
+    loadCaptures();
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     const proj = project.value;
     if (Array.isArray(proj?.comments) && proj.comments.length > 0) {

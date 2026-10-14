@@ -2,6 +2,8 @@
 
 Dokumen ini adalah acuan resmi struktur folder untuk aplikasi **PitchArch**: monorepo Laravel 12 + Inertia.js + Vue 3 (bukan backend/frontend terpisah).
 
+> **v2.8 Changelog:** Menambahkan modul Simulasi Pencahayaan Matahari Real-Time (Three.js + SunCalc) & Snapshot Captures: `app/Domains/Project/Actions/SaveCaptureAction.php`, `DeleteCaptureAction.php`, `ToggleCaptureVisibilityAction.php`, `UpdateProjectSunSettingsAction.php`, `ProjectCaptureController.php`, `ProjectCapture.php`, `StoreCaptureRequest.php`, `UpdateProjectSunSettingsRequest.php`, `ProjectCaptureFactory.php`, composable `useSunSimulation.ts`, migrasi `sun_settings` dan `project_captures`.
+>
 > **v2.7 Changelog:** Menambahkan file-file baru modul AHSP (`RabPriceItemComponent.php`, `RecalculatePriceItemAction.php`, `RabPriceItemComponentController.php`), Fase B/C RAB (`ImportQuantityTakeoffAction.php`, `ApplyGlbQuantitiesAction.php`, `TakeoffParserService.php`, `RabMappingService.php`), Export (`ExportRabAction.php`), Mapping RAB (`RabMappingController.php`), profil arsitek (`IndonesiaRegionController.php`, `useIndonesiaRegion.ts`, `AddressInput.vue`), halaman baru Rab (`GlbEstimator.vue`, `Import.vue`, `Mappings.vue`, `PriceItemComponents.vue`, `TemplateShow.vue`), composable `useGlbQuantities.ts`. Tambah rencana folder `Domains/Drawing/` (belum dibuat). Update routes baru.
 >
 > **v2.6 Changelog:** Menambahkan `app/Domains/Rab/` dan `resources/js/pages/Rab/` (modul RAB & Lembar Kerja).
@@ -88,23 +90,32 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │   └── Requests/
 │   │   │       └── StoreCommentRequest.php
 │   │   │
-│   │   ├── Project/            # Manajemen Model 3D, Storage & Client Invitation
+│   │   ├── Project/            # Manajemen Model 3D, Storage, Lighting & Captures
 │   │   │   ├── Actions/
 │   │   │   │   ├── CreateProjectAction.php          # Validasi kuota + buat project
+│   │   │   │   ├── DeleteCaptureAction.php          # Hapus snapshot capture & storage file
 │   │   │   │   ├── InviteClientAction.php           # Assign email Klien ke project_clients
 │   │   │   │   ├── RevokeClientAccessAction.php     # Cabut akses Klien
+│   │   │   │   ├── SaveCaptureAction.php            # Simpan snapshot Three.js (PNG), kuota per-gambar
+│   │   │   │   ├── ToggleCaptureVisibilityAction.php # Switch visibilitas capture ke klien
+│   │   │   │   ├── UpdateProjectSunSettingsAction.php # Simpan lat/long/arah utara/tanggal
 │   │   │   │   └── UploadProjectFileAction.php      # Handle upload .glb/.gltf
 │   │   │   ├── Controllers/
-│   │   │   │   └── CameraPresetController.php       # CRUD camera view presets
+│   │   │   │   ├── CameraPresetController.php       # CRUD camera view presets
+│   │   │   │   └── ProjectCaptureController.php     # CRUD snapshot capture & sun settings
 │   │   │   ├── Jobs/
 │   │   │   │   └── DracoCompressionJob.php          # Background queue: kompresi Draco via gltf-pipeline
 │   │   │   ├── Models/
-│   │   │   │   ├── Project.php
+│   │   │   │   ├── Project.php                      # Ditambah sun settings & relasi captures
 │   │   │   │   ├── ProjectCameraPreset.php
+│   │   │   │   ├── ProjectCapture.php               # UUID, room_name, captured_hour, file_path
 │   │   │   │   ├── ProjectClient.php
 │   │   │   │   └── ProjectVersion.php
-│   │   │   └── Notifications/
-│   │   │       └── ClientInvitationNotification.php # Email undangan ke Klien
+│   │   │   ├── Notifications/
+│   │   │   │   └── ClientInvitationNotification.php # Email undangan ke Klien
+│   │   │   └── Requests/
+│   │   │       ├── StoreCaptureRequest.php          # Validasi snapshot payload
+│   │   │       └── UpdateProjectSunSettingsRequest.php # Validasi koordinat & arah utara
 │   │   │
 │   │   ├── Rab/                # RAB & Lembar Kerja (template / CSV / .glb)
 │   │   │   ├── Actions/
@@ -237,7 +248,8 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │   ├── usePageLoading.ts
 │   │   │   ├── useSidebar.ts
 │   │   │   ├── useGlbQuantities.ts         # Hitung luas/volume/count per mesh dari .glb (Three.js); baca custom properties Blender
-│   │   │   └── useIndonesiaRegion.ts       # Cascading dropdown wilayah Indonesia via /region/* API
+│   │   │   ├── useIndonesiaRegion.ts       # Cascading dropdown wilayah Indonesia via /region/* API
+│   │   │   └── useSunSimulation.ts         # Simulasi posisi matahari (SunCalc), arah utara, night mode (LAMPU_*), dan ambient light lerp
 │   │   │
 │   │   ├── layouts/            # Inertia Page Layouts
 │   │   │   ├── AdminLayout.vue         # Layout untuk halaman /admin/*

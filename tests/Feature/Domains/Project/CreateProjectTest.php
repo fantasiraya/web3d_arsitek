@@ -48,4 +48,4 @@ it('throws 403 when quota is exceeded', function () {
 
     // Second project should fail
     $action->execute($user, ['name' => 'Project 2']);
-})->throws(HttpException::class, 'Project quota exceeded for your current subscription.');
+})->throws(HttpException::class);

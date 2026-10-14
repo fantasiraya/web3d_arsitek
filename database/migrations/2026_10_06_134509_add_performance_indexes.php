@@ -116,6 +116,12 @@ return new class extends Migration
      */
     protected function indexExists(string $table, string $indexName): bool
     {
+        if (\DB::connection()->getDriverName() === 'sqlite') {
+            return collect(\DB::select("PRAGMA index_list('{$table}')"))
+                ->pluck('name')
+                ->contains($indexName);
+        }
+
         return collect(\DB::select("SHOW INDEX FROM `{$table}`"))
             ->pluck('Key_name')
             ->contains($indexName);

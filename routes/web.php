@@ -4,6 +4,7 @@ use App\Domains\Comment\Controllers\CommentController;
 use App\Domains\Comment\Controllers\PinCommentController;
 use App\Domains\Chat\Controllers\ChatController;
 use App\Domains\Project\Controllers\CameraPresetController;
+use App\Domains\Project\Controllers\ProjectCaptureController;
 use App\Domains\Rab\Controllers\RabDocumentController;
 use App\Domains\Rab\Controllers\RabItemController;
 use App\Domains\Rab\Controllers\RabMappingController;
@@ -74,6 +75,13 @@ Route::middleware(['auth', 'project.access'])->group(function () {
     Route::get('/projects/{project}/camera-presets', [CameraPresetController::class, 'index'])->name('projects.camera-presets.index');
     Route::post('/projects/{project}/camera-presets', [CameraPresetController::class, 'store'])->name('projects.camera-presets.store');
     Route::delete('/projects/{project}/camera-presets/{preset}', [CameraPresetController::class, 'destroy'])->name('projects.camera-presets.destroy');
+
+    // ── Captures & Sun Simulation ──
+    Route::get('/projects/{project}/captures', [ProjectCaptureController::class, 'index'])->name('projects.captures.index');
+    Route::post('/projects/{project}/captures', [ProjectCaptureController::class, 'store'])->name('projects.captures.store');
+    Route::delete('/projects/{project}/captures/{capture}', [ProjectCaptureController::class, 'destroy'])->name('projects.captures.destroy');
+    Route::patch('/projects/{project}/captures/{capture}/toggle-visibility', [ProjectCaptureController::class, 'toggleVisibility'])->name('projects.captures.toggle-visibility');
+    Route::patch('/projects/{project}/sun-settings', [ProjectCaptureController::class, 'updateSunSettings'])->name('projects.sun-settings.update');
 });
 
 // ── RAB & Lembar Kerja ──

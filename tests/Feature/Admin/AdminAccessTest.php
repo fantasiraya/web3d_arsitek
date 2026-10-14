@@ -64,7 +64,7 @@ test('non-verified user cannot access admin routes', function () {
 
     $response = $this->actingAs($admin)->get('/admin/dashboard');
 
-    $response->assertRedirect('/verify-email');
+    $response->assertRedirect(route('verification.notice'));
 });
 
 test('suspended admin user cannot access admin routes', function () {

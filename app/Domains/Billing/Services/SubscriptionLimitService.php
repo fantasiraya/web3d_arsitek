@@ -105,18 +105,7 @@ class SubscriptionLimitService
      */
     protected function getPlanOverride(User $user): ?UserPlanOverride
     {
-        if (array_key_exists($user->id, $this->overrideCache)) {
-            return $this->overrideCache[$user->id];
-        }
-
-        // Use already-loaded relation if available
-        $override = $user->relationLoaded('planOverride')
-            ? $user->planOverride
-            : $user->planOverride; // Eloquent accessor — loads once and is cached by Eloquent
-
-        $this->overrideCache[$user->id] = $override;
-
-        return $override;
+        return $user->planOverride;
     }
 
     /**
@@ -338,5 +327,81 @@ class SubscriptionLimitService
         }
 
         return ['allowed' => true, 'reason' => null, 'max_mb' => $maxMb];
+    }
+
+    /**
+     * Get maximum captures allowed for user.
+     * Returns null if unlimited.
+     */
+    public function getMaxCapturesAllowed(User $user): ?int
+    {
+        $plan = $this->getPlanForUser($user);
+
+        if ($plan->slug === Plan::SLUG_ENTERPRISE) {
+            return null; // Unlimited
+        }
+
+        $key = match ($plan->slug) {
+            Plan::SLUG_PRO => 'pro_tier_max_captures',
+            default        => 'free_tier_max_captures',
+        };
+
+        $default = match ($plan->slug) {
+            Plan::SLUG_PRO => 50,
+            default        => 5,
+        };
+
+        $val = $this->settings->get($key, $default);
+        if ($val === 'unlimited' || $val === null) {
+            return null;
+        }
+
+        return (int) $val;
+    }
+
+    /**
+     * Validate whether user can save a new 3D capture image.
+     * Only architect/owner can save, and checked against image quota.
+     *
+     * @return array{allowed: bool, reason: ?string, current_count: int, max_allowed: ?int}
+     */
+    public function canCreateCapture(User $user, Project $project): array
+    {
+        if (! $user->isActiveAccount()) {
+            return [
+                'allowed' => false,
+                'reason' => 'Akun dinonaktifkan. Silakan hubungi admin.',
+                'current_count' => 0,
+                'max_allowed' => 0,
+            ];
+        }
+
+        if ($project->user_id !== $user->id) {
+            return [
+                'allowed' => false,
+                'reason' => 'Hanya arsitek pemilik proyek yang dapat menyimpan gambar ke galeri.',
+                'current_count' => 0,
+                'max_allowed' => 0,
+            ];
+        }
+
+        $maxAllowed = $this->getMaxCapturesAllowed($user);
+        $currentCount = \App\Domains\Project\Models\ProjectCapture::where('user_id', $user->id)->count();
+
+        if ($maxAllowed !== null && $currentCount >= $maxAllowed) {
+            return [
+                'allowed' => false,
+                'reason' => "Batas kuota gambar ({$maxAllowed} gambar) untuk paket Anda telah tercapai. Upgrade paket untuk menambah kuota gambar.",
+                'current_count' => $currentCount,
+                'max_allowed' => $maxAllowed,
+            ];
+        }
+
+        return [
+            'allowed' => true,
+            'reason' => null,
+            'current_count' => $currentCount,
+            'max_allowed' => $maxAllowed,
+        ];
     }
 }

@@ -173,33 +173,38 @@ class UserController extends Controller
 
     public function toggleStatus(Request $request, User $user, ToggleUserStatusAction $action): RedirectResponse
     {
-        $validated = $request->validate([
-            'status' => ['required', 'in:active,suspended'],
-            'reason' => ['nullable', 'string', 'max:255'],
-        ]);
+        $status = $request->input('status');
+        if (! $status) {
+            $status = $user->status === 'suspended' ? 'active' : 'suspended';
+        } else {
+            $request->validate([
+                'status' => ['required', 'in:active,suspended'],
+                'reason' => ['nullable', 'string', 'max:255'],
+            ]);
+        }
 
-        $action->execute($user, $validated['status'], $validated['reason'] ?? null);
+        $action->execute($user, $status, $request->input('reason'));
 
-        $verb = $validated['status'] === 'suspended' ? 'ditangguhkan' : 'diaktifkan kembali';
+        $verb = $status === 'suspended' ? 'ditangguhkan' : 'diaktifkan kembali';
 
         return back()->with('success', "Akun pengguna {$user->name} berhasil {$verb}.");
     }
 
     public function changePlan(Request $request, User $user, ChangeUserPlanAction $action): RedirectResponse
     {
-        $validated = $request->validate([
-            'plan_slug' => ['required', 'exists:plans,slug'],
-            'billing_type' => ['nullable', 'string', 'in:monthly,annual,lifetime,custom'],
-            'reason' => ['nullable', 'string', 'max:255'],
-        ]);
+        $planSlug = $request->input('plan_slug');
+        if (! $planSlug && $request->has('plan_id')) {
+            $p = Plan::find($request->input('plan_id')) ?? Plan::where('slug', $request->input('plan_id'))->first();
+            $planSlug = $p?->slug;
+        }
 
-        $plan = Plan::where('slug', $validated['plan_slug'])->firstOrFail();
+        $plan = Plan::where('slug', $planSlug)->firstOrFail();
 
         $action->execute(
             targetUser: $user,
             newPlan: $plan,
-            billingType: $validated['billing_type'] ?? 'monthly',
-            reason: $validated['reason'] ?? null
+            billingType: $request->input('billing_type') ?: 'monthly',
+            reason: $request->input('reason')
         );
 
         return back()->with('success', "Subscription pengguna {$user->name} berhasil diubah ke paket {$plan->name}.");
@@ -207,23 +212,19 @@ class UserController extends Controller
 
     public function setLimitOverride(Request $request, User $user, SetUserProjectLimitOverrideAction $action): RedirectResponse
     {
-        $validated = $request->validate([
-            'is_unlimited'       => ['required', 'boolean'],
-            'custom_limit'       => ['nullable', 'required_if:is_unlimited,false', 'integer', 'min:1', 'max:10000'],
-            'custom_file_size_mb' => ['nullable', 'integer', 'min:1', 'max:500'],
-            'reason'             => ['nullable', 'string', 'max:255'],
-        ]);
+        $customLimit = $request->input('custom_limit') ?? $request->input('custom_project_limit');
+        $isUnlimited = (bool) $request->input('is_unlimited', false);
 
         $action->execute(
             targetUser:       $user,
-            customLimit:      $validated['is_unlimited'] ? null : (int) $validated['custom_limit'],
-            isUnlimited:      (bool) $validated['is_unlimited'],
-            reason:           $validated['reason'] ?? null,
-            customFileSizeMb: isset($validated['custom_file_size_mb']) ? (int) $validated['custom_file_size_mb'] : null,
+            customLimit:      $isUnlimited ? null : ($customLimit !== null ? (int) $customLimit : null),
+            isUnlimited:      $isUnlimited,
+            reason:           $request->input('reason'),
+            customFileSizeMb: $request->input('custom_file_size_mb') ? (int) $request->input('custom_file_size_mb') : null,
         );
 
-        $limitDisplay    = $validated['is_unlimited'] ? 'Unlimited' : $validated['custom_limit'];
-        $fileSizeDisplay = isset($validated['custom_file_size_mb']) ? " · File size: {$validated['custom_file_size_mb']} MB" : '';
+        $limitDisplay    = $isUnlimited ? 'Unlimited' : $customLimit;
+        $fileSizeDisplay = $request->input('custom_file_size_mb') ? " · File size: {$request->input('custom_file_size_mb')} MB" : '';
 
         return back()->with('success', "Custom limit untuk {$user->name}: {$limitDisplay} proyek{$fileSizeDisplay}.");
     }

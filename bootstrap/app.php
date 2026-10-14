@@ -62,7 +62,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 && ! $request->expectsJson()
                 && ! $request->header('X-Inertia')
             ) {
-                return \Inertia\Inertia::render('Error', ['status' => $status])
+                return \Inertia\Inertia::render('Error', [
+                    'status' => $status,
+                    'message' => $exception->getMessage() ?: null,
+                ])
                     ->toResponse($request)
                     ->setStatusCode($status);
             }

@@ -1,3 +1,5 @@
+> **v2.8 Note:** Ditambahkan alur N (Pencahayaan Matahari Real-Time SunCalc & 3D Snapshot Captures). Update route structure: tambah `/projects/{project}/captures*` dan `/projects/{project}/sun-settings`.
+>
 > **v2.7 Note:** Ditambahkan alur L (Profil Arsitek & Wilayah Indonesia) dan alur M (Drawing 2D — Rencana). Update route structure: tambah `/region/*`, `/rab/mappings`, `/rab/price-items/{id}/components`, `/rab/price-items/{id}/overhead`.
 >
 > **v2.6 Note:** Ditambahkan alur K (RAB & Lembar Kerja) dan route RAB.
@@ -132,6 +134,17 @@ Sajikan output secara terstruktur dalam format Markdown:
    - Library simbol: pintu, jendela, kolom, tangga (pre-built SVG di konva).
    - Status: **🔴 Pending** — tunggu perintah implementasi.
 
+   **N. Simulasi Pencahayaan Matahari Real-Time & 3D Snapshot Captures (`Domains/Project`)**
+   - Perhitungan sudut azimuth & altitude matahari via library `SunCalc` di `useSunSimulation.ts`.
+   - Orientasi arah utara (`north_angle` 0°–360°) merotasi vektor posisi `DirectionalLight` dalam ruang 3D Three.js.
+   - Interpolasi warna dinamis: langit (`scene.background`), cahaya matahari (`directionalLight.color`), dan ambient light (`ambientLight.color`).
+   - Night Mode otomatis (altitude < 0 atau slider malam): matahari mati (`intensity = 0`), ambient redup (`#08081a`), dan mesh berprefix `LAMPU_*` / `lampu_*` menyala (emissive material + point lights).
+   - Preset: Pagi (08:00), Siang (12:00), Sore (17:00), Malam (20:00), plus slider scrub interaktif (00:00–23:59).
+   - Pengaturan lokasi & arah utara per-project hanya dapat disimpan oleh Arsitek (`UpdateProjectSunSettingsAction`). Default lokasi di-fallback ke koordinat Indonesia (Jakarta: -6.2088, 106.8456).
+   - Snapshot Captures: Three.js renderer dikonfigurasi `preserveDrawingBuffer: true` dan shadow map soft. Snapshot dapat di-export sebagai PNG lokal atau disimpan ke server (`SaveCaptureAction`).
+   - Quota limit dihitung per gambar (`SubscriptionLimitService::canCreateCapture`): Free tier 5 gambar, Pro tier 50 gambar.
+   - Galeri: Drawer di `Viewer.vue` untuk filter per-ruangan & jam, unduh PNG, hapus (arsitek), dan toggle visibilitas ke klien (`is_visible_to_clients`).
+
 2. **Struktur Folder (lihat `FOLDER_STRUCTURE.md` untuk detail lengkap)**
    - Monorepo: `app/Domains/`, `app/Http/`, `resources/js/pages/`, `resources/js/components/`, `resources/js/layouts/`.
    - Routes: `routes/web.php`, `routes/admin.php`, `routes/settings.php`, `routes/channels.php`.
@@ -169,6 +182,12 @@ Sajikan output secara terstruktur dalam format Markdown:
    DELETE /projects/{project}/clients/{id} → RevokeClientAccessAction
    GET|POST /projects/{project}/camera-presets    → CameraPresetController
    DELETE /projects/{project}/camera-presets/{id} → CameraPresetController@destroy
+
+   # Captures & Sun Settings (auth, project.access)
+   GET|POST /projects/{project}/captures          → ProjectCaptureController@index|store
+   DELETE   /projects/{project}/captures/{capture}→ ProjectCaptureController@destroy
+   PATCH    /projects/{project}/captures/{capture}/visibility → ProjectCaptureController@toggleVisibility
+   PATCH    /projects/{project}/sun-settings       → ProjectCaptureController@updateSunSettings
 
    # Chat (Reverb)
    GET  /projects/{project}/chat   → ChatController@index

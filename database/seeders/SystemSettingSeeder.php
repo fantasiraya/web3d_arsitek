@@ -61,6 +61,18 @@ class SystemSettingSeeder extends Seeder
                 'type' => 'string',
                 'description' => 'Batas jumlah email Klien yang boleh diundang per project untuk Pro Tier.',
             ],
+            [
+                'key' => 'free_tier_max_captures',
+                'value' => '5',
+                'type' => 'integer',
+                'description' => 'Batas jumlah gambar (capture 3D) yang boleh disimpan untuk Free Tier.',
+            ],
+            [
+                'key' => 'pro_tier_max_captures',
+                'value' => '50',
+                'type' => 'integer',
+                'description' => 'Batas jumlah gambar (capture 3D) yang boleh disimpan untuk Pro Tier.',
+            ],
         ];
 
         foreach ($settings as $setting) {
