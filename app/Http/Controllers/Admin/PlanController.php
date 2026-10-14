@@ -110,10 +110,8 @@ class PlanController extends Controller
             'xendit_secret_key', 'xendit_webhook_token',
         ];
 
-        // Hapus cache SEBELUM update
-        \Illuminate\Support\Facades\Cache::forget(
-            \App\Domains\SystemConfig\Repositories\SystemSettingRepository::CACHE_KEY
-        );
+        // Hapus cache SEBELUM dan SESUDAH update
+        \App\Support\CacheKeys::flushSettings();
 
         foreach ($validated as $key => $value) {
             // Jangan overwrite secret key jika dikirim kosong
@@ -125,6 +123,8 @@ class PlanController extends Controller
                 ['value' => is_bool($value) ? ($value ? '1' : '0') : (string) ($value ?? '')]
             );
         }
+
+        \App\Support\CacheKeys::flushSettings();
 
         $status = $validated['payment_gateway_enabled']
             ? 'Payment Gateway (Midtrans) diaktifkan.'

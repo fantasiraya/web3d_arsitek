@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Cache;
 
 class SystemSettingRepository
 {
+    public const CACHE_KEY = CacheKeys::KEY_SETTINGS_ALL;
+
     /**
      * Retrieve all system settings — cached selamanya dengan tag 'system_settings'.
      * Invalidasi via CacheKeys::flushSettings() setiap kali admin mengubah setting.
