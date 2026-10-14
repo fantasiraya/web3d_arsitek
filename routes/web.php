@@ -79,6 +79,7 @@ Route::middleware(['auth', 'project.access'])->group(function () {
     // ── Captures & Sun Simulation ──
     Route::get('/projects/{project}/captures', [ProjectCaptureController::class, 'index'])->name('projects.captures.index');
     Route::post('/projects/{project}/captures', [ProjectCaptureController::class, 'store'])->name('projects.captures.store');
+    Route::get('/projects/{project}/captures/{capture}/download', [ProjectCaptureController::class, 'download'])->name('projects.captures.download');
     Route::delete('/projects/{project}/captures/{capture}', [ProjectCaptureController::class, 'destroy'])->name('projects.captures.destroy');
     Route::patch('/projects/{project}/captures/{capture}/toggle-visibility', [ProjectCaptureController::class, 'toggleVisibility'])->name('projects.captures.toggle-visibility');
     Route::patch('/projects/{project}/captures/{capture}/prompt', [ProjectCaptureController::class, 'updatePrompt'])->name('projects.captures.prompt.update');

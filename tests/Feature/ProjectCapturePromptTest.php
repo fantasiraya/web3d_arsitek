@@ -127,3 +127,28 @@ test('generate prompt calls gemini api when key is set', function () {
     expect($response->json('prompt'))->toStartWith('Strict image-to-image architectural photorealistic rendering of the attached 3D reference image.');
 });
 
+test('user can download capture image as attachment', function () {
+    \Illuminate\Support\Facades\Storage::fake('public');
+
+    $user = User::factory()->create();
+    $project = Project::factory()->create(['user_id' => $user->id]);
+
+    $fakePath = "projects/{$project->id}/captures/test-capture.png";
+    \Illuminate\Support\Facades\Storage::disk('public')->put($fakePath, 'dummy png content');
+
+    $capture = ProjectCapture::factory()->create([
+        'project_id'    => $project->id,
+        'user_id'       => $user->id,
+        'room_name'     => 'Ruang Keluarga',
+        'captured_hour' => '15:30',
+        'file_path'     => $fakePath,
+    ]);
+
+    $response = $this->actingAs($user)->get("/projects/{$project->id}/captures/{$capture->id}/download");
+
+    $response->assertOk();
+    $response->assertHeader('content-disposition');
+    expect($response->headers->get('content-disposition'))->toContain('attachment');
+    expect($response->headers->get('content-disposition'))->toContain('pitcharch-ruang-keluarga-15-30.png');
+});
+

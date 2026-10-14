@@ -139,5 +139,32 @@ class ProjectCaptureController extends Controller
 
         return response()->json($result);
     }
+
+    public function download(Request $request, string $projectId, string $captureId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = $request->user();
+        $isOwner = $user && $project->user_id === $user->id;
+
+        $capture = ProjectCapture::where('project_id', $project->id)
+            ->where('id', $captureId)
+            ->firstOrFail();
+
+        if (! $isOwner && ! $capture->is_visible_to_clients) {
+            abort(403, 'Akses gambar tidak diizinkan.');
+        }
+
+        if (! \Illuminate\Support\Facades\Storage::disk('public')->exists($capture->file_path)) {
+            abort(404, 'File gambar tidak ditemukan.');
+        }
+
+        $roomSlug = \Illuminate\Support\Str::slug($capture->room_name ?: 'render');
+        $timeSlug = str_replace(':', '-', $capture->captured_hour ?: '12-00');
+        $filename = "pitcharch-{$roomSlug}-{$timeSlug}.png";
+
+        return \Illuminate\Support\Facades\Storage::disk('public')->download($capture->file_path, $filename, [
+            'Content-Type' => 'image/png',
+        ]);
+    }
 }
 

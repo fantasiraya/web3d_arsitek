@@ -1701,15 +1701,14 @@
                                 </span>
 
                                 <div class="flex items-center gap-1">
-                                    <a
-                                        :href="capture.url"
-                                        download
-                                        target="_blank"
+                                    <button
+                                        type="button"
+                                        @click.stop="downloadCaptureFile(capture)"
                                         class="p-1.5 rounded-lg text-neutral-300 hover:text-white hover:bg-white/10 transition-colors"
                                         title="Unduh PNG"
                                     >
                                         <Download class="h-3.5 w-3.5" />
-                                    </a>
+                                    </button>
 
                                     <button
                                         v-if="isOwner"
@@ -1981,15 +1980,15 @@
                             <!-- Footer Actions: Download, Visibility, Delete -->
                             <div class="space-y-2 pt-2 border-t border-white/10">
                                 <div class="flex items-center gap-2">
-                                    <a
-                                        :href="activeLightboxCapture.url"
-                                        download
-                                        target="_blank"
-                                        class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-black font-semibold text-xs hover:bg-neutral-200 transition-all shadow-md"
+                                    <button
+                                        type="button"
+                                        @click="downloadCaptureFile(activeLightboxCapture)"
+                                        class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-black font-semibold text-xs hover:bg-neutral-200 transition-all shadow-md active:scale-[0.99]"
+                                        title="Unduh PNG Resolusi Penuh"
                                     >
                                         <Download class="h-4 w-4" />
                                         <span>Unduh PNG Resolusi Penuh</span>
-                                    </a>
+                                    </button>
 
                                     <button
                                         v-if="isOwner"
@@ -3172,6 +3171,29 @@ function downloadCurrentCapture() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+}
+
+function downloadCaptureFile(capture?: ProjectCaptureItem | null) {
+    if (!capture?.id) return;
+
+    const downloadUrl = `/projects/${project.value.id}/captures/${capture.id}/download`;
+
+    // Gunakan hidden iframe agar halaman 3D tidak reload / berpindah sama sekali
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+    iframe.src = downloadUrl;
+    document.body.appendChild(iframe);
+
+    setTimeout(() => {
+        if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+        }
+    }, 10000);
 }
 
 async function saveCaptureToGallery() {
