@@ -249,7 +249,8 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │   ├── useSidebar.ts
 │   │   │   ├── useGlbQuantities.ts         # Hitung luas/volume/count per mesh dari .glb (Three.js); baca custom properties Blender
 │   │   │   ├── useIndonesiaRegion.ts       # Cascading dropdown wilayah Indonesia via /region/* API
-│   │   │   └── useSunSimulation.ts         # Simulasi posisi matahari (SunCalc), arah utara, night mode (LAMPU_*), dan ambient light lerp
+│   │   │   ├── useSunSimulation.ts         # Simulasi posisi matahari (SunCalc), arah utara, night mode (LAMPU_*), dan ambient light lerp
+│   │   │   └── usePostProcessing.ts        # Three.js EffectComposer: GTAOPass (ambient contact shadows), UnrealBloomPass, ACESFilmic ToneMapping, offscreen high-res 1080p/4K render
 │   │   │
 │   │   ├── layouts/            # Inertia Page Layouts
 │   │   │   ├── AdminLayout.vue         # Layout untuk halaman /admin/*

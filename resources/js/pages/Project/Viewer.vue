@@ -295,6 +295,26 @@
 
                 <div class="h-4 w-px bg-white/15 mx-0.5"></div>
 
+                <!-- Tombol Studio HD (Render Post-Processing) -->
+                <button
+                    type="button"
+                    @click="isEnhancedRenderingActive = !isEnhancedRenderingActive"
+                    class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all"
+                    :class="isEnhancedRenderingActive
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                        : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white'"
+                    title="Toggle Render Studio HD (GTAO Ambient Occlusion & Bloom)"
+                >
+                    <Sparkles class="h-3.5 w-3.5" :class="isEnhancedRenderingActive ? 'text-emerald-400 animate-pulse' : 'text-neutral-400'" />
+                    <span>Studio HD</span>
+                    <span
+                        class="h-1.5 w-1.5 rounded-full"
+                        :class="isEnhancedRenderingActive ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-neutral-600'"
+                    ></span>
+                </button>
+
+                <div class="h-4 w-px bg-white/15 mx-0.5"></div>
+
                 <!-- Tombol Ambil Gambar -->
                 <button
                     type="button"
@@ -1150,7 +1170,7 @@
 
                             <!-- Resolusi -->
                             <div>
-                                <label class="text-[11px] font-medium text-neutral-400 block mb-1">Resolusi Gambar</label>
+                                <label class="text-[11px] font-medium text-neutral-400 block mb-1">Resolusi Render</label>
                                 <select
                                     v-model="captureResolution"
                                     @change="refreshCaptureSnapshot"
@@ -1158,6 +1178,7 @@
                                 >
                                     <option value="viewport" class="bg-neutral-900 text-white">Viewport (Layar)</option>
                                     <option value="1080p" class="bg-neutral-900 text-white">1080p Full HD (1920×1080)</option>
+                                    <option value="4k" class="bg-neutral-900 text-white">4K Ultra HD (3840×2160)</option>
                                 </select>
                             </div>
 
@@ -1171,6 +1192,34 @@
                                     class="w-full h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-white placeholder:text-neutral-600 focus:outline-none focus:border-rose-400"
                                 />
                             </div>
+                        </div>
+
+                        <!-- Studio HD Render Toggle -->
+                        <div class="flex items-center justify-between p-3 rounded-2xl border border-emerald-500/20 bg-emerald-950/20">
+                            <div class="flex items-center gap-2.5">
+                                <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                    <Sparkles class="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <p class="text-xs font-medium text-white flex items-center gap-1.5">
+                                        Render Studio HD (GTAO & Bloom)
+                                        <span class="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Three.js</span>
+                                    </p>
+                                    <p class="text-[10px] text-neutral-400">Bayangan sudut realistis (GTAO) & efek pendaran cahaya alami.</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                @click="isEnhancedRenderingActive = !isEnhancedRenderingActive; refreshCaptureSnapshot()"
+                                class="relative h-6 w-11 rounded-full transition-all duration-200"
+                                :class="isEnhancedRenderingActive ? 'bg-emerald-500' : 'bg-white/15'"
+                                title="Aktifkan/nonaktifkan post-processing render studio"
+                            >
+                                <span
+                                    class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200"
+                                    :class="isEnhancedRenderingActive ? 'left-[22px]' : 'left-0.5'"
+                                ></span>
+                            </button>
                         </div>
 
                         <!-- Visibility Switch (Architect Only) -->
@@ -1511,6 +1560,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useRaycast } from '@/composables/useRaycast';
 import { useSunSimulation } from '@/composables/useSunSimulation';
+import { usePostProcessing } from '@/composables/usePostProcessing';
 import RevisionBadge from '@/components/RevisionBadge.vue';
 import ChatPanel from '@/components/ChatPanel.vue';
 import {
@@ -1652,6 +1702,20 @@ const {
     updateSettings: updateSunSettingsState,
 } = useSunSimulation();
 
+// ── Enhanced Post-Processing (GTAO, Bloom & HD Render) ──
+const {
+    initPostProcessing,
+    renderScene: renderWithPostProcessing,
+    setSize: setPostProcessingSize,
+    renderHighQualitySnapshot,
+    dispose: disposePostProcessing,
+    isEnhancedRenderingActive,
+    isAoEnabled,
+    isBloomEnabled,
+    aoIntensity,
+    bloomStrength,
+} = usePostProcessing();
+
 function onHourSliderChange(e: Event) {
     const val = parseFloat((e.target as HTMLInputElement).value);
     setHour(val);
@@ -1717,7 +1781,7 @@ const selectedPresetForCapture = ref<string>('current');
 const captureRoomName = ref('Sudut Bebas');
 const captureHour = ref('12:00');
 const captureTitle = ref('');
-const captureResolution = ref<'viewport' | '1080p'>('viewport');
+const captureResolution = ref<'viewport' | '1080p' | '4k'>('1080p');
 const captureVisibleToClients = ref(false);
 const capturePreviewDataUrl = ref('');
 const isSavingCapture = ref(false);
@@ -1764,35 +1828,8 @@ async function loadCaptures() {
     }
 }
 
-function captureCanvasSnapshot(targetRes: 'viewport' | '1080p'): string {
-    if (!renderer || !scene || !camera) return '';
-
-    if (targetRes === 'viewport') {
-        renderer.render(scene, camera);
-        return renderer.domElement.toDataURL('image/png');
-    } else {
-        // High-resolution 1080p render
-        const targetW = 1920;
-        const targetH = 1080;
-
-        renderer.setSize(targetW, targetH, false);
-        camera.aspect = targetW / targetH;
-        camera.updateProjectionMatrix();
-
-        renderer.render(scene, camera);
-        const dataUrl = renderer.domElement.toDataURL('image/png');
-
-        // Restore viewport size
-        if (viewerContainer.value) {
-            const { clientWidth: w, clientHeight: h } = viewerContainer.value;
-            renderer.setSize(w, h);
-            camera.aspect = w / h;
-            camera.updateProjectionMatrix();
-        }
-        renderer.render(scene, camera);
-
-        return dataUrl;
-    }
+function captureCanvasSnapshot(targetRes: 'viewport' | '1080p' | '4k'): string {
+    return renderHighQualitySnapshot(targetRes, viewerContainer.value);
 }
 
 function openCaptureModal() {
@@ -3041,6 +3078,7 @@ function resizeRenderer(): void {
     renderer.setSize(width, height);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    setPostProcessingSize(width, height);
     updateProjections();
 }
 
@@ -3067,7 +3105,7 @@ function render(): void {
 
         controls.update();
     }
-    renderer.render(scene, camera);
+    renderWithPostProcessing();
     updateProjections();
     animationFrame = window.requestAnimationFrame(render);
 }
@@ -3103,6 +3141,11 @@ function initializeViewer(): void {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.1;
+
+    // Inisialisasi Post-Processing Composer (GTAO + Bloom + Tone Mapping)
+    const initW = viewerContainer.value.clientWidth || 1280;
+    const initH = viewerContainer.value.clientHeight || 720;
+    initPostProcessing(renderer, scene, camera, initW, initH);
 
     viewerContainer.value.appendChild(renderer.domElement);
     renderer.domElement.classList.add('h-full', 'w-full');
@@ -3149,6 +3192,7 @@ onBeforeUnmount(() => {
         window.cancelAnimationFrame(animationFrame);
     }
 
+    disposePostProcessing();
     resizeObserver?.disconnect();
     controls?.dispose();
     renderer?.dispose();
