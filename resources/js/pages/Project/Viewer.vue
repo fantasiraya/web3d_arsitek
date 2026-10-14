@@ -1158,7 +1158,7 @@
                                 </div>
 
                                 <!-- Switcher Frame Awal / Akhir jika mode Video Two-Point -->
-                                <div v-if="capturePromptMode === 'video' && captureVideoMotion === 'two_point'" class="flex items-center gap-1 p-0.5 rounded-xl bg-purple-950/60 border border-purple-500/30 text-[11px]">
+                                <div v-if="isTwoPointActive" class="flex items-center gap-1 p-0.5 rounded-xl bg-purple-950/60 border border-purple-500/30 text-[11px]">
                                     <button
                                         type="button"
                                         @click="captureActiveFrameTab = 'frame_a'"
@@ -1203,7 +1203,7 @@
                             <!-- Preview Image Canvas Screen -->
                             <div class="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/15 bg-black flex items-center justify-center shadow-2xl">
                                 <!-- FRAME 1 / SINGLE FRAME PREVIEW -->
-                                <template v-if="captureActiveFrameTab === 'frame_a' || capturePromptMode !== 'video' || captureVideoMotion !== 'two_point'">
+                                <template v-if="captureActiveFrameTab === 'frame_a' || !isTwoPointActive">
                                     <img
                                         v-if="capturePreviewDataUrl"
                                         :src="capturePreviewDataUrl"
@@ -1218,7 +1218,7 @@
                                     <!-- Overlay Badge Sudut & Waktu -->
                                     <div class="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 pointer-events-none">
                                         <span class="px-2.5 py-0.5 rounded-full bg-black/80 border border-white/15 text-[10px] font-medium text-white backdrop-blur">
-                                            {{ (capturePromptMode === 'video' && captureVideoMotion === 'two_point') ? 'Frame 1: ' + (captureRoomName || 'Posisi Awal') : (captureRoomName || 'Sudut Bebas') }}
+                                            {{ isTwoPointActive ? 'Frame 1: ' + (captureRoomName || 'Posisi Awal') : (captureRoomName || 'Sudut Bebas') }}
                                         </span>
                                         <span class="px-2 py-0.5 rounded-full bg-black/80 border border-white/15 text-[10px] font-mono text-amber-300 backdrop-blur">
                                             {{ captureHour }}
@@ -1326,7 +1326,7 @@
                             <!-- Download Aset Gambar / Video untuk AI -->
                             <div class="p-3 rounded-2xl bg-white/5 border border-white/10 space-y-2">
                                 <!-- DOWNLOAD MODE VIDEO TWO-POINT -->
-                                <template v-if="capturePromptMode === 'video' && captureVideoMotion === 'two_point'">
+                                <template v-if="isTwoPointActive">
                                     <div class="text-left">
                                         <p class="text-xs font-semibold text-white flex items-center gap-1.5">
                                             <Download class="h-3.5 w-3.5 text-purple-400" />
@@ -1448,81 +1448,292 @@
                                 </button>
                             </div>
 
-                            <!-- JIKA MODE VIDEO: PILIHAN GAYA PERGERAKAN KAMERA (CAMERA MOTION) & TARGET PLATFORM -->
+                            <!-- JIKA MODE VIDEO: GAYA KAMERA (MULTI-SELECT), DURASI, KECEPATAN, AMBIENCE & LENSA -->
                             <div v-if="capturePromptMode === 'video'" class="space-y-3">
-                                <!-- Gaya Gerakan Kamera -->
+                                <!-- 1. Gaya Gerakan Kamera (Bisa Multipel) -->
                                 <div class="space-y-1.5">
                                     <div class="flex items-center justify-between text-[10px]">
-                                        <span class="font-semibold uppercase tracking-wider text-purple-300">Gaya Gerakan Kamera:</span>
-                                        <span class="font-mono text-neutral-300">
-                                            {{ captureVideoMotion === 'two_point' ? 'Transisi 2 Titik (Start & End Frame)' : (captureVideoMotion === 'push_in' ? 'Walkthrough Push-In' : (captureVideoMotion === 'orbit' ? 'Drone Orbit 360°' : (captureVideoMotion === 'pan' ? 'Lateral Pan' : (captureVideoMotion === 'crane_up' ? 'Crane / Pedestal Up' : 'Timelapse Bayangan')))) }}
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="font-semibold uppercase tracking-wider text-purple-300">Gaya Kamera:</span>
+                                            <span class="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-200 border border-purple-500/30">
+                                                {{ captureVideoMotions.length }} Dipilih (Bisa Multipel)
+                                            </span>
+                                        </div>
+                                        <span class="font-mono text-[10px] text-neutral-300 truncate max-w-[200px]" :title="getSelectedMotionsLabel()">
+                                            {{ getSelectedMotionsLabel() }}
                                         </span>
                                     </div>
-                                    <div class="grid grid-cols-3 sm:grid-cols-6 gap-1 p-1 rounded-xl bg-black/40 border border-white/10 text-[10px]">
+
+                                    <!-- Grid of 15 Camera Movements -->
+                                    <div class="grid grid-cols-3 sm:grid-cols-5 gap-1 p-1 rounded-xl bg-black/40 border border-white/10 text-[10px]">
                                         <button
                                             type="button"
-                                            @click="captureVideoMotion = 'two_point'; syncPromptWithCurrentState()"
-                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all"
-                                            :class="captureVideoMotion === 'two_point' ? 'bg-purple-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
+                                            @click="toggleVideoMotion('two_point')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('two_point') ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
                                             title="Transisi kamera dari posisi awal ke posisi akhir"
                                         >
-                                            🎯 2 Titik
+                                            <span>🎯 2 Titik</span>
                                         </button>
                                         <button
                                             type="button"
-                                            @click="captureVideoMotion = 'push_in'; syncPromptWithCurrentState()"
-                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all"
-                                            :class="captureVideoMotion === 'push_in' ? 'bg-purple-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
+                                            @click="toggleVideoMotion('push_in')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('push_in') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
                                             title="Kamera bergerak maju masuk ke ruangan"
                                         >
-                                            🚶 Push-In
+                                            <span>🚶 Push-In</span>
                                         </button>
                                         <button
                                             type="button"
-                                            @click="captureVideoMotion = 'orbit'; syncPromptWithCurrentState()"
-                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all"
-                                            :class="captureVideoMotion === 'orbit' ? 'bg-purple-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
-                                            title="Kamera mengitari bangunan 360 derajat"
+                                            @click="toggleVideoMotion('pull_out')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('pull_out') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
+                                            title="Kamera mundur mengungkap fasad bangunan"
                                         >
-                                            🛸 Orbit
+                                            <span>🔙 Pull-Out</span>
                                         </button>
                                         <button
                                             type="button"
-                                            @click="captureVideoMotion = 'pan'; syncPromptWithCurrentState()"
-                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all"
-                                            :class="captureVideoMotion === 'pan' ? 'bg-purple-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
-                                            title="Geser kamera horizontal"
+                                            @click="toggleVideoMotion('orbit_left')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('orbit_left') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
+                                            title="Kamera mengitari bangunan searah jarum jam"
                                         >
-                                            ↔️ Pan
+                                            <span>🛸 Orbit Kiri</span>
                                         </button>
                                         <button
                                             type="button"
-                                            @click="captureVideoMotion = 'crane_up'; syncPromptWithCurrentState()"
-                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all"
-                                            :class="captureVideoMotion === 'crane_up' ? 'bg-purple-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
+                                            @click="toggleVideoMotion('orbit_right')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('orbit_right') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
+                                            title="Kamera mengitari bangunan berlawanan jarum jam"
+                                        >
+                                            <span>🔄 Orbit Kanan</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="toggleVideoMotion('pan_left')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('pan_left') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
+                                            title="Geser kamera ke kiri"
+                                        >
+                                            <span>⬅️ Pan Kiri</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="toggleVideoMotion('pan_right')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('pan_right') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
+                                            title="Geser kamera ke kanan"
+                                        >
+                                            <span>➡️ Pan Kanan</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="toggleVideoMotion('crane_up')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('crane_up') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
                                             title="Kamera naik vertikal ke atas"
                                         >
-                                            🏗️ Crane
+                                            <span>🏗️ Crane Naik</span>
                                         </button>
                                         <button
                                             type="button"
-                                            @click="captureVideoMotion = 'timelapse'; syncPromptWithCurrentState()"
-                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all"
-                                            :class="captureVideoMotion === 'timelapse' ? 'bg-purple-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
-                                            title="Kamera statis dengan bayangan matahari dinamis"
+                                            @click="toggleVideoMotion('crane_down')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('crane_down') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
+                                            title="Kamera turun vertikal mendekati lantai"
                                         >
-                                            🌅 Timelapse
+                                            <span>⬇️ Crane Turun</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="toggleVideoMotion('fpv_drone')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('fpv_drone') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
+                                            title="Penerbangan drone FPV mulus melintasi bukaan ruangan"
+                                        >
+                                            <span>🛩️ FPV Drone</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="toggleVideoMotion('spiral_ascend')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('spiral_ascend') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
+                                            title="Kamera naik melingkar spiral mengitari bangunan"
+                                        >
+                                            <span>🌀 Spiral Naik</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="toggleVideoMotion('tilt_up')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('tilt_up') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
+                                            title="Sudut kamera menengadah ke atas dari lantai"
+                                        >
+                                            <span>📐 Tilt Up</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="toggleVideoMotion('tilt_down')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('tilt_down') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
+                                            title="Sudut kamera menunduk ke bawah dari plafon"
+                                        >
+                                            <span>📐 Tilt Down</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="toggleVideoMotion('timelapse')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('timelapse') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
+                                            title="Kamera statis dengan bayangan matahari bergerak cepat"
+                                        >
+                                            <span>🌅 Timelapse</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="toggleVideoMotion('static_subtle')"
+                                            class="py-1 px-1 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1"
+                                            :class="captureVideoMotions.includes('static_subtle') ? 'bg-purple-600 text-white shadow font-semibold border border-purple-400/40' : 'text-neutral-400 hover:text-white hover:bg-white/5'"
+                                            title="Tripod statis dengan micro-parallax alami"
+                                        >
+                                            <span>📹 Tripod Parallax</span>
                                         </button>
                                     </div>
                                 </div>
 
-                                <!-- Target Video AI Platform -->
+                                <!-- 2. Parameter Standar AI Video: Durasi & Kecepatan Kamera -->
+                                <div class="grid grid-cols-2 gap-2">
+                                    <!-- Durasi Video Standar -->
+                                    <div class="space-y-1">
+                                        <div class="flex items-center justify-between text-[10px]">
+                                            <span class="font-semibold uppercase tracking-wider text-neutral-400">Durasi Video AI:</span>
+                                            <span class="font-mono text-purple-300 font-semibold">{{ captureVideoDuration }}</span>
+                                        </div>
+                                        <div class="grid grid-cols-3 gap-1 p-0.5 rounded-xl bg-black/40 border border-white/10 text-[10px]">
+                                            <button
+                                                type="button"
+                                                @click="captureVideoDuration = '4s'; syncPromptWithCurrentState()"
+                                                class="py-1 px-1 rounded-lg text-center font-medium transition-all"
+                                                :class="captureVideoDuration === '4s' ? 'bg-purple-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
+                                                title="4 Detik (Looping / Reels)"
+                                            >
+                                                4 Detik
+                                            </button>
+                                            <button
+                                                type="button"
+                                                @click="captureVideoDuration = '5s'; syncPromptWithCurrentState()"
+                                                class="py-1 px-1 rounded-lg text-center font-medium transition-all"
+                                                :class="captureVideoDuration === '5s' ? 'bg-purple-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
+                                                title="5 Detik (Standar Runway Gen-3 & Kling)"
+                                            >
+                                                5s (Standar)
+                                            </button>
+                                            <button
+                                                type="button"
+                                                @click="captureVideoDuration = '10s'; syncPromptWithCurrentState()"
+                                                class="py-1 px-1 rounded-lg text-center font-medium transition-all"
+                                                :class="captureVideoDuration === '10s' ? 'bg-purple-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
+                                                title="10 Detik (Extended Kling / Sora)"
+                                            >
+                                                10s (Long)
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Kecepatan Kamera (Pace) -->
+                                    <div class="space-y-1">
+                                        <div class="flex items-center justify-between text-[10px]">
+                                            <span class="font-semibold uppercase tracking-wider text-neutral-400">Kecepatan Kamera:</span>
+                                            <span class="font-mono text-purple-300 font-semibold">
+                                                {{ captureVideoPace === 'slow' ? '🐢 Slow (0.5x)' : (captureVideoPace === 'dynamic' ? '⚡ Dinamis' : '🚶 Normal') }}
+                                            </span>
+                                        </div>
+                                        <div class="grid grid-cols-3 gap-1 p-0.5 rounded-xl bg-black/40 border border-white/10 text-[10px]">
+                                            <button
+                                                type="button"
+                                                @click="captureVideoPace = 'slow'; syncPromptWithCurrentState()"
+                                                class="py-1 px-1 rounded-lg text-center font-medium transition-all"
+                                                :class="captureVideoPace === 'slow' ? 'bg-purple-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
+                                                title="Slow & Majestic (Terbaik untuk Arsitektur)"
+                                            >
+                                                Slow 0.5x
+                                            </button>
+                                            <button
+                                                type="button"
+                                                @click="captureVideoPace = 'normal'; syncPromptWithCurrentState()"
+                                                class="py-1 px-1 rounded-lg text-center font-medium transition-all"
+                                                :class="captureVideoPace === 'normal' ? 'bg-purple-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
+                                                title="Normal Walking Pace 1.0x"
+                                            >
+                                                Normal
+                                            </button>
+                                            <button
+                                                type="button"
+                                                @click="captureVideoPace = 'dynamic'; syncPromptWithCurrentState()"
+                                                class="py-1 px-1 rounded-lg text-center font-medium transition-all"
+                                                :class="captureVideoPace === 'dynamic' ? 'bg-purple-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
+                                                title="Dynamic Drone Speed"
+                                            >
+                                                Dinamis
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 3. Suasana Cuaca & Lensa Sinematik -->
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <!-- Suasana Cuaca & Ambience -->
+                                    <div class="space-y-1">
+                                        <div class="flex items-center justify-between text-[10px]">
+                                            <span class="font-semibold uppercase tracking-wider text-neutral-400">Suasana Cuaca / Ambience:</span>
+                                        </div>
+                                        <select
+                                            v-model="captureVideoMood"
+                                            @change="syncPromptWithCurrentState()"
+                                            class="w-full py-1.5 px-2 rounded-xl bg-black/50 border border-white/10 text-[11px] text-neutral-200 focus:outline-none focus:border-purple-400"
+                                        >
+                                            <option value="scene">☀️ Sesuai Model 3D (Jam &amp; Matahari)</option>
+                                            <option value="golden_hour">🌇 Golden Hour Sore (Bayangan Panjang)</option>
+                                            <option value="overcast">☁️ Overcast Lembut (Jepang / Nordik)</option>
+                                            <option value="rainy">🌧️ Hujan &amp; Refleksi Basah (Mewah)</option>
+                                            <option value="night_luxury">🌃 Malam Mewah (Warm Spotlights &amp; LED)</option>
+                                            <option value="misty_morning">🌫️ Kabut Pagi &amp; Sunbeams (Mist)</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Gaya Lensa Kamera -->
+                                    <div class="space-y-1">
+                                        <div class="flex items-center justify-between text-[10px]">
+                                            <span class="font-semibold uppercase tracking-wider text-neutral-400">Profil Lensa Kamera:</span>
+                                        </div>
+                                        <select
+                                            v-model="captureVideoLens"
+                                            @change="syncPromptWithCurrentState()"
+                                            class="w-full py-1.5 px-2 rounded-xl bg-black/50 border border-white/10 text-[11px] text-neutral-200 focus:outline-none focus:border-purple-400"
+                                        >
+                                            <option value="anamorphic_35mm">🎬 35mm Anamorphic (Film Hollywood 24fps)</option>
+                                            <option value="wide_16mm">🏛️ 16mm Ultra-Wide (Garis Vertikal Lurus)</option>
+                                            <option value="macro_50mm">🔍 50mm Bokeh (Detail Tekstur Material)</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- 4. Target Video AI Platform & Anti-Warping Toggle -->
                                 <div class="space-y-1.5">
                                     <div class="flex items-center justify-between text-[10px]">
                                         <span class="font-semibold uppercase tracking-wider text-neutral-400">Target AI Video:</span>
-                                        <span class="font-mono text-purple-300">
-                                            {{ captureVideoTarget === 'runway' ? 'Runway Gen-3 Alpha' : (captureVideoTarget === 'kling' ? 'Kling AI (Start & End Frame)' : (captureVideoTarget === 'luma' ? 'Luma Dream Machine' : 'Universal Video AI')) }}
-                                        </span>
+                                        <label class="flex items-center gap-1.5 cursor-pointer select-none text-[10px] text-purple-300 hover:text-white">
+                                            <input
+                                                type="checkbox"
+                                                v-model="captureVideoStrictGeometry"
+                                                @change="syncPromptWithCurrentState()"
+                                                class="rounded border-white/20 bg-black/40 text-purple-600 focus:ring-0 h-3 w-3"
+                                            />
+                                            <span>Kunci Geometri 3D (Anti-Warping)</span>
+                                        </label>
                                     </div>
                                     <div class="grid grid-cols-4 gap-1 p-1 rounded-xl bg-black/40 border border-white/10">
                                         <button
@@ -1564,10 +1775,15 @@
                                 <div class="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-200 leading-relaxed flex items-start gap-2">
                                     <Info class="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
                                     <div v-if="captureVideoTarget === 'runway'">
-                                        <span class="font-semibold text-white">Panduan Runway Gen-3 Alpha:</span> Unggah Frame 1 ke slot <b>First Frame</b> dan Frame 2 ke slot <b>Last Frame</b>. Salin prompt di bawah untuk pergerakan kamera sinematik tanpa distorsi bentuk arsitektur.
+                                        <span class="font-semibold text-white">Panduan Runway Gen-3 Alpha:</span>
+                                        <span v-if="isTwoPointActive"> Unggah Frame 1 ke slot <b>First Frame</b> dan Frame 2 ke slot <b>Last Frame</b>.</span>
+                                        <span v-else> Unggah gambar snapshot ini ke Runway.</span>
+                                        Salin prompt di bawah untuk pergerakan kamera sinematik tanpa distorsi bentuk arsitektur.
                                     </div>
                                     <div v-else-if="captureVideoTarget === 'kling'">
-                                        <span class="font-semibold text-white">Panduan Kling AI:</span> Aktifkan opsi <b>Start &amp; End Frame</b> pada menu kamera Kling AI, lalu paste prompt di bawah ini.
+                                        <span class="font-semibold text-white">Panduan Kling AI:</span>
+                                        <span v-if="isTwoPointActive"> Aktifkan opsi <b>Start &amp; End Frame</b> pada menu kamera Kling AI.</span>
+                                        <span v-else> Paste prompt di bawah ini pada menu Text-to-Video / Image-to-Video Kling AI.</span>
                                     </div>
                                     <div v-else-if="captureVideoTarget === 'luma'">
                                         <span class="font-semibold text-white">Panduan Luma Dream Machine:</span> Gunakan Frame 1 sebagai input gambar, lalu paste prompt untuk mengarahkan kamera 3D.
@@ -1772,6 +1988,28 @@
                                         v-model="defaultNegativePrompt"
                                         rows="2"
                                         class="w-full rounded-xl border border-rose-500/30 bg-black/60 p-2 text-[10px] text-rose-200/90 font-mono leading-relaxed focus:outline-none focus:border-rose-400"
+                                    ></textarea>
+                                </div>
+
+                                <!-- Video AI Negative Prompt Section (Anti-Warping & Anti-Distorsi) -->
+                                <div v-if="capturePromptMode === 'video'" class="space-y-1 pt-1 border-t border-purple-500/20">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-semibold uppercase tracking-wider text-purple-300">Negative Prompt Video (Anti-Warping):</span>
+                                        <button
+                                            type="button"
+                                            @click="copyVideoNegativePrompt"
+                                            class="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 border border-purple-500/30 transition-all"
+                                            title="Salin Negative Prompt Video"
+                                        >
+                                            <Check v-if="copiedVideoNegativeModal" class="h-2.5 w-2.5" />
+                                            <Copy v-else class="h-2.5 w-2.5" />
+                                            <span>{{ copiedVideoNegativeModal ? 'Tersalin!' : 'Copy Negative Video' }}</span>
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        v-model="defaultVideoNegativePrompt"
+                                        rows="2"
+                                        class="w-full rounded-xl border border-purple-500/30 bg-black/60 p-2 text-[10px] text-purple-200/90 font-mono leading-relaxed focus:outline-none focus:border-purple-400"
                                     ></textarea>
                                 </div>
 
@@ -2734,10 +2972,63 @@ const copiedPromptModal = ref(false);
 const promptSaveStatus = ref<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({});
 const copiedCaptureId = ref<string | null>(null);
 
-// ── Video Prompt & Two-Point Transition States ──
+// ── Video Prompt & Multi-Camera Motion States ──
 const capturePromptMode = ref<'image' | 'video'>('image');
-const captureVideoMotion = ref<'two_point' | 'push_in' | 'orbit' | 'pan' | 'crane_up' | 'timelapse'>('two_point');
+const captureVideoMotions = ref<string[]>(['push_in']);
+const captureVideoDuration = ref<'4s' | '5s' | '10s'>('5s');
+const captureVideoPace = ref<'slow' | 'normal' | 'dynamic'>('slow');
+const captureVideoMood = ref<'scene' | 'golden_hour' | 'overcast' | 'rainy' | 'night_luxury' | 'misty_morning'>('scene');
+const captureVideoLens = ref<'anamorphic_35mm' | 'wide_16mm' | 'macro_50mm'>('anamorphic_35mm');
+const captureVideoStrictGeometry = ref(true);
 const captureVideoTarget = ref<'runway' | 'kling' | 'luma' | 'universal'>('runway');
+const defaultVideoNegativePrompt = ref('deformed architecture, morphing walls, bending columns, warped windows, flickering geometry, sudden camera cuts, jerky movement, erratic zoom, floating artifacts, distorted proportions, low framerate, jittery shadows');
+const copiedVideoNegativeModal = ref(false);
+
+const isTwoPointActive = computed(() => capturePromptMode.value === 'video' && captureVideoMotions.value.includes('two_point'));
+
+const videoMotionDict: Record<string, string> = {
+    two_point: '2 Titik',
+    push_in: 'Push-In',
+    pull_out: 'Pull-Out',
+    orbit_left: 'Orbit Kiri',
+    orbit_right: 'Orbit Kanan',
+    pan_left: 'Pan Kiri',
+    pan_right: 'Pan Kanan',
+    crane_up: 'Crane Naik',
+    crane_down: 'Crane Turun',
+    fpv_drone: 'FPV Drone',
+    spiral_ascend: 'Spiral Naik',
+    tilt_up: 'Tilt Up',
+    tilt_down: 'Tilt Down',
+    timelapse: 'Timelapse',
+    static_subtle: 'Tripod Parallax',
+};
+
+function toggleVideoMotion(key: string) {
+    const idx = captureVideoMotions.value.indexOf(key);
+    if (idx > -1) {
+        if (captureVideoMotions.value.length > 1) {
+            captureVideoMotions.value.splice(idx, 1);
+        }
+    } else {
+        captureVideoMotions.value.push(key);
+    }
+    syncPromptWithCurrentState();
+}
+
+function getSelectedMotionsLabel(): string {
+    if (!captureVideoMotions.value.length) return 'Belum dipilih';
+    return captureVideoMotions.value.map((k: string) => videoMotionDict[k] || k).join(' + ');
+}
+
+function copyVideoNegativePrompt() {
+    if (!defaultVideoNegativePrompt.value) return;
+    navigator.clipboard.writeText(defaultVideoNegativePrompt.value);
+    copiedVideoNegativeModal.value = true;
+    setTimeout(() => {
+        copiedVideoNegativeModal.value = false;
+    }, 2000);
+}
 
 // Two-Point Transition Frames (Frame Awal & Frame Akhir)
 const captureActiveFrameTab = ref<'frame_a' | 'frame_b'>('frame_a');
@@ -3055,23 +3346,69 @@ function generatePromptForCurrentView(providedAnalysis?: Analyzed3DView | null):
     if (capturePromptMode.value === 'video') {
         const motionPrompts: Record<string, string> = {
             two_point: 'Smooth cinematic camera transition traveling steadily from starting camera viewpoint to ending viewpoint',
-            push_in: 'Slow cinematic push-in walkthrough moving smoothly forward through the entrance into the interior',
-            orbit: 'Smooth continuous 360-degree circular drone orbit flying around the architectural exterior showcase',
-            pan: 'Smooth lateral cinematic panning shot revealing the architectural interior spaces and layout',
-            crane_up: 'Slow vertical crane pedestal shot ascending upwards from eye level towards the upper architectural volume',
-            timelapse: 'Static fixed camera angle with dynamic architectural sunlight and shadow timelapse progression from day to evening',
+            push_in: 'Slow cinematic push-in walkthrough moving smoothly forward into the interior space',
+            pull_out: 'Slow cinematic pull-out revealing the full architectural facade and contextual exterior',
+            orbit_left: 'Smooth continuous 360-degree circular drone orbit flying clockwise around the architectural structure',
+            orbit_right: 'Smooth continuous 360-degree circular drone orbit flying counter-clockwise around the architectural structure',
+            pan_left: 'Smooth lateral cinematic panning shot to the left revealing spatial depth and interior transitions',
+            pan_right: 'Smooth lateral cinematic panning shot to the right showcasing the expansive room volume',
+            crane_up: 'Slow vertical crane pedestal ascending upwards towards the architectural ceiling structure',
+            crane_down: 'Smooth vertical crane pedestal descending gracefully towards ground floor living space',
+            fpv_drone: 'Dynamic continuous FPV drone flight gliding smoothly through architectural openings and hallways',
+            spiral_ascend: 'Smooth cinematic spiral ascending shot rotating upwards around the structural building column',
+            tilt_up: 'Slow deliberate camera tilt up from floor finish revealing double-height ceiling and skylights',
+            tilt_down: 'Slow cinematic camera tilt down from clerestory ceiling to curated interior floor arrangement',
+            timelapse: 'Static fixed camera angle with dynamic architectural sunlight and shadow timelapse progression',
+            static_subtle: 'Static tripod framing with subtle natural camera breathing and micro-parallax',
         };
-        const motionText = motionPrompts[captureVideoMotion.value] || 'Smooth cinematic architectural camera movement';
+
+        const selectedMotions = captureVideoMotions.value.length > 0 ? captureVideoMotions.value : ['push_in'];
+        const motionDescriptions = selectedMotions.map(k => motionPrompts[k] || k);
+        const compoundMotion = motionDescriptions.join(', combined with ');
+
+        const durationText = captureVideoDuration.value === '4s'
+            ? '4-second quick seamless loop'
+            : captureVideoDuration.value === '10s'
+            ? '10-second extended showcase'
+            : '5-second standard generation';
+
+        const paceText = captureVideoPace.value === 'slow'
+            ? 'slow majestic 0.5x camera pace'
+            : captureVideoPace.value === 'dynamic'
+            ? 'dynamic fluid pacing'
+            : 'natural steady walking pace';
+
+        const moodMap: Record<string, string> = {
+            scene: 'authentic lighting matching reference 3D scene',
+            golden_hour: 'golden hour sunset with warm low-angle sunbeams and soft elongated shadows',
+            overcast: 'soft diffused overcast daylight with subtle natural ambient shadows',
+            rainy: 'moody rainy atmosphere with reflective wet ground and subtle raindrops',
+            night_luxury: 'luxurious nighttime architectural showcase with warm interior spotlights and subtle linear LED lighting',
+            misty_morning: 'misty morning sunrise with ethereal sunbeams piercing through the space',
+        };
+        const moodText = moodMap[captureVideoMood.value] || moodMap.scene;
+
+        const lensMap: Record<string, string> = {
+            anamorphic_35mm: '35mm anamorphic cinema lens, subtle lens flare, natural depth of field, 24fps cinematic motion blur',
+            wide_16mm: '16mm architectural wide-angle lens, perfectly straight vertical lines, zero barrel distortion',
+            macro_50mm: '50mm prime lens, beautiful shallow depth of field, tactile architectural material focus',
+        };
+        const lensText = lensMap[captureVideoLens.value] || lensMap.anamorphic_35mm;
+
+        const strictGeometryText = captureVideoStrictGeometry.value
+            ? 'Maintain 100% rigid architectural geometry, zero morphing walls, zero flickering surfaces, perfectly straight architectural vertical lines.'
+            : 'Photorealistic architectural videography.';
+
         const targetGuidance = captureVideoTarget.value === 'runway'
             ? 'Runway Gen-3 Alpha camera direction: zero structural morphing, realistic interior materials, rigid spatial structure.'
             : captureVideoTarget.value === 'kling'
-            ? 'Kling AI Start & End frame transition: preserve architectural geometry and lighting consistency.'
+            ? 'Kling AI video generation: preserve architectural geometry and lighting consistency across all frames.'
             : captureVideoTarget.value === 'luma'
             ? 'Luma Dream Machine camera move: photorealistic architectural videography, realistic scale.'
             : 'Cinematic architectural videography, steady camera movement, photorealistic 8k render.';
 
         const subjectName = analysis?.subjectEn || captureRoomName.value || 'architectural space';
-        return `Cinematic 4K architectural video. ${motionText}. Subject: ${subjectName}. Maintain 100% rigid architectural geometry, straight vertical perspective lines, and realistic materials. ${targetGuidance}`;
+        return `Cinematic 4K architectural video (${durationText}, ${paceText}). ${compoundMotion}. Subject: ${subjectName}. Environment: ${moodText}. Optics: ${lensText}. ${strictGeometryText} ${targetGuidance}`;
     }
 
     const mandatoryPrefix = 'Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Maintain 100% of the exact geometry, camera perspective, section-cut lines, AND THE EXACT COLOR PALETTE of every surface as shown in the reference image.';
@@ -3351,8 +3688,9 @@ const hasVisionAiGenerated = ref(false);
 
 function getPromptCacheKey(): string {
     if (capturePromptMode.value === 'video') {
+        const motionsKey = [...captureVideoMotions.value].sort().join('+');
         const hasEnd = captureFrameBDataUrl.value ? 'with_end' : 'no_end';
-        return `video_${captureVideoMotion.value}_${captureVideoTarget.value}_${hasEnd}`;
+        return `video_${motionsKey}_${captureVideoDuration.value}_${captureVideoPace.value}_${captureVideoMood.value}_${captureVideoLens.value}_${captureVideoStrictGeometry.value ? 'strict' : 'free'}_${captureVideoTarget.value}_${hasEnd}`;
     }
     return `image_${captureSelectedSyntax.value}`;
 }
@@ -3489,7 +3827,12 @@ async function triggerVisionAiPromptGeneration() {
         const payload: Record<string, any> = {
             image: capturePreviewDataUrl.value,
             prompt_type: capturePromptMode.value,
-            camera_motion: captureVideoMotion.value,
+            camera_motions: captureVideoMotions.value,
+            duration: captureVideoDuration.value,
+            camera_pace: captureVideoPace.value,
+            ambient_mood: captureVideoMood.value,
+            lens_style: captureVideoLens.value,
+            strict_geometry: captureVideoStrictGeometry.value,
             video_target: captureVideoTarget.value,
             scene_metadata: meta,
         };

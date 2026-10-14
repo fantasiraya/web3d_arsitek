@@ -10,6 +10,26 @@ use Illuminate\Support\Facades\Log;
 
 class GenerateVisionPromptAction
 {
+    public const MOTION_DESCRIPTIONS = [
+        'two_point'     => 'seamless camera transition traveling steadily from starting camera viewpoint in Frame 1 to destination viewpoint in Frame 2',
+        'push_in'       => 'smooth continuous forward dolly push-in tracking shot approaching and entering the architectural space',
+        'pull_out'      => 'smooth reverse dolly pull-out reveal shot moving steadily backward to unveil the complete architectural facade',
+        'orbit_left'    => 'continuous circular orbit tracking arc traveling clockwise around the building facade',
+        'orbit_right'   => 'continuous circular orbit tracking arc traveling counter-clockwise around the building facade',
+        'pan_left'      => 'smooth horizontal lateral pan tracking across the facade to the left',
+        'pan_right'     => 'smooth horizontal lateral pan tracking across the facade to the right',
+        'crane_up'      => 'vertical cinematic crane pedestal-up ascent rising steadily upwards to reveal upper volumes and rooflines',
+        'crane_down'    => 'gentle descending crane pedestal-down landing smoothly towards eye-level ground perspective',
+        'fpv_drone'     => 'smooth stabilized FPV drone flight gliding effortlessly through the architectural space and openings',
+        'spiral_ascend' => 'helical spiral ascension combining continuous circular orbit with steady vertical elevation gain',
+        'tilt_up'       => 'cinematic vertical tilt-up pivot starting from ground foundation and sweeping up to the skyline',
+        'tilt_down'     => 'cinematic vertical tilt-down pivot looking downward from ceiling to floor layout',
+        'timelapse'     => 'static locked-off framing with dynamic daylight sun-path timelapse and crisp shifting geometric shadows',
+        'static_subtle' => 'rock-solid tripod framing with subtle organic micro-drift parallax and natural atmospheric movement',
+    ];
+
+    public const DEFAULT_VIDEO_NEGATIVE_PROMPT = 'deformed architecture, morphing walls, bending columns, warped windows, flickering geometry, sudden camera cuts, jerky movement, erratic zoom, floating artifacts, distorted proportions, low framerate, jittery shadows';
+
     public function __construct(
         protected ?SystemSettingRepository $settingsRepo = null
     ) {
@@ -22,12 +42,30 @@ class GenerateVisionPromptAction
         $rawImage = $data['image'] ?? '';
         $rawEndImage = $data['end_image'] ?? '';
         $promptType = $data['prompt_type'] ?? 'image'; // 'image' | 'video'
-        $cameraMotion = $data['camera_motion'] ?? 'orbit'; // 'orbit' | 'push_in' | 'pan' | 'crane_up' | 'timelapse' | 'two_point'
-        $videoTarget = $data['video_target'] ?? 'runway'; // 'runway' | 'kling' | 'luma' | 'universal'
 
+        // Multi-motion support
+        $motions = (array) ($data['camera_motions'] ?? (!empty($data['camera_motion']) ? [$data['camera_motion']] : ['push_in']));
+        $duration = $data['duration'] ?? '5s';
+        $cameraPace = $data['camera_pace'] ?? 'slow';
+        $ambientMood = $data['ambient_mood'] ?? 'scene';
+        $lensStyle = $data['lens_style'] ?? 'anamorphic_35mm';
+        $strictGeometry = isset($data['strict_geometry']) ? (bool) $data['strict_geometry'] : true;
+
+        $videoTarget = $data['video_target'] ?? 'runway'; // 'runway' | 'kling' | 'luma' | 'universal'
         $hasEndFrame = !empty($rawEndImage);
 
-        $fallbackPrompt = $this->buildFallbackPrompt($project, $metadata, $promptType, $cameraMotion, $hasEndFrame);
+        $fallbackPrompt = $this->buildFallbackPrompt(
+            $project,
+            $metadata,
+            $promptType,
+            $motions,
+            $hasEndFrame,
+            $duration,
+            $cameraPace,
+            $ambientMood,
+            $lensStyle,
+            $strictGeometry
+        );
 
         // 1. Resolusi Konfigurasi: Database (Prioritas) -> Config .env (Fallback)
         $aiConfig = $this->resolveAiConfig();
@@ -35,25 +73,35 @@ class GenerateVisionPromptAction
         $apiKey = $aiConfig['api_key'] ?? '';
         $model = $aiConfig['model'] ?? '';
 
+        $baseResponse = [
+            'type'            => $promptType,
+            'camera_motion'   => $motions[0] ?? 'push_in',
+            'camera_motions'  => $motions,
+            'duration'        => $duration,
+            'camera_pace'     => $cameraPace,
+            'ambient_mood'    => $ambientMood,
+            'lens_style'      => $lensStyle,
+            'has_end_frame'   => $hasEndFrame,
+            'negative_prompt' => $promptType === 'video' ? self::DEFAULT_VIDEO_NEGATIVE_PROMPT : null,
+        ];
+
         if (empty($apiKey)) {
             $providerUpper = strtoupper($provider);
-            return [
+            return array_merge($baseResponse, [
                 'prompt'   => $fallbackPrompt,
                 'source'   => 'local-spatial-3d',
                 'provider' => $provider,
-                'type'     => $promptType,
                 'notice'   => "API Key untuk provider {$providerUpper} belum disetel di Database maupun .env. Menggunakan generator spasial 3D internal.",
-            ];
+            ]);
         }
 
         if (empty($rawImage)) {
-            return [
+            return array_merge($baseResponse, [
                 'prompt'   => $fallbackPrompt,
                 'source'   => 'local-spatial-3d',
                 'provider' => $provider,
-                'type'     => $promptType,
                 'notice'   => 'Gambar kanvas tidak tersedia. Menggunakan generator spasial 3D.',
-            ];
+            ]);
         }
 
         try {
@@ -78,8 +126,19 @@ class GenerateVisionPromptAction
             }
 
             // Siapkan Prompt Instruksi (System & User)
-            $systemInstruction = $this->buildSystemInstruction($promptType, $cameraMotion, $hasEndFrame, $videoTarget);
-            $userPrompt = $this->buildUserPrompt($promptType, $cameraMotion, $hasEndFrame, $videoTarget, $metadata);
+            $systemInstruction = $this->buildSystemInstruction($promptType, $motions, $hasEndFrame, $videoTarget);
+            $userPrompt = $this->buildUserPrompt(
+                $promptType,
+                $motions,
+                $hasEndFrame,
+                $videoTarget,
+                $metadata,
+                $duration,
+                $cameraPace,
+                $ambientMood,
+                $lensStyle,
+                $strictGeometry
+            );
 
             // Dispatch ke Provider aktif
             $rawResponseText = match ($provider) {
@@ -92,36 +151,31 @@ class GenerateVisionPromptAction
             if (!empty($rawResponseText)) {
                 $cleanedText = $this->sanitizePromptText($rawResponseText, $promptType);
 
-                return [
-                    'prompt'        => $cleanedText,
-                    'source'        => "{$provider}-vision",
-                    'provider'      => $provider,
-                    'model'         => $model,
-                    'type'          => $promptType,
-                    'camera_motion' => $cameraMotion,
-                    'has_end_frame' => $hasEndFrame,
-                ];
+                return array_merge($baseResponse, [
+                    'prompt'   => $cleanedText,
+                    'source'   => "{$provider}-vision",
+                    'provider' => $provider,
+                    'model'    => $model,
+                ]);
             }
 
-            return [
-                'prompt'        => $fallbackPrompt,
-                'source'        => 'local-spatial-3d',
-                'provider'      => $provider,
-                'type'          => $promptType,
-                'notice'        => "Layanan Vision AI ({$provider}) sedang sibuk. Menggunakan generator spasial 3D internal.",
-            ];
+            return array_merge($baseResponse, [
+                'prompt'   => $fallbackPrompt,
+                'source'   => 'local-spatial-3d',
+                'provider' => $provider,
+                'notice'   => "Layanan Vision AI ({$provider}) sedang sibuk. Menggunakan generator spasial 3D internal.",
+            ]);
         } catch (\Throwable $e) {
             Log::error("Vision AI exception [{$provider}]", [
                 'error' => $e->getMessage(),
             ]);
 
-            return [
-                'prompt'        => $fallbackPrompt,
-                'source'        => 'local-spatial-3d',
-                'provider'      => $provider,
-                'type'          => $promptType,
-                'notice'        => "Gagal menghubungi Vision AI ({$provider}). Menggunakan generator spasial 3D internal.",
-            ];
+            return array_merge($baseResponse, [
+                'prompt'   => $fallbackPrompt,
+                'source'   => 'local-spatial-3d',
+                'provider' => $provider,
+                'notice'   => "Gagal menghubungi Vision AI ({$provider}). Menggunakan generator spasial 3D internal.",
+            ]);
         }
     }
 
@@ -140,7 +194,27 @@ class GenerateVisionPromptAction
         ];
     }
 
-    protected function buildSystemInstruction(string $promptType, ?string $motion, bool $hasEndFrame, ?string $videoTarget): string
+    protected function formatCameraMotions(array $motions): string
+    {
+        $phrases = [];
+        foreach ($motions as $m) {
+            if (isset(self::MOTION_DESCRIPTIONS[$m])) {
+                $phrases[] = self::MOTION_DESCRIPTIONS[$m];
+            }
+        }
+
+        if (empty($phrases)) {
+            return 'Smooth continuous forward tracking shot through the architectural space.';
+        }
+
+        if (count($phrases) === 1) {
+            return ucfirst($phrases[0]) . '.';
+        }
+
+        return 'Simultaneous compound camera movement combining: ' . implode(', and ', $phrases) . '.';
+    }
+
+    protected function buildSystemInstruction(string $promptType, array|string $motions, bool $hasEndFrame, ?string $videoTarget): string
     {
         if ($promptType === 'video') {
             if ($hasEndFrame) {
@@ -168,7 +242,7 @@ Analyze the attached 3D .glb architectural viewport screenshot and generate ONE 
 MANDATORY RULES:
 1. Start the prompt with this exact opening style:
    "Cinematic architectural video rendering of the attached 3D reference. Maintain 100% of the exact geometry, spatial proportions, and surface colors with fluid cinematic camera motion."
-2. Clearly describe the requested camera motion trajectory based on the selected camera motion style.
+2. Clearly describe the requested compound camera motion trajectory based on the selected camera motion styles.
 3. EXACT COLOR & MATERIAL FIDELITY: Look closely at visible surfaces in the 3D screenshot. Preserve every exact color shade and texture without altering materials.
 4. Describe subtle realistic environmental dynamics: gentle atmospheric breeze, dynamic natural lighting with crisp architectural shadows, warm interior glow.
 5. Conclude with cinematic technical specifications: "Shot on 35mm anamorphic lens, 24fps, photorealistic architectural film reel, hyper-realistic, fluid motion without warping."
@@ -190,22 +264,50 @@ CRITICAL RULES FOR STRUCTURE & COLOR ACCURACY:
 TEXT;
     }
 
-    protected function buildUserPrompt(string $promptType, ?string $motion, bool $hasEndFrame, ?string $videoTarget, array $metadata): string
-    {
+    protected function buildUserPrompt(
+        string $promptType,
+        array|string $motions,
+        bool $hasEndFrame,
+        ?string $videoTarget,
+        array $metadata,
+        string $duration = '5s',
+        string $cameraPace = 'slow',
+        string $ambientMood = 'scene',
+        string $lensStyle = 'anamorphic_35mm',
+        bool $strictGeometry = true
+    ): string {
         $cutKeywords = $metadata['cut_keywords'] ?? ($metadata['clipping_desc'] ?? (!empty($metadata['clipping_enabled']) ? 'Active Section Cut' : 'Solid intact architectural massing, unclipped complete geometry'));
         $angleKeywords = $metadata['angle_keywords'] ?? trim(($metadata['camera_perspective'] ?? 'straight-on rectilinear architectural framing') . ', ' . ($metadata['shot_type'] ?? '35mm lens'));
         $lightingKeywords = $metadata['lighting_keywords'] ?? ($metadata['lighting_desc'] ?? 'crisp bright mid-day sun, sharp geometric architectural shadows, neutral white balance, accurate true-to-life surface colors without heavy color tinting');
 
         if ($promptType === 'video') {
-            $motionDescription = match ($motion) {
-                'orbit'     => 'Continuous 360-degree circular orbit tracking shot around the building, revealing all architectural facades and spatial context.',
-                'push_in'   => 'Smooth continuous forward dolly push-in tracking shot approaching and entering the architectural space.',
-                'pan'       => 'Slow horizontal lateral pan revealing architectural rhythm, facade details, and spatial depth.',
-                'crane_up'  => 'Vertical crane pedestal-up ascent shot rising from ground level to reveal the complete architectural massing, rooflines, and landscape.',
-                'timelapse' => 'Static locked-off camera framing showing daylight timelapse with rapidly shifting crisp geometric sun shadows moving across facades as interior lights softly turn on.',
-                'two_point' => 'Seamless camera interpolation traveling smoothly from the starting perspective in Frame 1 to the destination perspective in Frame 2.',
-                default     => 'Smooth continuous forward tracking shot through the architectural space.',
+            $motionsArray = is_array($motions) ? $motions : [$motions];
+            $motionDescription = $this->formatCameraMotions($motionsArray);
+
+            $paceDescription = match ($cameraPace) {
+                'slow'    => 'Slow and majestic camera velocity (0.5x speed) designed to preserve razor-sharp architectural geometry without motion blur',
+                'dynamic' => 'Dynamic fluid cinematic velocity',
+                default   => 'Steady natural cinematic walking velocity (1.0x speed)',
             };
+
+            $moodDescription = match ($ambientMood) {
+                'golden_hour'   => 'Warm golden hour sunset, elongated geometric architectural shadows, warm amber ray lighting',
+                'overcast'      => 'Soft overcast diffuse daylight, minimalist even illumination',
+                'rainy'         => 'Cinematic dusk rain with soft droplets, reflective wet asphalt and exterior glass reflections, moody luxury ambiance',
+                'night_luxury'  => 'Dramatic evening twilight, warm interior spotlights and linear LED ribbons glowing through glass',
+                'misty_morning' => 'Atmospheric dawn mist with volumetric Tyndall sunbeams filtering through openings',
+                default         => $lightingKeywords,
+            };
+
+            $lensDescription = match ($lensStyle) {
+                'wide_16mm'  => 'Shot on 16mm ultra-wide rectilinear architectural lens, zero optical distortion, straight vertical lines',
+                'macro_50mm' => 'Shot on 50mm f/2.0 portrait lens, gentle background bokeh emphasizing tactile textures',
+                default      => 'Shot on Arri Alexa 65, 35mm anamorphic prime lens, subtle cinematic depth of field, 24fps film reel',
+            };
+
+            $geometryConstraint = $strictGeometry
+                ? 'Strict structural preservation: 100% rigid architectural geometry, straight vertical perspective lines, zero warping or morphing of walls, windows, and structural columns.'
+                : 'Fluid motion without morphing.';
 
             if ($hasEndFrame) {
                 return <<<PROMPT
@@ -213,9 +315,12 @@ SCENE & VIDEO TRAJECTORY:
 - Image 1: START FRAME (Initial camera position)
 - Image 2: END FRAME (Final camera position)
 - Camera Motion: {$motionDescription}
+- Duration & Velocity: {$duration} continuous cinematic shot with {$paceDescription}
+- Lighting & Atmosphere: {$moodDescription}
+- Lens & Cinematography: {$lensDescription}
 - Section State: {$cutKeywords}
-- Lighting State: {$lightingKeywords}
 - Target Video AI: {$videoTarget}
+- Quality Guardrail: {$geometryConstraint}
 
 TASK:
 Write the complete English video prompt describing the smooth cinematic camera flight from Frame 1 to Frame 2, strictly preserving all visible architectural geometry, colors, and textures, with subtle natural ambient movement. Output ONLY the prompt text.
@@ -224,11 +329,14 @@ PROMPT;
 
             return <<<PROMPT
 SCENE & VIDEO PARAMETERS:
-- Camera Motion Style: {$motionDescription}
+- Camera Motion: {$motionDescription}
+- Duration & Velocity: {$duration} continuous cinematic shot with {$paceDescription}
 - Initial Framing: {$angleKeywords}
+- Lighting & Atmosphere: {$moodDescription}
+- Lens & Cinematography: {$lensDescription}
 - Section State: {$cutKeywords}
-- Lighting State: {$lightingKeywords}
 - Target Video AI: {$videoTarget}
+- Quality Guardrail: {$geometryConstraint}
 
 TASK:
 Write the complete English video prompt describing the camera trajectory and spatial atmosphere. Maintain exact colors and materials from the attached 3D reference. Output ONLY the prompt text.
@@ -501,8 +609,13 @@ PROMPT;
         Project $project,
         array $metadata,
         string $promptType = 'image',
-        ?string $motion = 'orbit',
-        bool $hasEndFrame = false
+        array|string $motions = ['push_in'],
+        bool $hasEndFrame = false,
+        string $duration = '5s',
+        string $cameraPace = 'slow',
+        string $ambientMood = 'scene',
+        string $lensStyle = 'anamorphic_35mm',
+        bool $strictGeometry = true
     ): string {
         $subject = $metadata['detected_object'] ?? ($metadata['room_name'] ?? 'Modern Architectural Space');
         $materials = (array) ($metadata['detected_materials'] ?? []);
@@ -516,17 +629,35 @@ PROMPT;
         $projName = $project->title ? 'for ' . $project->title : 'for this architectural project';
 
         if ($promptType === 'video') {
-            $motionPhrase = match ($motion) {
-                'orbit'     => 'continuous 360-degree circular orbit tracking shot',
-                'push_in'   => 'slow continuous forward dolly push-in walkthrough tracking shot',
-                'pan'       => 'smooth lateral horizontal pan shot revealing spatial depth',
-                'crane_up'  => 'vertical cinematic crane pedestal-up ascent revealing rooflines',
-                'timelapse' => 'static camera framing with daylight timelapse and dynamic shifting shadows',
-                'two_point' => 'continuous seamless camera tracking transition from start frame to end frame',
-                default     => 'smooth cinematic camera tracking shot',
+            $motionsArray = is_array($motions) ? $motions : [$motions];
+            $motionPhrase = $this->formatCameraMotions($motionsArray);
+
+            $moodPhrase = match ($ambientMood) {
+                'golden_hour'   => 'Warm golden hour sunset, elongated geometric architectural shadows, warm amber ray lighting',
+                'overcast'      => 'Soft overcast diffuse daylight, minimalist even illumination',
+                'rainy'         => 'Cinematic dusk rain with soft droplets, reflective wet surfaces and glass reflections',
+                'night_luxury'  => 'Dramatic evening twilight, warm interior spotlights and linear LED ribbons glowing through glass',
+                'misty_morning' => 'Atmospheric dawn mist with volumetric Tyndall sunbeams filtering through openings',
+                default         => $lightingKeywords,
             };
 
-            return "Cinematic smooth {$motionPhrase} through {$subject} {$projName}. {$cutKeywords}. Initial perspective: {$angleKeywords}. Lighting: {$lightingKeywords}. {$matPhrase} Subtle natural breeze rustles greenery, dynamic daylight with soft shifting architectural shadows. Shot on Arri Alexa Mini, 35mm anamorphic lens, 24fps, photorealistic architectural film reel, hyper-realistic, fluid motion without warping.";
+            $pacePhrase = match ($cameraPace) {
+                'slow'    => 'Slow and majestic camera velocity (0.5x speed) preserving razor-sharp architectural geometry without motion blur',
+                'dynamic' => 'Dynamic fluid cinematic velocity',
+                default   => 'Steady natural cinematic walking velocity',
+            };
+
+            $lensPhrase = match ($lensStyle) {
+                'wide_16mm'  => 'Shot on 16mm ultra-wide rectilinear architectural lens, zero optical distortion, straight vertical lines',
+                'macro_50mm' => 'Shot on 50mm f/2.0 portrait lens, gentle background bokeh emphasizing tactile textures',
+                default      => 'Shot on Arri Alexa Mini, 35mm anamorphic lens, 24fps film reel',
+            };
+
+            $geometryRule = $strictGeometry
+                ? '100% rigid architectural geometry, straight vertical perspective lines, fluid motion without warping or morphing.'
+                : 'Fluid cinematic motion without morphing.';
+
+            return "Cinematic 4K architectural video. {$motionPhrase} through {$subject} {$projName}. {$cutKeywords}. Duration: {$duration} continuous uncut take. Pacing: {$pacePhrase}. Lighting & Atmosphere: {$moodPhrase}. {$matPhrase} {$lensPhrase}, {$geometryRule}";
         }
 
         $mandatoryPrefix = 'Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Maintain 100% of the exact geometry, camera perspective, section-cut lines, AND THE EXACT COLOR PALETTE of every surface as shown in the reference image.';

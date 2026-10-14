@@ -247,4 +247,56 @@ test('generate prompt produces cinematic video prompt with two-point frames', fu
     expect($response->json('prompt'))->toContain('Cinematic continuous forward tracking shot');
 });
 
+test('generate prompt handles compound multiple camera motions with duration and styling', function () {
+    config([
+        'services.vision_ai.provider' => 'gemini',
+        'services.vision_ai.providers.gemini.api_key' => 'fake-gemini-key',
+    ]);
+    \App\Domains\SystemConfig\Models\SystemSetting::where('key', 'vision_ai_provider')->delete();
+
+    \Illuminate\Support\Facades\Http::fake([
+        'generativelanguage.googleapis.com/*' => \Illuminate\Support\Facades\Http::response([
+            'candidates' => [
+                [
+                    'content' => [
+                        'parts' => [
+                            ['text' => 'Cinematic 4K architectural video. Simultaneous compound camera movement combining smooth forward dolly push-in and vertical crane pedestal-up ascent. Duration: 5s continuous take.'],
+                        ],
+                    ],
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $user = User::factory()->create();
+    $project = Project::factory()->create(['user_id' => $user->id, 'title' => 'Residensi Minimalis']);
+
+    $dummyImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+    $response = $this->actingAs($user)->postJson("/projects/{$project->id}/captures/generate-prompt", [
+        'prompt_type'     => 'video',
+        'camera_motions'  => ['push_in', 'crane_up'],
+        'duration'        => '10s',
+        'camera_pace'     => 'slow',
+        'ambient_mood'    => 'golden_hour',
+        'lens_style'      => 'wide_16mm',
+        'strict_geometry' => true,
+        'image'           => $dummyImage,
+        'scene_metadata'  => [
+            'room_name' => 'Fasad Depan',
+        ],
+    ]);
+
+    $response->assertOk();
+    expect($response->json('type'))->toBe('video');
+    expect($response->json('camera_motions'))->toBe(['push_in', 'crane_up']);
+    expect($response->json('duration'))->toBe('10s');
+    expect($response->json('camera_pace'))->toBe('slow');
+    expect($response->json('ambient_mood'))->toBe('golden_hour');
+    expect($response->json('lens_style'))->toBe('wide_16mm');
+    expect($response->json('negative_prompt'))->toContain('morphing walls');
+    expect($response->json('prompt'))->toContain('Simultaneous compound camera movement');
+});
+
+
 

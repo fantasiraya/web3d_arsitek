@@ -131,12 +131,19 @@ class ProjectCaptureController extends Controller
         $project = Project::findOrFail($projectId);
 
         $validated = $request->validate([
-            'image'          => ['nullable', 'string'],
-            'end_image'      => ['nullable', 'string'],
-            'prompt_type'    => ['nullable', 'string', 'in:image,video'],
-            'camera_motion'  => ['nullable', 'string'],
-            'video_target'   => ['nullable', 'string'],
-            'scene_metadata' => ['nullable', 'array'],
+            'image'            => ['nullable', 'string'],
+            'end_image'        => ['nullable', 'string'],
+            'prompt_type'      => ['nullable', 'string', 'in:image,video'],
+            'camera_motion'    => ['nullable', 'string'],
+            'camera_motions'   => ['nullable', 'array'],
+            'camera_motions.*' => ['string'],
+            'video_target'     => ['nullable', 'string'],
+            'duration'         => ['nullable', 'string'],
+            'camera_pace'      => ['nullable', 'string'],
+            'ambient_mood'     => ['nullable', 'string'],
+            'lens_style'       => ['nullable', 'string'],
+            'strict_geometry'  => ['nullable', 'boolean'],
+            'scene_metadata'   => ['nullable', 'array'],
         ]);
 
         $result = $action->execute($request->user(), $project, $validated);
