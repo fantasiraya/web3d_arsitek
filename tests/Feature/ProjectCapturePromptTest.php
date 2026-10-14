@@ -202,3 +202,49 @@ test('generate prompt uses database setting to override env provider', function 
     expect($response->json('prompt'))->toContain('OpenAI GPT-4o');
 });
 
+test('generate prompt produces cinematic video prompt with two-point frames', function () {
+    config([
+        'services.vision_ai.provider' => 'gemini',
+        'services.vision_ai.providers.gemini.api_key' => 'fake-gemini-key',
+    ]);
+    \App\Domains\SystemConfig\Models\SystemSetting::where('key', 'vision_ai_provider')->delete();
+
+    \Illuminate\Support\Facades\Http::fake([
+        'generativelanguage.googleapis.com/*' => \Illuminate\Support\Facades\Http::response([
+            'candidates' => [
+                [
+                    'content' => [
+                        'parts' => [
+                            ['text' => 'Cinematic continuous forward tracking shot seamlessly traveling from the exterior terrace in Frame 1 into the spacious interior living room in Frame 2. Maintain exact architectural proportions and materials.'],
+                        ],
+                    ],
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $user = User::factory()->create();
+    $project = Project::factory()->create(['user_id' => $user->id, 'title' => 'Villa Modern']);
+
+    $dummyImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+    $response = $this->actingAs($user)->postJson("/projects/{$project->id}/captures/generate-prompt", [
+        'prompt_type'    => 'video',
+        'camera_motion'  => 'two_point',
+        'video_target'   => 'runway',
+        'image'          => $dummyImage,
+        'end_image'      => $dummyImage,
+        'scene_metadata' => [
+            'room_name' => 'Teras ke Ruang Tamu',
+        ],
+    ]);
+
+    $response->assertOk();
+    expect($response->json('source'))->toBe('gemini-vision');
+    expect($response->json('type'))->toBe('video');
+    expect($response->json('camera_motion'))->toBe('two_point');
+    expect($response->json('has_end_frame'))->toBeTrue();
+    expect($response->json('prompt'))->toContain('Cinematic continuous forward tracking shot');
+});
+
+

@@ -132,6 +132,10 @@ class ProjectCaptureController extends Controller
 
         $validated = $request->validate([
             'image'          => ['nullable', 'string'],
+            'end_image'      => ['nullable', 'string'],
+            'prompt_type'    => ['nullable', 'string', 'in:image,video'],
+            'camera_motion'  => ['nullable', 'string'],
+            'video_target'   => ['nullable', 'string'],
             'scene_metadata' => ['nullable', 'array'],
         ]);
 
