@@ -186,6 +186,39 @@
                 @pointerup="onPointerUp"
             ></div>
 
+            <!-- ── Camera Shutter Flash Effect & Loading Indicator ── -->
+            <Transition
+                enter-active-class="transition-opacity duration-75 ease-out"
+                enter-from-class="opacity-0"
+                enter-to-class="opacity-100"
+                leave-active-class="transition-opacity duration-300 ease-in"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+            >
+                <div
+                    v-if="isShutterFlashing"
+                    class="pointer-events-none absolute inset-0 z-40 bg-white/40 backdrop-blur-[1px]"
+                ></div>
+            </Transition>
+
+            <!-- Floating Snapshot Capture Toast -->
+            <Transition
+                enter-active-class="transition-all duration-200 ease-out"
+                enter-from-class="opacity-0 -translate-y-2 scale-95"
+                enter-to-class="opacity-100 translate-y-0 scale-100"
+                leave-active-class="transition-all duration-150 ease-in"
+                leave-from-class="opacity-100 translate-y-0 scale-100"
+                leave-to-class="opacity-0 -translate-y-2 scale-95"
+            >
+                <div
+                    v-if="isCapturingSnapshot"
+                    class="pointer-events-none absolute top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2 rounded-full bg-black/85 border border-rose-500/40 text-white shadow-2xl backdrop-blur-md"
+                >
+                    <span class="h-3.5 w-3.5 rounded-full border-2 border-rose-400 border-t-transparent animate-spin"></span>
+                    <span class="text-xs font-medium text-rose-200">Mengambil snapshot 3D resolusi tinggi...</span>
+                </div>
+            </Transition>
+
             <!-- Loading Overlay -->
             <div
                 v-if="isLoading"
@@ -318,12 +351,17 @@
                 <!-- Tombol Ambil Gambar -->
                 <button
                     type="button"
+                    :disabled="isCapturingSnapshot"
                     @click="openCaptureModal"
-                    class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 transition-all shadow-sm"
+                    class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all shadow-sm"
+                    :class="isCapturingSnapshot
+                        ? 'bg-rose-600/40 text-rose-200 border border-rose-400/60 cursor-wait animate-pulse'
+                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'"
                     title="Ambil Gambar dari Sudut Kamera Saat Ini"
                 >
-                    <Camera class="h-3.5 w-3.5 text-rose-400" />
-                    <span>Ambil Gambar</span>
+                    <Loader2 v-if="isCapturingSnapshot" class="h-3.5 w-3.5 text-rose-300 animate-spin" />
+                    <Camera v-else class="h-3.5 w-3.5 text-rose-400" />
+                    <span>{{ isCapturingSnapshot ? 'Mengambil...' : 'Ambil Gambar' }}</span>
                 </button>
             </div>
 
@@ -1112,11 +1150,13 @@
                     <div class="flex items-center gap-2">
                         <button
                             type="button"
+                            :disabled="isCapturingFrameB"
                             @click="finishNavigatingForFrameB"
-                            class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-lg transition-all"
+                            class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-lg transition-all disabled:opacity-50"
                         >
-                            <Check class="h-3.5 w-3.5" />
-                            <span>Kunci Frame 2 (Akhir)</span>
+                            <Loader2 v-if="isCapturingFrameB" class="h-3.5 w-3.5 animate-spin" />
+                            <Check v-else class="h-3.5 w-3.5" />
+                            <span>{{ isCapturingFrameB ? 'Mengunci...' : 'Kunci Frame 2 (Akhir)' }}</span>
                         </button>
 
                         <button
@@ -1277,10 +1317,12 @@
                                             </button>
                                             <button
                                                 type="button"
+                                                :disabled="isCapturingFrameB"
                                                 @click="setFrameBFromCurrentView"
-                                                class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-neutral-200 text-xs font-medium border border-white/15 transition"
+                                                class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-neutral-200 text-xs font-medium border border-white/15 transition flex items-center gap-1.5 disabled:opacity-50"
                                             >
-                                                Kunci Sudut Saat Ini
+                                                <Loader2 v-if="isCapturingFrameB" class="h-3 w-3 animate-spin text-purple-400" />
+                                                <span>{{ isCapturingFrameB ? 'Mengunci...' : 'Kunci Sudut Saat Ini' }}</span>
                                             </button>
                                         </div>
                                     </div>
@@ -2647,6 +2689,7 @@ import {
     Image,
     Info,
     Layers,
+    Loader2,
     Lock,
     MapPin,
     Maximize2,
@@ -2953,6 +2996,9 @@ interface ProjectCaptureItem {
 const captures = ref<ProjectCaptureItem[]>([]);
 const quotaInfo = ref<{ max_captures: number | null; current_count: number; can_capture: boolean } | null>(null);
 const isCaptureModalOpen = ref(false);
+const isCapturingSnapshot = ref(false);
+const isShutterFlashing = ref(false);
+const isCapturingFrameB = ref(false);
 const isGalleryOpen = ref(false);
 const activeLightboxCapture = ref<ProjectCaptureItem | null>(null);
 
@@ -3869,13 +3915,27 @@ async function triggerVisionAiPromptGeneration() {
     }
 }
 
-function setFrameBFromCurrentView() {
-    captureFrameBDataUrl.value = captureCanvasSnapshot(captureResolution.value);
-    const meta = extractSceneMetadata();
-    captureFrameBRoomName.value = meta.detected_object_id || 'Posisi Akhir';
-    captureFrameBHour.value = formattedTime.value;
-    captureActiveFrameTab.value = 'frame_b';
-    syncPromptWithCurrentState();
+async function setFrameBFromCurrentView() {
+    if (isCapturingFrameB.value) return;
+    isCapturingFrameB.value = true;
+    isShutterFlashing.value = true;
+    setTimeout(() => {
+        isShutterFlashing.value = false;
+    }, 280);
+
+    await nextTick();
+    await new Promise(resolve => setTimeout(resolve, 60));
+
+    try {
+        captureFrameBDataUrl.value = captureCanvasSnapshot(captureResolution.value);
+        const meta = extractSceneMetadata();
+        captureFrameBRoomName.value = meta.detected_object_id || 'Posisi Akhir';
+        captureFrameBHour.value = formattedTime.value;
+        captureActiveFrameTab.value = 'frame_b';
+        syncPromptWithCurrentState();
+    } finally {
+        isCapturingFrameB.value = false;
+    }
 }
 
 function startNavigatingForFrameB() {
@@ -3883,15 +3943,29 @@ function startNavigatingForFrameB() {
     isCaptureModalOpen.value = false;
 }
 
-function finishNavigatingForFrameB() {
-    captureFrameBDataUrl.value = captureCanvasSnapshot(captureResolution.value);
-    const meta = extractSceneMetadata();
-    captureFrameBRoomName.value = meta.detected_object_id || 'Posisi Akhir';
-    captureFrameBHour.value = formattedTime.value;
-    isSettingFrameB.value = false;
-    isCaptureModalOpen.value = true;
-    captureActiveFrameTab.value = 'frame_b';
-    syncPromptWithCurrentState();
+async function finishNavigatingForFrameB() {
+    if (isCapturingFrameB.value) return;
+    isCapturingFrameB.value = true;
+    isShutterFlashing.value = true;
+    setTimeout(() => {
+        isShutterFlashing.value = false;
+    }, 280);
+
+    await nextTick();
+    await new Promise(resolve => setTimeout(resolve, 60));
+
+    try {
+        captureFrameBDataUrl.value = captureCanvasSnapshot(captureResolution.value);
+        const meta = extractSceneMetadata();
+        captureFrameBRoomName.value = meta.detected_object_id || 'Posisi Akhir';
+        captureFrameBHour.value = formattedTime.value;
+        isSettingFrameB.value = false;
+        isCaptureModalOpen.value = true;
+        captureActiveFrameTab.value = 'frame_b';
+        syncPromptWithCurrentState();
+    } finally {
+        isCapturingFrameB.value = false;
+    }
 }
 
 function cancelNavigatingForFrameB() {
@@ -3926,26 +4000,45 @@ function refreshCaptureSnapshot() {
     capturePreviewDataUrl.value = captureCanvasSnapshot(captureResolution.value);
 }
 
-function openCaptureModal() {
-    selectedPresetForCapture.value = 'current';
-    captureHour.value = formattedTime.value;
-    captureTitle.value = '';
-    captureError.value = '';
-    captureVisibleToClients.value = false;
-    renderEngine.value = 'standard';
-    cachedAiPrompts.value = {};
-    hasVisionAiGenerated.value = false;
+async function openCaptureModal() {
+    if (isCapturingSnapshot.value) return;
+    isCapturingSnapshot.value = true;
+    isShutterFlashing.value = true;
 
-    // 1. Bekukan snapshot preview canvas seketika
-    refreshCaptureSnapshot();
+    // Durasi kilatan shutter kamera
+    setTimeout(() => {
+        isShutterFlashing.value = false;
+    }, 280);
 
-    // 2. Ekstrak status fitur aplikasi (kamera, potongan, cahaya, objek)
-    const meta = extractSceneMetadata();
-    captureRoomName.value = meta.detected_object_id || 'Sudut Bebas';
+    // Yield control sejenak agar browser merender spinner loading pada tombol & efek shutter
+    await nextTick();
+    await new Promise(resolve => setTimeout(resolve, 60));
 
-    // 3. Set prompt lokal instan (0 token) agar user leluasa memilih foto/video
-    syncPromptWithCurrentState();
-    isCaptureModalOpen.value = true;
+    try {
+        selectedPresetForCapture.value = 'current';
+        captureHour.value = formattedTime.value;
+        captureTitle.value = '';
+        captureError.value = '';
+        captureVisibleToClients.value = false;
+        renderEngine.value = 'standard';
+        cachedAiPrompts.value = {};
+        hasVisionAiGenerated.value = false;
+
+        // 1. Bekukan snapshot preview canvas seketika
+        refreshCaptureSnapshot();
+
+        // 2. Ekstrak status fitur aplikasi (kamera, potongan, cahaya, objek)
+        const meta = extractSceneMetadata();
+        captureRoomName.value = meta.detected_object_id || 'Sudut Bebas';
+
+        // 3. Set prompt lokal instan (0 token) agar user leluasa memilih foto/video
+        syncPromptWithCurrentState();
+        isCaptureModalOpen.value = true;
+    } catch (err) {
+        console.error('[Capture] Error taking snapshot:', err);
+    } finally {
+        isCapturingSnapshot.value = false;
+    }
 }
 
 function onCapturePresetChange() {
