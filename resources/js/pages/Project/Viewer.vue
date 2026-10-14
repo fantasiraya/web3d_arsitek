@@ -1263,6 +1263,26 @@
                         </button>
                     </div>
 
+                    <!-- Quota Bar (Architect only) -->
+                    <div v-if="isOwner && quotaInfo" class="px-4 py-2.5 bg-white/[0.04] border-b border-white/10 flex items-center justify-between text-xs shrink-0">
+                        <div class="flex items-center gap-1.5 text-neutral-300">
+                            <Sparkles class="h-3.5 w-3.5 text-amber-400" />
+                            <span>Kuota Gambar:</span>
+                            <span class="font-bold text-white">
+                                {{ quotaInfo.current_count }} / {{ quotaInfo.max_captures ?? '∞' }}
+                            </span>
+                        </div>
+                        <span
+                            v-if="quotaInfo.max_captures !== null"
+                            class="text-[10px] font-mono px-2 py-0.5 rounded-full"
+                            :class="quotaInfo.current_count >= quotaInfo.max_captures
+                                ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30'
+                                : 'bg-white/10 text-neutral-300'"
+                        >
+                            {{ quotaInfo.current_count >= quotaInfo.max_captures ? 'Kuota Penuh' : `Sisa ${Math.max(0, quotaInfo.max_captures - quotaInfo.current_count)}` }}
+                        </span>
+                    </div>
+
                     <!-- Filter Bar -->
                     <div class="p-3 border-b border-white/5 grid grid-cols-2 gap-2 shrink-0">
                         <select
