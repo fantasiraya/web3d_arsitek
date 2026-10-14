@@ -58,6 +58,7 @@ class SaveCaptureAction
             'width'                 => (int) ($data['width'] ?? 1920),
             'height'                => (int) ($data['height'] ?? 1080),
             'is_visible_to_clients' => (bool) ($data['is_visible_to_clients'] ?? false),
+            'prompt'                => $data['prompt'] ?? null,
         ]);
     }
 }

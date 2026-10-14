@@ -21,6 +21,7 @@ class StoreCaptureRequest extends FormRequest
             'width'                 => ['nullable', 'integer', 'min:100', 'max:7680'],
             'height'                => ['nullable', 'integer', 'min:100', 'max:4320'],
             'is_visible_to_clients' => ['nullable', 'boolean'],
+            'prompt'                => ['nullable', 'string', 'max:5000'],
         ];
     }
 

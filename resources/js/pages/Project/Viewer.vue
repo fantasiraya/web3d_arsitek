@@ -1344,6 +1344,50 @@
                             </button>
                         </div>
 
+                        <!-- Prompt AI Generator & Editor -->
+                        <div class="p-3.5 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <Sparkles class="h-4 w-4 text-indigo-400" />
+                                    <span class="text-xs font-semibold text-white">Prompt AI Arsitektur</span>
+                                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Auto-Generated</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        @click="capturePrompt = generatePromptForCurrentView()"
+                                        class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+                                        title="Buat ulang prompt sesuai sudut & pencahayaan saat ini"
+                                    >
+                                        <RefreshCw class="h-3 w-3" />
+                                        <span>Reset</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="copyPromptText(capturePrompt)"
+                                        class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shadow-sm"
+                                        :class="copiedPromptModal
+                                            ? 'bg-emerald-500 text-black'
+                                            : 'bg-indigo-600 hover:bg-indigo-500 text-white'"
+                                    >
+                                        <Check v-if="copiedPromptModal" class="h-3 w-3" />
+                                        <Copy v-else class="h-3 w-3" />
+                                        <span>{{ copiedPromptModal ? 'Tersalin!' : 'Salin Prompt' }}</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <textarea
+                                v-model="capturePrompt"
+                                rows="3"
+                                placeholder="Prompt deskripsi arsitektural untuk Midjourney, DALL-E, atau ChatGPT..."
+                                class="w-full rounded-xl border border-white/10 bg-black/40 p-2.5 text-xs text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400 leading-relaxed font-sans resize-y"
+                            ></textarea>
+                            <p class="text-[10px] text-neutral-400 flex items-center justify-between">
+                                <span>💡 Dapat diedit bebas sebelum disimpan. Siap disalin ke Midjourney / ChatGPT / SD.</span>
+                                <span class="font-mono text-neutral-500">{{ capturePrompt.length }} karakter</span>
+                            </p>
+                        </div>
+
                         <!-- Visibility Switch (Architect Only) -->
                         <div v-if="isOwner" class="flex items-center justify-between p-3 rounded-2xl border border-white/10 bg-white/5">
                             <div>
@@ -1520,6 +1564,66 @@
                                 </div>
                             </div>
 
+                            <!-- Prompt AI Section in Gallery Card -->
+                            <div class="px-3 py-2 border-t border-white/5 space-y-1.5 bg-black/20">
+                                <div class="flex items-center justify-between text-[11px]">
+                                    <div class="flex items-center gap-1.5 text-neutral-400">
+                                        <Sparkles class="h-3 w-3 text-indigo-400" />
+                                        <span class="font-medium text-neutral-300">Prompt AI:</span>
+                                        <span
+                                            v-if="promptSaveStatus[capture.id] === 'saving'"
+                                            class="text-[10px] text-amber-400 animate-pulse font-mono"
+                                        >
+                                            Menyimpan...
+                                        </span>
+                                        <span
+                                            v-else-if="promptSaveStatus[capture.id] === 'saved'"
+                                            class="text-[10px] text-emerald-400 font-mono"
+                                        >
+                                            Tersimpan ✓
+                                        </span>
+                                        <span
+                                            v-else-if="promptSaveStatus[capture.id] === 'error'"
+                                            class="text-[10px] text-rose-400 font-mono"
+                                        >
+                                            Gagal simpan
+                                        </span>
+                                    </div>
+
+                                    <button
+                                        v-if="capture.prompt"
+                                        type="button"
+                                        @click.stop="copyCapturePrompt(capture)"
+                                        class="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-all"
+                                        :class="copiedCaptureId === capture.id
+                                            ? 'bg-emerald-500 text-black font-semibold'
+                                            : 'bg-white/10 hover:bg-white/20 text-neutral-300 hover:text-white'"
+                                        title="Salin Prompt ke Clipboard"
+                                    >
+                                        <Check v-if="copiedCaptureId === capture.id" class="h-2.5 w-2.5" />
+                                        <Copy v-else class="h-2.5 w-2.5" />
+                                        <span>{{ copiedCaptureId === capture.id ? 'Tersalin' : 'Salin' }}</span>
+                                    </button>
+                                </div>
+
+                                <!-- Editable textarea for Owner with Auto-Save on Blur -->
+                                <textarea
+                                    v-if="isOwner"
+                                    v-model="capture.prompt"
+                                    @blur="autoSaveCapturePrompt(capture)"
+                                    rows="2"
+                                    placeholder="Tulis prompt AI di sini (otomatis tersimpan saat klik di luar)..."
+                                    class="w-full rounded-xl border border-white/10 bg-black/40 p-2 text-[11px] text-neutral-300 placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400 leading-relaxed font-sans resize-y"
+                                ></textarea>
+                                <!-- Read-only text for Client -->
+                                <p
+                                    v-else-if="capture.prompt"
+                                    class="text-[11px] text-neutral-400 line-clamp-3 bg-black/30 p-2 rounded-xl border border-white/5 leading-relaxed"
+                                >
+                                    {{ capture.prompt }}
+                                </p>
+                            </div>
+
                             <!-- Footer actions -->
                             <div class="p-3 flex items-center justify-between text-xs">
                                 <!-- Visibility toggle (Architect only) -->
@@ -1580,44 +1684,216 @@
             >
                 <div
                     v-if="activeLightboxCapture"
-                    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl"
+                    class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-xl overflow-y-auto"
                     @click.self="activeLightboxCapture = null"
                 >
-                    <div class="relative max-w-5xl w-full flex flex-col items-center gap-3">
-                        <button
-                            @click="activeLightboxCapture = null"
-                            class="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
-                        >
-                            <X class="h-6 w-6" />
-                        </button>
+                    <!-- Modal Container (2-Column on Desktop / Stacked on Mobile) -->
+                    <div class="relative w-full max-w-6xl max-h-[92vh] flex flex-col lg:flex-row bg-neutral-950/95 border border-white/15 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-2xl my-auto">
+                        
+                        <!-- Left Stage: Large 3D Snapshot Viewer -->
+                        <div class="relative flex-1 flex flex-col items-center justify-center bg-black/70 p-4 sm:p-6 min-h-[280px] sm:min-h-[380px] lg:min-h-[500px] select-none">
+                            
+                            <!-- Floating Nav Arrows (Prev / Next) -->
+                            <button
+                                v-if="filteredCaptures.length > 1"
+                                type="button"
+                                @click.stop="prevLightboxCapture"
+                                class="absolute left-3 top-1/2 -translate-y-1/2 z-10 p-2.5 rounded-full bg-black/60 hover:bg-black/90 text-white/80 hover:text-white border border-white/15 backdrop-blur-md transition-all shadow-lg hover:scale-105 active:scale-95"
+                                title="Gambar Sebelumnya (Arrow Left)"
+                            >
+                                <ChevronLeft class="h-5 w-5" />
+                            </button>
 
-                        <img
-                            :src="activeLightboxCapture.url"
-                            :alt="activeLightboxCapture.room_name"
-                            class="max-h-[80vh] w-auto rounded-2xl border border-white/15 shadow-2xl object-contain"
-                        />
+                            <button
+                                v-if="filteredCaptures.length > 1"
+                                type="button"
+                                @click.stop="nextLightboxCapture"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 z-10 p-2.5 rounded-full bg-black/60 hover:bg-black/90 text-white/80 hover:text-white border border-white/15 backdrop-blur-md transition-all shadow-lg hover:scale-105 active:scale-95"
+                                title="Gambar Selanjutnya (Arrow Right)"
+                            >
+                                <ChevronRight class="h-5 w-5" />
+                            </button>
 
-                        <div class="flex items-center justify-between w-full max-w-xl px-4 py-2 rounded-2xl bg-black/80 border border-white/15 backdrop-blur text-xs">
-                            <div class="flex items-center gap-2">
-                                <span class="font-semibold text-white">{{ activeLightboxCapture.room_name }}</span>
-                                <span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono text-[10px]">
-                                    {{ activeLightboxCapture.captured_hour }}
-                                </span>
-                                <span class="text-neutral-500 text-[10px]">
-                                    {{ (activeLightboxCapture.file_size_bytes / 1024).toFixed(0) }} KB
-                                </span>
+                            <!-- Centered Responsive Image -->
+                            <img
+                                :src="activeLightboxCapture.url"
+                                :alt="activeLightboxCapture.room_name"
+                                class="max-h-[46vh] lg:max-h-[80vh] w-auto max-w-full rounded-2xl border border-white/10 shadow-2xl object-contain transition-all duration-200"
+                            />
+
+                            <!-- Image Bottom Floating Badges -->
+                            <div class="absolute bottom-4 left-4 right-4 flex items-center justify-between pointer-events-none">
+                                <div class="flex items-center gap-1.5 pointer-events-auto">
+                                    <span class="px-2.5 py-1 rounded-full bg-black/75 border border-white/15 text-[11px] font-medium text-white backdrop-blur">
+                                        {{ activeLightboxCapture.room_name }}
+                                    </span>
+                                    <span class="px-2 py-0.5 rounded-full bg-amber-500/25 border border-amber-500/40 text-amber-300 font-mono text-[10px] backdrop-blur">
+                                        {{ activeLightboxCapture.captured_hour }}
+                                    </span>
+                                </div>
+
+                                <div v-if="filteredCaptures.length > 1" class="px-2.5 py-1 rounded-full bg-black/75 border border-white/15 text-[10px] text-neutral-300 font-mono backdrop-blur">
+                                    {{ currentLightboxIndex + 1 }} / {{ filteredCaptures.length }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Sidebar: Inspector, AI Prompt, Metadata & Actions -->
+                        <div class="w-full lg:w-[420px] flex flex-col justify-between border-t lg:border-t-0 lg:border-l border-white/10 bg-neutral-900/80 p-5 space-y-4 overflow-y-auto max-h-[50vh] lg:max-h-[92vh]">
+                            
+                            <!-- Header: Title, Close button & Meta pills -->
+                            <div class="space-y-2">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <h3 class="text-base font-semibold text-white tracking-tight">
+                                                {{ activeLightboxCapture.room_name }}
+                                            </h3>
+                                            <span
+                                                v-if="isOwner"
+                                                class="px-2 py-0.5 rounded text-[10px] font-medium border"
+                                                :class="activeLightboxCapture.is_visible_to_clients
+                                                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                                    : 'bg-neutral-800 text-neutral-400 border-white/10'"
+                                            >
+                                                {{ activeLightboxCapture.is_visible_to_clients ? 'Tampil ke Klien' : 'Privat' }}
+                                            </span>
+                                        </div>
+                                        <p class="text-[11px] text-neutral-400 mt-0.5">
+                                            Ditangkap pada jam <span class="text-amber-300 font-mono font-medium">{{ activeLightboxCapture.captured_hour }}</span>
+                                            <span v-if="activeLightboxCapture.width && activeLightboxCapture.height" class="text-neutral-500"> • {{ activeLightboxCapture.width }}×{{ activeLightboxCapture.height }}px</span>
+                                            <span class="text-neutral-500"> • {{ (activeLightboxCapture.file_size_bytes / 1024).toFixed(0) }} KB</span>
+                                        </p>
+                                    </div>
+
+                                    <!-- Sticky Close button -->
+                                    <button
+                                        type="button"
+                                        @click="activeLightboxCapture = null"
+                                        class="p-2 rounded-xl text-neutral-400 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+                                        title="Tutup (Esc)"
+                                    >
+                                        <X class="h-5 w-5" />
+                                    </button>
+                                </div>
                             </div>
 
-                            <a
-                                :href="activeLightboxCapture.url"
-                                download
-                                target="_blank"
-                                class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium transition-all"
-                            >
-                                <Download class="h-3.5 w-3.5" />
-                                <span>Unduh Gambar</span>
-                            </a>
+                            <!-- AI Prompt Section -->
+                            <div class="flex-1 flex flex-col p-4 rounded-2xl border border-indigo-500/25 bg-indigo-950/20 space-y-2.5">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <Sparkles class="h-4 w-4 text-indigo-400" />
+                                        <span class="text-xs font-semibold text-white">Prompt AI Arsitektur</span>
+                                        <span
+                                            v-if="promptSaveStatus[activeLightboxCapture.id] === 'saving'"
+                                            class="text-[10px] text-amber-400 animate-pulse font-mono"
+                                        >
+                                            Menyimpan...
+                                        </span>
+                                        <span
+                                            v-else-if="promptSaveStatus[activeLightboxCapture.id] === 'saved'"
+                                            class="text-[10px] text-emerald-400 font-mono"
+                                        >
+                                            Tersimpan ✓
+                                        </span>
+                                        <span
+                                            v-else-if="promptSaveStatus[activeLightboxCapture.id] === 'error'"
+                                            class="text-[10px] text-rose-400 font-mono"
+                                        >
+                                            Gagal simpan
+                                        </span>
+                                    </div>
+
+                                    <button
+                                        v-if="activeLightboxCapture.prompt"
+                                        type="button"
+                                        @click="copyCapturePrompt(activeLightboxCapture)"
+                                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shadow-sm"
+                                        :class="copiedCaptureId === activeLightboxCapture.id
+                                            ? 'bg-emerald-500 text-black'
+                                            : 'bg-indigo-600 hover:bg-indigo-500 text-white'"
+                                        title="Salin Prompt ke Clipboard"
+                                    >
+                                        <Check v-if="copiedCaptureId === activeLightboxCapture.id" class="h-3 w-3" />
+                                        <Copy v-else class="h-3 w-3" />
+                                        <span>{{ copiedCaptureId === activeLightboxCapture.id ? 'Tersalin!' : 'Salin Prompt' }}</span>
+                                    </button>
+                                </div>
+
+                                <!-- Editable textarea for Owner with Auto-Save on Blur -->
+                                <textarea
+                                    v-if="isOwner"
+                                    v-model="activeLightboxCapture.prompt"
+                                    @blur="autoSaveCapturePrompt(activeLightboxCapture)"
+                                    rows="6"
+                                    placeholder="Edit prompt AI di sini... Otomatis tersimpan ke server saat klik di luar."
+                                    class="w-full flex-1 min-h-[120px] rounded-xl border border-white/10 bg-black/50 p-3 text-xs text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400 leading-relaxed font-sans resize-y"
+                                ></textarea>
+
+                                <!-- Read-only text for Client -->
+                                <div
+                                    v-else-if="activeLightboxCapture.prompt"
+                                    class="p-3 rounded-xl bg-black/40 border border-white/5 text-xs text-neutral-300 leading-relaxed max-h-[180px] overflow-y-auto"
+                                >
+                                    {{ activeLightboxCapture.prompt }}
+                                </div>
+
+                                <p v-else class="text-[11px] text-neutral-500 italic p-2">
+                                    Belum ada prompt AI untuk gambar ini.
+                                </p>
+
+                                <p class="text-[10px] text-neutral-400 flex items-center justify-between pt-1">
+                                    <span>💡 Siap disalin ke Midjourney / ChatGPT / SD.</span>
+                                    <span v-if="activeLightboxCapture.prompt" class="font-mono text-neutral-500">
+                                        {{ activeLightboxCapture.prompt.length }} karakter
+                                    </span>
+                                </p>
+                            </div>
+
+                            <!-- Footer Actions: Download, Visibility, Delete -->
+                            <div class="space-y-2 pt-2 border-t border-white/10">
+                                <div class="flex items-center gap-2">
+                                    <a
+                                        :href="activeLightboxCapture.url"
+                                        download
+                                        target="_blank"
+                                        class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-black font-semibold text-xs hover:bg-neutral-200 transition-all shadow-md"
+                                    >
+                                        <Download class="h-4 w-4" />
+                                        <span>Unduh PNG Resolusi Penuh</span>
+                                    </a>
+
+                                    <button
+                                        v-if="isOwner"
+                                        type="button"
+                                        @click="deleteCapture(activeLightboxCapture)"
+                                        class="p-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-all"
+                                        title="Hapus gambar ini"
+                                    >
+                                        <Trash2 class="h-4 w-4" />
+                                    </button>
+                                </div>
+
+                                <!-- Visibility Toggle for Owner -->
+                                <div v-if="isOwner" class="flex items-center justify-between px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs">
+                                    <span class="text-[11px] text-neutral-300">Visibilitas Gambar ke Klien</span>
+                                    <button
+                                        type="button"
+                                        @click="toggleCaptureVisibility(activeLightboxCapture)"
+                                        class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all"
+                                        :class="activeLightboxCapture.is_visible_to_clients
+                                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                            : 'bg-white/10 text-neutral-400 border border-white/10'"
+                                    >
+                                        <Eye v-if="activeLightboxCapture.is_visible_to_clients" class="h-3 w-3" />
+                                        <EyeOff v-else class="h-3 w-3" />
+                                        <span>{{ activeLightboxCapture.is_visible_to_clients ? 'Bisa Dilihat Klien' : 'Hanya Pemilik' }}</span>
+                                    </button>
+                                </div>
+                            </div>
+
                         </div>
+
                     </div>
                 </div>
             </Transition>
@@ -1644,8 +1920,11 @@ import {
     Camera,
     Check,
     CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
     ClipboardList,
     Compass,
+    Copy,
     Cpu,
     Download,
     Eye,
@@ -1667,6 +1946,7 @@ import {
     Pencil,
     PinOff,
     Plus,
+    RefreshCw,
     RotateCw,
     Scissors,
     Send,
@@ -1756,6 +2036,16 @@ const viewerContainer = ref<HTMLDivElement | null>(null);
 const comments = ref<Comment[]>([]);
 const isLoading = ref(true);
 const modelError = ref('');
+
+// Three.js variables
+let renderer: THREE.WebGLRenderer | null = null;
+let scene: THREE.Scene | null = null;
+let camera: THREE.PerspectiveCamera | null = null;
+let controls: OrbitControls | null = null;
+let model: THREE.Object3D | null = null;
+let animationFrame: number | null = null;
+let resizeObserver: ResizeObserver | null = null;
+const markerGroup = new THREE.Group();
 
 // UI States
 const interactionMode = ref<'rotate' | 'pan' | 'pin'>('rotate');
@@ -1943,6 +2233,7 @@ interface ProjectCaptureItem {
     width: number;
     height: number;
     is_visible_to_clients: boolean;
+    prompt?: string | null;
     url: string;
     created_at: string;
 }
@@ -1962,6 +2253,408 @@ const captureVisibleToClients = ref(false);
 const capturePreviewDataUrl = ref('');
 const isSavingCapture = ref(false);
 const captureError = ref('');
+
+// ── AI Prompt States, Scene 3D Analysis & Auto-Save ──
+const capturePrompt = ref('');
+const copiedPromptModal = ref(false);
+const promptSaveStatus = ref<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({});
+const copiedCaptureId = ref<string | null>(null);
+
+interface Analyzed3DView {
+    labelId: string;
+    subjectEn: string;
+    materialsEn: string[];
+    shotTypeEn: string;
+    perspectiveEn: string;
+    distance: number;
+}
+
+const ARCHITECTURAL_DICTIONARY = [
+    {
+        keywords: ['sofa', 'couch', 'lounge', 'seating', 'armchair', 'ottoman', 'daybed', 'kursi_santai'],
+        labelId: 'Sofa & Ruang Santai',
+        subjectEn: 'contemporary designer lounge sofa and seating area',
+        defaultMaterials: ['tactile woven fabric upholstery', 'warm ambient finishes'],
+    },
+    {
+        keywords: ['kitchen', 'dapur', 'island', 'countertop', 'sink', 'cooktop', 'kitchenset', 'stove', 'kompor', 'pantry'],
+        labelId: 'Dapur & Kitchen Island',
+        subjectEn: 'minimalist modern kitchen island and bespoke architectural cabinetry',
+        defaultMaterials: ['monolithic stone countertop', 'matte cabinet surfaces'],
+    },
+    {
+        keywords: ['table', 'meja', 'dining', 'desk', 'meja_makan', 'meja_kerja'],
+        labelId: 'Meja & Area Makan',
+        subjectEn: 'sculptural dining table and curated interior setting',
+        defaultMaterials: ['solid hardwood surface', 'architectural metal base'],
+    },
+    {
+        keywords: ['chair', 'kursi', 'stool', 'barstool'],
+        labelId: 'Kursi & Tempat Duduk',
+        subjectEn: 'modern architectural chairs with refined silhouettes',
+        defaultMaterials: ['ergonomic molded frames', 'matte finishes'],
+    },
+    {
+        keywords: ['bed', 'kasur', 'ranjang', 'bedroom', 'headboard', 'matras', 'kamar_tidur'],
+        labelId: 'Tempat Tidur & Kamar Tidur',
+        subjectEn: 'serene master bedroom suite with bespoke upholstered bed and headboard',
+        defaultMaterials: ['crisp linen bedding', 'natural wood accents'],
+    },
+    {
+        keywords: ['window', 'jendela', 'glass', 'kaca', 'glazing', 'curtainwall', 'vitrage', 'fenster'],
+        labelId: 'Bukaan Kaca & Jendela',
+        subjectEn: 'floor-to-ceiling architectural glass glazing and panoramic window frames',
+        defaultMaterials: ['reflective clear float glass', 'powder-coated aluminum frames'],
+    },
+    {
+        keywords: ['door', 'pintu', 'portal', 'entrance', 'entry', 'kusen'],
+        labelId: 'Pintu & Akses Masuk',
+        subjectEn: 'grand architectural entrance door and entryway portal',
+        defaultMaterials: ['solid timber door panel', 'refined metal hardware'],
+    },
+    {
+        keywords: ['stair', 'tangga', 'step', 'railing', 'balustrade', 'handrail', 'tread', 'riser'],
+        labelId: 'Tangga & Railing Minimalis',
+        subjectEn: 'cantilevered floating staircase with minimalist architectural railing',
+        defaultMaterials: ['structural steel', 'natural timber steps'],
+    },
+    {
+        keywords: ['wall', 'dinding', 'partition', 'partisi', 'panel', 'cladding', 'fasad', 'facade', 'bata', 'brick'],
+        labelId: 'Dinding & Panel Aksen',
+        subjectEn: 'architectural feature wall with textured paneling and crisp geometric planes',
+        defaultMaterials: ['textured architectural surface', 'recessed shadow lines'],
+    },
+    {
+        keywords: ['floor', 'lantai', 'tile', 'tiles', 'ubin', 'parket', 'parquet', 'carpet', 'karpet', 'paving', 'asphalt', 'aspal'],
+        labelId: 'Lantai & Permukaan Pijakan',
+        subjectEn: 'seamless expansive architectural flooring and floor finishes',
+        defaultMaterials: ['large-format tiles', 'smooth polished surface'],
+    },
+    {
+        keywords: ['roof', 'atap', 'ceiling', 'plafon', 'canopy', 'kanopi', 'soffit', 'genteng', 'truss'],
+        labelId: 'Plafon & Struktur Atap',
+        subjectEn: 'geometric architectural ceiling design with recessed indirect lighting cove',
+        defaultMaterials: ['smooth matte ceiling', 'integrated architectural reveals'],
+    },
+    {
+        keywords: ['pool', 'kolam', 'swimming', 'water', 'air', 'jacuzzi'],
+        labelId: 'Kolam Renang & Fitur Air',
+        subjectEn: 'crisp modern swimming pool with tranquil reflective water surfaces',
+        defaultMaterials: ['shimmering turquoise water', 'natural stone coping edges'],
+    },
+    {
+        keywords: ['garden', 'taman', 'plant', 'tanaman', 'tree', 'pohon', 'landscape', 'grass', 'rumput', 'foliage', 'vegetation'],
+        labelId: 'Taman & Lanskap Hijau',
+        subjectEn: 'lush landscaped courtyard garden with sculpted tropical greenery',
+        defaultMaterials: ['vibrant architectural foliage', 'natural stone pathways'],
+    },
+    {
+        keywords: ['lamp', 'lampu', 'light', 'lighting', 'chandelier', 'pendant', 'sconce', 'spotlight'],
+        labelId: 'Pencahayaan & Fitting Lampu',
+        subjectEn: 'sculptural architectural lighting fixture and warm ambient luminescence',
+        defaultMaterials: ['brushed brass housing', 'frosted diffuse glass'],
+    },
+    {
+        keywords: ['cabinet', 'lemari', 'wardrobe', 'shelf', 'shelving', 'rak', 'credenza', 'cupboard', 'storage'],
+        labelId: 'Lemari & Rak Built-in',
+        subjectEn: 'integrated custom joinery and minimalist architectural shelving',
+        defaultMaterials: ['natural wood veneer', 'seamless flush doors'],
+    },
+    {
+        keywords: ['bath', 'toilet', 'shower', 'bathtub', 'wastafel', 'kamar_mandi', 'kloset', 'vanity'],
+        labelId: 'Kamar Mandi & Sanitair',
+        subjectEn: 'spa-like luxury bathroom suite with monolithic stone finishes',
+        defaultMaterials: ['honed marble surfaces', 'matte black fixtures'],
+    },
+    {
+        keywords: ['balcony', 'balkon', 'terrace', 'teras', 'patio', 'deck', 'porch', 'veranda'],
+        labelId: 'Balkon & Teras Terbuka',
+        subjectEn: 'open-air architectural terrace and balcony deck framing outdoor views',
+        defaultMaterials: ['weather-resistant timber decking', 'frameless glass balustrade'],
+    },
+    {
+        keywords: ['column', 'tiang', 'pilar', 'beam', 'balok', 'kolom', 'structure', 'pillar'],
+        labelId: 'Kolom & Elemen Struktural',
+        subjectEn: 'monolithic architectural columns and exposed structural concrete geometry',
+        defaultMaterials: ['smooth architectural concrete', 'clean chamfered edges'],
+    },
+];
+
+function analyzeSceneFromCamera(): Analyzed3DView | null {
+    if (!camera || !scene) return null;
+
+    const raycaster = new THREE.Raycaster();
+    const sampleCoords = [
+        new THREE.Vector2(0, 0),         // center
+        new THREE.Vector2(-0.12, 0),     // slight left
+        new THREE.Vector2(0.12, 0),      // slight right
+        new THREE.Vector2(0, -0.12),     // slight bottom
+        new THREE.Vector2(0, 0.12),      // slight top
+    ];
+
+    const targetObjects = model ? [model] : scene.children;
+    let closestHit: THREE.Intersection | null = null;
+
+    for (const coord of sampleCoords) {
+        raycaster.setFromCamera(coord, camera);
+        const intersects = raycaster.intersectObjects(targetObjects, true);
+        const valid = intersects.find((i) => {
+            let cur: THREE.Object3D | null = i.object;
+            while (cur) {
+                if (cur.userData?.isMarker) return false;
+                cur = cur.parent;
+            }
+            return (i.object as THREE.Mesh).isMesh !== false;
+        });
+
+        if (valid) {
+            closestHit = valid;
+            break;
+        }
+    }
+
+    if (!closestHit) {
+        const dir = new THREE.Vector3();
+        camera.getWorldDirection(dir);
+        const isLookingDown = dir.y < -0.3;
+        const isLookingUp = dir.y > 0.3;
+
+        return {
+            labelId: isLookingDown ? 'Tinjauan Atas (Elevated)' : (isLookingUp ? 'Sudut Rendah Heroic' : 'Perspektif Bebas'),
+            subjectEn: isLookingDown
+                ? 'overall architectural massing and spatial layout from an elevated vantage point'
+                : 'contemporary architectural structure against the open sky',
+            materialsEn: ['mixed architectural finishes', 'crisp exterior facade'],
+            shotTypeEn: isLookingDown ? 'elevated isometric architectural overview, 35mm lens' : 'wide architectural perspective, 24mm lens',
+            perspectiveEn: isLookingDown ? 'high-angle bird’s eye perspective' : 'atmospheric architectural framing',
+            distance: 12,
+        };
+    }
+
+    const hitObject = closestHit.object;
+    const hitPoint = closestHit.point;
+    const distance = camera.position.distanceTo(hitPoint);
+
+    // Collect names from object and up hierarchy (up to 5 levels)
+    const hierarchyNames: string[] = [];
+    let curObj: THREE.Object3D | null = hitObject;
+    while (curObj && curObj !== scene && hierarchyNames.length < 5) {
+        if (curObj.name && curObj.name.trim().length > 0) {
+            hierarchyNames.push(curObj.name);
+        }
+        curObj = curObj.parent;
+    }
+
+    // Material analysis
+    const detectedMaterials: string[] = [];
+    const matNames: string[] = [];
+    const rawMaterial = (hitObject as THREE.Mesh).material;
+    const materialsList = Array.isArray(rawMaterial) ? rawMaterial : (rawMaterial ? [rawMaterial] : []);
+
+    for (const m of materialsList) {
+        if (m.name) matNames.push(m.name);
+
+        const mNameLower = (m.name || '').toLowerCase();
+        if (mNameLower.includes('wood') || mNameLower.includes('kayu') || mNameLower.includes('timber') || mNameLower.includes('oak') || mNameLower.includes('walnut') || mNameLower.includes('plywood')) {
+            detectedMaterials.push('warm textured natural timber wood grain');
+        } else if (mNameLower.includes('concrete') || mNameLower.includes('beton') || mNameLower.includes('semen') || mNameLower.includes('cement')) {
+            detectedMaterials.push('smooth cast-in-place architectural concrete with subtle pores');
+        } else if (mNameLower.includes('marble') || mNameLower.includes('marmer') || mNameLower.includes('granite') || mNameLower.includes('travertine') || mNameLower.includes('stone') || mNameLower.includes('batu')) {
+            detectedMaterials.push('luxurious polished marble and veined natural stone');
+        } else if (mNameLower.includes('glass') || mNameLower.includes('kaca') || mNameLower.includes('glazing')) {
+            detectedMaterials.push('reflective clear float architectural glass');
+        } else if (mNameLower.includes('metal') || mNameLower.includes('aluminum') || mNameLower.includes('steel') || mNameLower.includes('baja') || mNameLower.includes('chrome') || mNameLower.includes('brass')) {
+            detectedMaterials.push('precision matte dark metallic framing and trim');
+        } else if (mNameLower.includes('brick') || mNameLower.includes('bata')) {
+            detectedMaterials.push('tactile architectural brickwork with clean mortar joints');
+        } else if (mNameLower.includes('tile') || mNameLower.includes('keramik') || mNameLower.includes('porcelain')) {
+            detectedMaterials.push('refined large-format ceramic tile surfaces');
+        } else if (mNameLower.includes('fabric') || mNameLower.includes('linen') || mNameLower.includes('leather') || mNameLower.includes('kain')) {
+            detectedMaterials.push('tactile woven upholstery and soft leather finishes');
+        } else if (mNameLower.includes('asphalt') || mNameLower.includes('aspal')) {
+            detectedMaterials.push('clean dark architectural pavement');
+        }
+
+        const std = m as THREE.MeshStandardMaterial;
+        if (std.metalness && std.metalness > 0.45 && !detectedMaterials.some(d => d.includes('metallic'))) {
+            detectedMaterials.push('brushed metallic accents');
+        }
+        if (std.roughness !== undefined && std.roughness < 0.15 && !detectedMaterials.some(d => d.includes('polished') || d.includes('reflective'))) {
+            detectedMaterials.push('high-gloss reflective finish');
+        }
+        if (m.transparent || m.opacity < 0.95) {
+            if (!detectedMaterials.some(d => d.includes('glass'))) {
+                detectedMaterials.push('translucent architectural glazing');
+            }
+        }
+    }
+
+    // Match architectural category
+    const searchString = [...hierarchyNames, ...matNames].join(' ').toLowerCase();
+    let matchedCategory = ARCHITECTURAL_DICTIONARY.find(cat =>
+        cat.keywords.some(kw => searchString.includes(kw))
+    );
+
+    // If no keyword match, inspect surface orientation
+    let labelId = matchedCategory?.labelId;
+    let subjectEn = matchedCategory?.subjectEn;
+
+    if (!matchedCategory) {
+        const rawNormal = closestHit.face?.normal ?? new THREE.Vector3(0, 1, 0);
+        const normalMatrix = new THREE.Matrix3().getNormalMatrix(hitObject.matrixWorld);
+        const worldNormal = rawNormal.clone().applyMatrix3(normalMatrix).normalize();
+
+        if (worldNormal.y > 0.65) {
+            labelId = 'Lantai & Permukaan Datar';
+            subjectEn = 'expansive architectural floor plane and horizontal surface';
+        } else if (worldNormal.y < -0.65) {
+            labelId = 'Plafon & Bidang Atas';
+            subjectEn = 'architectural ceiling soffit and overhead planes';
+        } else {
+            labelId = 'Dinding & Elemen Fasad';
+            subjectEn = 'geometric architectural wall plane and volumetric facade';
+        }
+    }
+
+    if (detectedMaterials.length === 0) {
+        if (matchedCategory?.defaultMaterials) {
+            detectedMaterials.push(...matchedCategory.defaultMaterials);
+        } else {
+            detectedMaterials.push('clean architectural materials with natural textures');
+        }
+    }
+
+    // Shot type & Perspective based on distance
+    let shotTypeEn = 'eye-level medium perspective shot, 35mm lens, balanced one-point framing';
+    let perspectiveEn = 'human-scale eye-level composition, highlighting architectural proportion';
+
+    if (distance < 2.5) {
+        shotTypeEn = 'tactile close-up macro detail shot, 50mm f/1.8 lens with shallow depth of field';
+        perspectiveEn = 'intimate close-up perspective capturing delicate material textures and craftsmanship';
+    } else if (distance >= 2.5 && distance < 7.0) {
+        shotTypeEn = 'eye-level medium architectural perspective, 35mm lens, balanced one-point perspective';
+        perspectiveEn = 'human-scale eye-level composition, highlighting architectural proportion and interior flow';
+    } else if (distance >= 7.0 && distance < 16.0) {
+        shotTypeEn = 'wide-angle spatial perspective shot, 24mm architectural tilt-shift lens, perfectly vertical lines';
+        perspectiveEn = 'expansive wide-angle composition showcasing full volumetric space and architectural rhythm';
+    } else {
+        shotTypeEn = 'sweeping panoramic architectural vista, 18mm lens, majestic exterior composition';
+        perspectiveEn = 'commanding panoramic perspective revealing the full building massing and landscape context';
+    }
+
+    // Camera pitch angle
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    if (dir.y < -0.35) {
+        perspectiveEn += ', elevated high-angle viewpoint looking downward with isometric clarity';
+    } else if (dir.y > 0.35) {
+        perspectiveEn += ', dramatic low-angle hero perspective looking upward emphasizing towering architectural scale';
+    } else {
+        perspectiveEn += ', straight-on rectilinear architectural framing with strict vertical alignment';
+    }
+
+    return {
+        labelId: labelId!,
+        subjectEn: subjectEn!,
+        materialsEn: Array.from(new Set(detectedMaterials)),
+        shotTypeEn,
+        perspectiveEn,
+        distance,
+    };
+}
+
+function generatePromptForCurrentView(providedAnalysis?: Analyzed3DView | null): string {
+    const analysis = providedAnalysis !== undefined ? providedAnalysis : analyzeSceneFromCamera();
+
+    const hourStr = captureHour.value || '12:00';
+    const hourNum = parseFloat(hourStr.replace(':', '.'));
+
+    let lightingContext = 'balanced architectural daylight, neutral color balance';
+    if (hourNum >= 5 && hourNum < 8.5) {
+        lightingContext = 'early morning sunrise light, soft warm sun rays penetrating through glazing, gentle long shadows, peaceful morning ambiance';
+    } else if (hourNum >= 8.5 && hourNum < 15) {
+        lightingContext = 'crisp bright mid-day sun, clear natural daylight, sharp geometric architectural shadows, vibrant material reflections';
+    } else if (hourNum >= 15 && hourNum < 18.5) {
+        lightingContext = 'dramatic golden hour sunset, warm ambient sunlight, long soft shadows, cozy architectural glow, warm atmospheric tones';
+    } else if (hourNum >= 18.5 && hourNum < 20.5) {
+        lightingContext = 'twilight blue hour, deep indigo sky, warm interior tungsten lighting glow, glowing linear LED architectural accents';
+    } else {
+        lightingContext = 'nighttime architectural visual, warm interior ceiling spotlights, subtle LED strip lighting, deep evening shadows with cozy interior lamps';
+    }
+
+    const renderStyle = renderEngine.value === 'pathtrace'
+        ? 'ultra-realistic path-traced raytracing, physically accurate global illumination, sub-surface light bounce, 8k resolution, architectural design magazine photography'
+        : 'photorealistic architectural photography, ambient occlusion in crevices, soft natural bloom highlights, Hasselblad H6D-100c, f/8, 8k resolution, award-winning architectural showcase';
+
+    const projectContext = project.value.title ? `for ${project.value.title}` : '';
+
+    if (analysis) {
+        const subjectPhrase = analysis.subjectEn;
+        const materialsPhrase = analysis.materialsEn.length > 0 ? `, featuring ${analysis.materialsEn.slice(0, 3).join(', ')}` : '';
+        const roomContext = captureRoomName.value && captureRoomName.value !== 'Sudut Bebas' && captureRoomName.value !== analysis.labelId
+            ? `in ${captureRoomName.value}`
+            : '';
+
+        return `Architectural photograph of ${subjectPhrase} ${roomContext} ${projectContext}${materialsPhrase}, ${analysis.shotTypeEn}, ${analysis.perspectiveEn}, ${lightingContext}, ${renderStyle}, highly detailed architecture, cinematic composition`;
+    }
+
+    const room = captureRoomName.value || 'Ruangan Arsitektur';
+    return `Architectural photograph of ${room} ${projectContext}, ${lightingContext}, ${renderStyle}, highly detailed interior architecture, cinematic composition, award-winning architectural showcase`;
+}
+
+function copyPromptText(text?: string | null) {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    copiedPromptModal.value = true;
+    setTimeout(() => {
+        copiedPromptModal.value = false;
+    }, 2000);
+}
+
+function copyCapturePrompt(capture: ProjectCaptureItem) {
+    if (!capture.prompt) return;
+    navigator.clipboard.writeText(capture.prompt);
+    copiedCaptureId.value = capture.id;
+    setTimeout(() => {
+        if (copiedCaptureId.value === capture.id) {
+            copiedCaptureId.value = null;
+        }
+    }, 2000);
+}
+
+async function autoSaveCapturePrompt(capture: ProjectCaptureItem) {
+    if (!isOwner.value) return;
+    const captureId = capture.id;
+    promptSaveStatus.value[captureId] = 'saving';
+
+    try {
+        const res = await fetch(`/projects/${project.value.id}/captures/${captureId}/prompt`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+                prompt: capture.prompt ?? '',
+            }),
+        });
+
+        if (res.ok) {
+            promptSaveStatus.value[captureId] = 'saved';
+            setTimeout(() => {
+                if (promptSaveStatus.value[captureId] === 'saved') {
+                    promptSaveStatus.value[captureId] = 'idle';
+                }
+            }, 2500);
+        } else {
+            promptSaveStatus.value[captureId] = 'error';
+        }
+    } catch {
+        promptSaveStatus.value[captureId] = 'error';
+    }
+}
 
 const galleryRoomFilter = ref('all');
 const galleryHourFilter = ref('all');
@@ -2011,11 +2704,20 @@ function captureCanvasSnapshot(targetRes: 'viewport' | '1080p' | '4k'): string {
 function openCaptureModal() {
     selectedPresetForCapture.value = 'current';
     captureHour.value = formattedTime.value;
-    captureRoomName.value = 'Sudut Bebas';
     captureTitle.value = '';
     captureError.value = '';
     captureVisibleToClients.value = false;
     renderEngine.value = 'standard';
+
+    // Deteksi elemen arsitektur 3D spesifik yang sedang diarahkan kamera
+    const analysis = analyzeSceneFromCamera();
+    if (analysis) {
+        captureRoomName.value = analysis.labelId;
+    } else {
+        captureRoomName.value = 'Sudut Bebas';
+    }
+
+    capturePrompt.value = generatePromptForCurrentView(analysis);
     isCaptureModalOpen.value = true;
 
     nextTick(() => {
@@ -2029,7 +2731,9 @@ function refreshCaptureSnapshot() {
 
 function onCapturePresetChange() {
     if (selectedPresetForCapture.value === 'current') {
-        captureRoomName.value = 'Sudut Bebas';
+        const analysis = analyzeSceneFromCamera();
+        captureRoomName.value = analysis?.labelId || 'Sudut Bebas';
+        capturePrompt.value = generatePromptForCurrentView(analysis);
         refreshCaptureSnapshot();
         return;
     }
@@ -2040,6 +2744,8 @@ function onCapturePresetChange() {
         applyPreset(preset);
 
         setTimeout(() => {
+            const analysis = analyzeSceneFromCamera();
+            capturePrompt.value = generatePromptForCurrentView(analysis);
             refreshCaptureSnapshot();
         }, 350);
     }
@@ -2071,6 +2777,7 @@ async function saveCaptureToGallery() {
         width: captureResolution.value === '1080p' ? 1920 : (renderer?.domElement.width ?? 1280),
         height: captureResolution.value === '1080p' ? 1080 : (renderer?.domElement.height ?? 720),
         is_visible_to_clients: captureVisibleToClients.value,
+        prompt: capturePrompt.value || null,
     };
 
     try {
@@ -2148,6 +2855,63 @@ async function deleteCapture(capture: ProjectCaptureItem) {
         console.error('[Captures] delete error:', err);
     }
 }
+
+// ── Lightbox Navigation & Keyboard Controls ──
+const currentLightboxIndex = computed(() => {
+    if (!activeLightboxCapture.value) return 0;
+    return filteredCaptures.value.findIndex(c => c.id === activeLightboxCapture.value?.id);
+});
+
+function nextLightboxCapture() {
+    if (!activeLightboxCapture.value) return;
+    const list = filteredCaptures.value;
+    if (list.length === 0) return;
+    const idx = list.findIndex(c => c.id === activeLightboxCapture.value?.id);
+    if (idx !== -1 && idx < list.length - 1) {
+        activeLightboxCapture.value = list[idx + 1];
+    } else {
+        activeLightboxCapture.value = list[0];
+    }
+}
+
+function prevLightboxCapture() {
+    if (!activeLightboxCapture.value) return;
+    const list = filteredCaptures.value;
+    if (list.length === 0) return;
+    const idx = list.findIndex(c => c.id === activeLightboxCapture.value?.id);
+    if (idx > 0) {
+        activeLightboxCapture.value = list[idx - 1];
+    } else {
+        activeLightboxCapture.value = list[list.length - 1];
+    }
+}
+
+function onLightboxKeyDown(e: KeyboardEvent) {
+    if (!activeLightboxCapture.value) return;
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT')) {
+        if (e.key === 'Escape') {
+            (activeEl as HTMLElement).blur();
+        }
+        return;
+    }
+
+    if (e.key === 'Escape') {
+        activeLightboxCapture.value = null;
+    } else if (e.key === 'ArrowRight') {
+        nextLightboxCapture();
+    } else if (e.key === 'ArrowLeft') {
+        prevLightboxCapture();
+    }
+}
+
+watch(activeLightboxCapture, (val) => {
+    if (val) {
+        window.addEventListener('keydown', onLightboxKeyDown);
+    } else {
+        window.removeEventListener('keydown', onLightboxKeyDown);
+    }
+});
 
 // Apakah user adalah arsitek pemilik project
 const isOwner = computed(() => {
@@ -2782,16 +3546,6 @@ async function toggleResolved(commentId: string): Promise<void> {
 
 
 
-// Three.js variables
-let renderer: THREE.WebGLRenderer | null = null;
-let scene: THREE.Scene | null = null;
-let camera: THREE.PerspectiveCamera | null = null;
-let controls: OrbitControls | null = null;
-let model: THREE.Object3D | null = null;
-let animationFrame: number | null = null;
-let resizeObserver: ResizeObserver | null = null;
-const markerGroup = new THREE.Group();
-
 // 2D Projection state
 const projectedComments = ref<ProjectedComment[]>([]);
 const visibleProjectedComments = computed(() =>
@@ -3370,6 +4124,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
     onBoxDragEnd();
     document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    window.removeEventListener('keydown', onLightboxKeyDown);
     if (animationFrame !== null) {
         window.cancelAnimationFrame(animationFrame);
     }

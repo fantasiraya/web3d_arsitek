@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Storage;
  * @property int $width
  * @property int $height
  * @property bool $is_visible_to_clients
+ * @property string|null $prompt
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -43,6 +44,7 @@ class ProjectCapture extends Model
         'width',
         'height',
         'is_visible_to_clients',
+        'prompt',
     ];
 
     protected function casts(): array

@@ -96,8 +96,9 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │   │   ├── DeleteCaptureAction.php          # Hapus snapshot capture & storage file
 │   │   │   │   ├── InviteClientAction.php           # Assign email Klien ke project_clients
 │   │   │   │   ├── RevokeClientAccessAction.php     # Cabut akses Klien
-│   │   │   │   ├── SaveCaptureAction.php            # Simpan snapshot Three.js (PNG), kuota per-gambar
+│   │   │   │   ├── SaveCaptureAction.php            # Simpan snapshot Three.js (PNG), kuota per-gambar & prompt AI
 │   │   │   │   ├── ToggleCaptureVisibilityAction.php # Switch visibilitas capture ke klien
+│   │   │   │   ├── UpdateCapturePromptAction.php    # Update prompt AI capture (auto-save on blur)
 │   │   │   │   ├── UpdateProjectSunSettingsAction.php # Simpan lat/long/arah utara/tanggal
 │   │   │   │   └── UploadProjectFileAction.php      # Handle upload .glb/.gltf
 │   │   │   ├── Controllers/

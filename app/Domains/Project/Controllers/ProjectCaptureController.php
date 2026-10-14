@@ -90,6 +90,23 @@ class ProjectCaptureController extends Controller
         ]);
     }
 
+    public function updatePrompt(
+        \App\Domains\Project\Requests\UpdateCapturePromptRequest $request,
+        string $projectId,
+        string $captureId,
+        \App\Domains\Project\Actions\UpdateCapturePromptAction $action
+    ): JsonResponse {
+        $project = Project::findOrFail($projectId);
+        $capture = ProjectCapture::where('project_id', $project->id)->findOrFail($captureId);
+
+        $updated = $action->execute($request->user(), $project, $capture, $request->input('prompt'));
+
+        return response()->json([
+            'message' => 'Prompt berhasil diperbarui.',
+            'data'    => $updated,
+        ]);
+    }
+
     public function updateSunSettings(UpdateProjectSunSettingsRequest $request, string $projectId, UpdateProjectSunSettingsAction $action): JsonResponse
     {
         $project = Project::findOrFail($projectId);
