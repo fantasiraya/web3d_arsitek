@@ -1107,8 +1107,37 @@
                                 <Camera class="h-5 w-5 text-rose-400" />
                                 <h3 class="text-base font-semibold text-white">Ambil Gambar 3D (Snapshot)</h3>
                             </div>
-                            <button @click="isCaptureModalOpen = false" class="text-neutral-400 hover:text-white transition-colors">
+                            <button @click="closeCaptureModal" class="text-neutral-400 hover:text-white transition-colors">
                                 <X class="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <!-- Mode Engine Selector (Tingkat 1 vs Tingkat 2) -->
+                        <div class="flex items-center gap-1.5 p-1 rounded-2xl bg-white/5 border border-white/10 text-xs">
+                            <button
+                                type="button"
+                                @click="renderEngine = 'standard'; refreshCaptureSnapshot()"
+                                class="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl font-medium transition-all"
+                                :class="renderEngine === 'standard'
+                                    ? 'bg-white text-black font-semibold shadow'
+                                    : 'text-neutral-400 hover:text-white'"
+                            >
+                                <Sparkles class="h-3.5 w-3.5" :class="renderEngine === 'standard' ? 'text-emerald-600' : 'text-neutral-400'" />
+                                <span>Real-Time Studio</span>
+                            </button>
+                            <button
+                                type="button"
+                                @click="renderEngine = 'pathtrace'"
+                                class="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl font-medium transition-all"
+                                :class="renderEngine === 'pathtrace'
+                                    ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-black font-semibold shadow-md'
+                                    : 'text-neutral-400 hover:text-white'"
+                            >
+                                <Cpu class="h-3.5 w-3.5" :class="renderEngine === 'pathtrace' ? 'text-black' : 'text-teal-400'" />
+                                <span class="flex items-center gap-1.5">
+                                    <span>Path-Tracing</span>
+                                    <span class="text-[9px] px-1 rounded bg-black/20 text-black font-mono">PRO</span>
+                                </span>
                             </button>
                         </div>
 
@@ -1125,6 +1154,34 @@
                                 <span class="text-xs">Mengambil snapshot canvas...</span>
                             </div>
 
+                            <!-- Path Tracing Progress Overlay -->
+                            <div
+                                v-if="isPathTracing"
+                                class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm p-6 text-center space-y-3"
+                            >
+                                <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono">
+                                    <span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                    <span v-if="isCompilingBvh">Membangun BVH Akselerasi: {{ bvhProgress }}%</span>
+                                    <span v-else>Ray-Tracing Sampel: {{ currentSample }} / {{ ptTotalSamples }} ({{ ptProgressPercent }}%)</span>
+                                </div>
+                                <div class="w-full max-w-xs h-2 rounded-full bg-white/10 overflow-hidden">
+                                    <div
+                                        class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-150"
+                                        :style="{ width: `${isCompilingBvh ? bvhProgress : ptProgressPercent}%` }"
+                                    ></div>
+                                </div>
+                                <p class="text-[11px] text-neutral-400 max-w-xs">
+                                    Akumulasi pantulan cahaya fisik & global illumination langsung di GPU...
+                                </p>
+                                <button
+                                    type="button"
+                                    @click="cancelPathTracing"
+                                    class="px-3 py-1 text-xs text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 rounded-lg transition-all"
+                                >
+                                    Hentikan Render
+                                </button>
+                            </div>
+
                             <!-- Overlay badges -->
                             <div class="absolute bottom-2 left-2 flex items-center gap-1.5">
                                 <span class="px-2 py-0.5 rounded-full bg-black/80 border border-white/15 text-[10px] font-medium text-white backdrop-blur">
@@ -1132,6 +1189,12 @@
                                 </span>
                                 <span class="px-2 py-0.5 rounded-full bg-black/80 border border-white/15 text-[10px] font-mono text-amber-300 backdrop-blur">
                                     {{ captureHour }}
+                                </span>
+                                <span
+                                    v-if="renderEngine === 'pathtrace'"
+                                    class="px-2 py-0.5 rounded-full bg-emerald-500/80 text-black text-[10px] font-bold font-mono shadow-sm"
+                                >
+                                    PATH-TRACED
                                 </span>
                             </div>
                         </div>
@@ -1173,7 +1236,7 @@
                                 <label class="text-[11px] font-medium text-neutral-400 block mb-1">Resolusi Render</label>
                                 <select
                                     v-model="captureResolution"
-                                    @change="refreshCaptureSnapshot"
+                                    @change="renderEngine === 'standard' && refreshCaptureSnapshot()"
                                     class="w-full h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-white focus:outline-none focus:border-rose-400"
                                 >
                                     <option value="viewport" class="bg-neutral-900 text-white">Viewport (Layar)</option>
@@ -1194,8 +1257,67 @@
                             </div>
                         </div>
 
-                        <!-- Studio HD Render Toggle -->
-                        <div class="flex items-center justify-between p-3 rounded-2xl border border-emerald-500/20 bg-emerald-950/20">
+                        <!-- Engine Specific Control -->
+                        <!-- If Path-Tracing PRO -->
+                        <div v-if="renderEngine === 'pathtrace'" class="p-3 rounded-2xl border border-teal-500/30 bg-teal-950/20 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <div class="p-1.5 rounded-lg bg-teal-500/20 text-teal-300">
+                                        <Cpu class="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-semibold text-white">Path-Tracing GPU Engine</p>
+                                        <p class="text-[10px] text-neutral-400">Global Illumination sejati, pantulan cermin fisik, dan pencahayaan akurat.</p>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30">three-gpu-pathtracer</span>
+                            </div>
+
+                            <div class="flex items-center justify-between pt-1 border-t border-white/10">
+                                <div class="flex items-center gap-2 text-xs">
+                                    <span class="text-neutral-400">Sampel:</span>
+                                    <div class="flex items-center gap-1">
+                                        <button
+                                            type="button"
+                                            @click="pathTraceTargetSamples = 15"
+                                            class="px-2 py-1 rounded text-[11px] transition-all"
+                                            :class="pathTraceTargetSamples === 15 ? 'bg-teal-500 text-black font-semibold' : 'bg-white/10 text-neutral-300 hover:bg-white/20'"
+                                        >
+                                            15 (Cepat)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="pathTraceTargetSamples = 30"
+                                            class="px-2 py-1 rounded text-[11px] transition-all"
+                                            :class="pathTraceTargetSamples === 30 ? 'bg-teal-500 text-black font-semibold' : 'bg-white/10 text-neutral-300 hover:bg-white/20'"
+                                        >
+                                            30 (Standar)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="pathTraceTargetSamples = 60"
+                                            class="px-2 py-1 rounded text-[11px] transition-all"
+                                            :class="pathTraceTargetSamples === 60 ? 'bg-teal-500 text-black font-semibold' : 'bg-white/10 text-neutral-300 hover:bg-white/20'"
+                                        >
+                                            60 (Ultra)
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    :disabled="isPathTracing"
+                                    @click="startPathTraceRender"
+                                    class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-black text-xs font-semibold hover:brightness-110 transition-all shadow-md disabled:opacity-50"
+                                >
+                                    <Sparkles class="h-3.5 w-3.5 text-black" />
+                                    <span>{{ isPathTracing ? 'Sedang Merender...' : 'Mulai Render' }}</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- If Standard Studio HD -->
+                        <div v-else class="flex items-center justify-between p-3 rounded-2xl border border-emerald-500/20 bg-emerald-950/20">
                             <div class="flex items-center gap-2.5">
                                 <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                                     <Sparkles class="h-4 w-4" />
@@ -1261,8 +1383,9 @@
                             <div class="flex items-center gap-2">
                                 <button
                                     type="button"
+                                    :disabled="isPathTracing || !capturePreviewDataUrl"
                                     @click="downloadCurrentCapture"
-                                    class="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-white/15 bg-white/5 text-xs font-medium text-white hover:bg-white/10 transition-all"
+                                    class="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-white/15 bg-white/5 text-xs font-medium text-white hover:bg-white/10 transition-all disabled:opacity-40"
                                 >
                                     <Download class="h-3.5 w-3.5" />
                                     <span>Unduh PNG</span>
@@ -1271,9 +1394,9 @@
                                 <button
                                     v-if="isOwner"
                                     type="button"
-                                    :disabled="isSavingCapture || !capturePreviewDataUrl"
+                                    :disabled="isPathTracing || isSavingCapture || !capturePreviewDataUrl"
                                     @click="saveCaptureToGallery"
-                                    class="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 text-xs font-semibold text-white hover:bg-rose-500 transition-all shadow-md disabled:opacity-50"
+                                    class="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 text-xs font-semibold text-white hover:bg-rose-500 transition-all shadow-md disabled:opacity-40"
                                 >
                                     <Check v-if="!isSavingCapture" class="h-3.5 w-3.5" />
                                     <span v-else class="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
@@ -1523,6 +1646,7 @@ import {
     CheckCircle2,
     ClipboardList,
     Compass,
+    Cpu,
     Download,
     Eye,
     EyeOff,
@@ -1561,6 +1685,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useRaycast } from '@/composables/useRaycast';
 import { useSunSimulation } from '@/composables/useSunSimulation';
 import { usePostProcessing } from '@/composables/usePostProcessing';
+import { usePathTracer } from '@/composables/usePathTracer';
 import RevisionBadge from '@/components/RevisionBadge.vue';
 import ChatPanel from '@/components/ChatPanel.vue';
 import {
@@ -1716,6 +1841,57 @@ const {
     bloomStrength,
 } = usePostProcessing();
 
+// ── Tingkat 2: True Path-Tracing Pro (three-gpu-pathtracer) ──
+const {
+    isPathTracing,
+    isCompilingBvh,
+    bvhProgress,
+    currentSample,
+    totalSamples: ptTotalSamples,
+    progressPercent: ptProgressPercent,
+    pathTraceError,
+    renderPathTracedImage,
+    cancelPathTracing,
+    disposePathTracer,
+} = usePathTracer();
+
+const renderEngine = ref<'standard' | 'pathtrace'>('standard');
+const pathTraceTargetSamples = ref<number>(30);
+
+async function startPathTraceRender() {
+    captureError.value = '';
+    if (!renderer || !scene || !camera) {
+        captureError.value = 'Viewer 3D belum siap. Silakan tunggu hingga model 3D selesai dimuat.';
+        return;
+    }
+    try {
+        const result = await renderPathTracedImage({
+            scene,
+            camera,
+            renderer,
+            targetResolution: captureResolution.value,
+            maxSamples: pathTraceTargetSamples.value,
+            container: viewerContainer.value,
+            onFrameUpdate: (dataUrl) => {
+                capturePreviewDataUrl.value = dataUrl;
+            },
+        });
+        if (result) {
+            capturePreviewDataUrl.value = result;
+        }
+    } catch (err: unknown) {
+        console.error('[PathTracer] Error:', err);
+        captureError.value = err instanceof Error ? err.message : 'Gagal menjalankan render Path-Tracing.';
+    }
+}
+
+function closeCaptureModal() {
+    if (isPathTracing.value) {
+        cancelPathTracing();
+    }
+    isCaptureModalOpen.value = false;
+}
+
 function onHourSliderChange(e: Event) {
     const val = parseFloat((e.target as HTMLInputElement).value);
     setHour(val);
@@ -1839,6 +2015,7 @@ function openCaptureModal() {
     captureTitle.value = '';
     captureError.value = '';
     captureVisibleToClients.value = false;
+    renderEngine.value = 'standard';
     isCaptureModalOpen.value = true;
 
     nextTick(() => {
@@ -3087,6 +3264,11 @@ function render(): void {
         return;
     }
 
+    if (isPathTracing.value) {
+        animationFrame = window.requestAnimationFrame(render);
+        return;
+    }
+
     if (controls) {
         controls.autoRotate = autoRotate.value;
         controls.autoRotateSpeed = 1.2;
@@ -3193,6 +3375,7 @@ onBeforeUnmount(() => {
     }
 
     disposePostProcessing();
+    disposePathTracer();
     resizeObserver?.disconnect();
     controls?.dispose();
     renderer?.dispose();

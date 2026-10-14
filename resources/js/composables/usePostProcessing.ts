@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { Scene, PerspectiveCamera, WebGLRenderer, Vector2 } from 'three';
 import { ref } from 'vue';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -13,9 +13,9 @@ export function usePostProcessing() {
     let bloomPass: UnrealBloomPass | null = null;
     let outputPass: OutputPass | null = null;
 
-    let activeRenderer: THREE.WebGLRenderer | null = null;
-    let activeScene: THREE.Scene | null = null;
-    let activeCamera: THREE.PerspectiveCamera | null = null;
+    let activeRenderer: WebGLRenderer | null = null;
+    let activeScene: Scene | null = null;
+    let activeCamera: PerspectiveCamera | null = null;
 
     // Reactive states
     const isEnhancedRenderingActive = ref(true);
@@ -27,9 +27,9 @@ export function usePostProcessing() {
     const bloomThreshold = ref(0.85);
 
     function initPostProcessing(
-        renderer: THREE.WebGLRenderer,
-        scene: THREE.Scene,
-        camera: THREE.PerspectiveCamera,
+        renderer: WebGLRenderer,
+        scene: Scene,
+        camera: PerspectiveCamera,
         width: number,
         height: number
     ) {
@@ -59,7 +59,7 @@ export function usePostProcessing() {
 
         // 3. UnrealBloomPass (Warm architectural glow for LAMPU_* and sunlight highlights)
         bloomPass = new UnrealBloomPass(
-            new THREE.Vector2(width, height),
+            new Vector2(width, height),
             bloomStrength.value,
             bloomRadius.value,
             bloomThreshold.value
