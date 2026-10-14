@@ -1196,26 +1196,39 @@
                                 </button>
                             </div>
 
-                            <!-- Download Gambar Preview (Reference / ControlNet) Button -->
-                            <div class="p-3 rounded-2xl bg-white/5 border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
+                            <!-- Download Aset Gambar untuk AI (RGB & Depth Map) -->
+                            <div class="p-3 rounded-2xl bg-white/5 border border-white/10 space-y-2">
                                 <div class="text-left">
-                                    <p class="text-xs font-medium text-white flex items-center gap-1.5">
+                                    <p class="text-xs font-semibold text-white flex items-center gap-1.5">
                                         <Download class="h-3.5 w-3.5 text-rose-400" />
-                                        <span>Download Gambar Preview</span>
+                                        <span>Download Aset Gambar untuk AI</span>
                                     </p>
                                     <p class="text-[10px] text-neutral-400">
-                                        Siap diunggah sebagai Image Reference / ControlNet di Midjourney, Flux, atau SDXL.
+                                        Gunakan gambar warna untuk Image Reference (Midjourney/Flux) atau Depth Map untuk ControlNet (SDXL/Fooocus) agar geometri 100% presisi.
                                     </p>
                                 </div>
-                                <button
-                                    type="button"
-                                    :disabled="!capturePreviewDataUrl"
-                                    @click="downloadCurrentCapture"
-                                    class="w-full sm:w-auto flex-shrink-0 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black text-xs font-semibold transition-all shadow disabled:opacity-40"
-                                >
-                                    <Download class="h-3.5 w-3.5" />
-                                    <span>Unduh PNG</span>
-                                </button>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                                    <button
+                                        type="button"
+                                        :disabled="!capturePreviewDataUrl"
+                                        @click="downloadCurrentCapture"
+                                        class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black text-xs font-semibold transition-all shadow disabled:opacity-40"
+                                        title="Download tangkapan layar 3D warna penuh"
+                                    >
+                                        <Download class="h-3.5 w-3.5" />
+                                        <span>Gambar Warna (RGB)</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        :disabled="!capturePreviewDataUrl"
+                                        @click="downloadDepthMap"
+                                        class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-white/15 text-xs font-semibold transition-all shadow disabled:opacity-40"
+                                        title="Download peta kedalaman hitam-putih untuk ControlNet"
+                                    >
+                                        <Layers class="h-3.5 w-3.5 text-amber-400" />
+                                        <span>Depth Map (ControlNet)</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -1226,7 +1239,7 @@
                                 <div>
                                     <div class="flex items-center gap-2">
                                         <Sparkles class="h-4 w-4 text-indigo-400" />
-                                        <h3 class="text-sm font-semibold text-white tracking-tight">Prompt AI Universal</h3>
+                                        <h3 class="text-sm font-semibold text-white tracking-tight">AI Prompt Generator</h3>
                                         <span
                                             class="text-[9px] font-mono px-1.5 py-0.5 rounded border"
                                             :class="promptSource === 'gemini-vision'
@@ -1237,7 +1250,7 @@
                                         </span>
                                     </div>
                                     <p class="text-[10px] text-neutral-400 mt-0.5">
-                                        Diformulasikan untuk Midjourney v6, Flux.1, SDXL, dan DALL-E 3.
+                                        Pilih format target AI agar hasil render 100% mirip dengan desain 3D Anda.
                                     </p>
                                 </div>
 
@@ -1250,9 +1263,79 @@
                                 </button>
                             </div>
 
+                            <!-- Model AI Syntax Switcher Tabs -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between text-[10px]">
+                                    <span class="font-semibold uppercase tracking-wider text-neutral-400">Target Model AI:</span>
+                                    <span class="font-mono text-indigo-300">
+                                        {{ captureSelectedSyntax === 'midjourney' ? 'Midjourney v6.1 (--iw 2.0)' : (captureSelectedSyntax === 'sdxl' ? 'SDXL / Fooocus / ControlNet' : (captureSelectedSyntax === 'flux' ? 'Flux.1 / Krea.ai' : 'Universal Prompt')) }}
+                                    </span>
+                                </div>
+                                <div class="grid grid-cols-4 gap-1 p-1 rounded-xl bg-black/40 border border-white/10">
+                                    <button
+                                        type="button"
+                                        @click="captureSelectedSyntax = 'universal'"
+                                        class="py-1 px-1.5 rounded-lg text-center text-[10px] sm:text-[11px] font-medium transition-all"
+                                        :class="captureSelectedSyntax === 'universal' ? 'bg-indigo-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
+                                    >
+                                        Universal
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="captureSelectedSyntax = 'midjourney'"
+                                        class="py-1 px-1.5 rounded-lg text-center text-[10px] sm:text-[11px] font-medium transition-all"
+                                        :class="captureSelectedSyntax === 'midjourney' ? 'bg-blue-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
+                                    >
+                                        Midjourney
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="captureSelectedSyntax = 'sdxl'"
+                                        class="py-1 px-1.5 rounded-lg text-center text-[10px] sm:text-[11px] font-medium transition-all"
+                                        :class="captureSelectedSyntax === 'sdxl' ? 'bg-purple-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
+                                    >
+                                        SDXL / ControlNet
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="captureSelectedSyntax = 'flux'"
+                                        class="py-1 px-1.5 rounded-lg text-center text-[10px] sm:text-[11px] font-medium transition-all"
+                                        :class="captureSelectedSyntax === 'flux' ? 'bg-emerald-600 text-white shadow font-semibold' : 'text-neutral-400 hover:text-white'"
+                                    >
+                                        Flux / Krea
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Model-Specific Recommendation Tip Banner -->
+                            <div v-if="captureSelectedSyntax === 'midjourney'" class="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-200 leading-relaxed flex items-start gap-2">
+                                <Info class="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+                                <div>
+                                    <span class="font-semibold text-white">Panduan Midjourney v6:</span> Unggah gambar preview ke Discord, salin link gambarnya di awal prompt. Parameter <code class="px-1 py-0.2 rounded bg-blue-900/60 font-mono text-amber-300">--iw 2.0</code> (Image Weight maksimal) otomatis ditambahkan untuk mengunci geometri 3D.
+                                </div>
+                            </div>
+
+                            <div v-else-if="captureSelectedSyntax === 'sdxl'" class="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-200 leading-relaxed space-y-1">
+                                <div class="flex items-center gap-1.5 font-semibold text-white">
+                                    <Sliders class="h-3.5 w-3.5 text-purple-400" />
+                                    <span>Panduan Stable Diffusion / Fooocus:</span>
+                                </div>
+                                <p class="text-[10px] text-neutral-300">
+                                    • <b>Img2Img Denoising:</b> Set di angka <span class="text-amber-300 font-bold font-mono">0.35 - 0.45</span> (jangan >0.5 agar bentuk tidak berubah).<br>
+                                    • <b>ControlNet:</b> Unggah file <b>Depth Map</b> (Preprocessor: Depth/None, Weight: 1.0) untuk akurasi dinding 100%.
+                                </p>
+                            </div>
+
+                            <div v-else-if="captureSelectedSyntax === 'flux'" class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-200 leading-relaxed flex items-start gap-2">
+                                <Info class="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                <div>
+                                    <span class="font-semibold text-white">Panduan Flux.1 & Krea.ai:</span> Gunakan mode <b>Image-to-Image / Sketch to Render</b> dengan <b>AI Strength 30% - 40%</b> agar warna material dan proporsi asli tidak diganti.
+                                </div>
+                            </div>
+
                             <!-- Detected Feature Status Badges -->
                             <div class="space-y-1.5">
-                                <span class="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 block">Status Fitur Terdeteksi Otomatis:</span>
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 block">Status Fitur Terdeteksi:</span>
                                 <div class="flex flex-wrap gap-1.5">
                                     <span
                                         v-for="(badge, bIdx) in detectedSceneBadges"
@@ -1275,7 +1358,9 @@
                             <div class="flex-1 flex flex-col p-3.5 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 space-y-2">
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-center gap-2">
-                                        <span class="text-[11px] font-semibold text-white">Universal Architectural Prompt</span>
+                                        <span class="text-[11px] font-semibold text-white">
+                                            {{ captureSelectedSyntax === 'midjourney' ? 'Midjourney Command' : (captureSelectedSyntax === 'sdxl' ? 'Positive Prompt' : (captureSelectedSyntax === 'flux' ? 'Flux Prompt' : 'Universal Prompt')) }}
+                                        </span>
                                         <span v-if="isGeneratingVisionPrompt" class="text-[10px] text-amber-300 font-mono animate-pulse flex items-center gap-1">
                                             <span class="h-2 w-2 rounded-full bg-amber-400 animate-ping"></span>
                                             <span>Menganalisis Vision AI...</span>
@@ -1295,32 +1380,60 @@
                                             <span>{{ isGeneratingVisionPrompt ? 'Proses...' : 'Re-roll' }}</span>
                                         </button>
 
-                                        <!-- Copy Prompt Button -->
+                                        <!-- Copy Formatted Prompt Button -->
                                         <button
                                             type="button"
-                                            @click="copyPromptText(capturePrompt)"
+                                            @click="copySelectedCapturePrompt"
                                             class="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shadow-md"
                                             :class="copiedPromptModal
                                                 ? 'bg-emerald-500 text-black'
-                                                : 'bg-indigo-600 hover:bg-indigo-500 text-white'"
-                                            title="Salin Prompt ke Clipboard"
+                                                : (captureSelectedSyntax === 'midjourney' ? 'bg-blue-600 hover:bg-blue-500 text-white' : (captureSelectedSyntax === 'sdxl' ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'))"
+                                            :title="`Salin prompt format ${captureSelectedSyntax} ke clipboard`"
                                         >
                                             <Check v-if="copiedPromptModal" class="h-3.5 w-3.5" />
                                             <Copy v-else class="h-3.5 w-3.5" />
-                                            <span>{{ copiedPromptModal ? 'Tersalin!' : 'Copy Prompt' }}</span>
+                                            <span>{{ copiedPromptModal ? 'Tersalin!' : (captureSelectedSyntax === 'midjourney' ? 'Copy Midjourney' : (captureSelectedSyntax === 'sdxl' ? 'Copy Positive' : 'Copy Prompt')) }}</span>
                                         </button>
                                     </div>
                                 </div>
 
-                                <!-- Textarea Editor -->
+                                <!-- Textarea Editor for Prompt -->
                                 <textarea
                                     v-model="capturePrompt"
-                                    rows="6"
+                                    rows="5"
                                     placeholder="Menghasilkan prompt arsitektur dari Gemini Vision AI..."
-                                    class="w-full flex-1 min-h-[120px] rounded-xl border border-white/10 bg-black/50 p-2.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-indigo-400 leading-relaxed font-sans resize-y"
+                                    class="w-full flex-1 min-h-[105px] rounded-xl border border-white/10 bg-black/50 p-2.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-indigo-400 leading-relaxed font-sans resize-y"
                                 ></textarea>
 
-                                <p class="text-[10px] text-neutral-400 flex items-center justify-between">
+                                <!-- Midjourney Parameters Indicator -->
+                                <div v-if="captureSelectedSyntax === 'midjourney'" class="p-2 rounded-xl bg-blue-950/40 border border-blue-500/30 flex items-center justify-between text-[10px]">
+                                    <span class="text-neutral-400">Parameter otomatis ditambahkan saat disalin:</span>
+                                    <span class="font-mono text-amber-300 font-semibold bg-black/50 px-2 py-0.5 rounded border border-blue-500/30">--iw 2.0 --ar 16:9 --style raw --v 6.1</span>
+                                </div>
+
+                                <!-- SDXL Negative Prompt Section -->
+                                <div v-if="captureSelectedSyntax === 'sdxl'" class="space-y-1 pt-1 border-t border-purple-500/20">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-semibold uppercase tracking-wider text-rose-300">Negative Prompt (Wajib di SDXL):</span>
+                                        <button
+                                            type="button"
+                                            @click="copyNegativePrompt"
+                                            class="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30 transition-all"
+                                            title="Salin Negative Prompt"
+                                        >
+                                            <Check v-if="copiedNegativeModal" class="h-2.5 w-2.5" />
+                                            <Copy v-else class="h-2.5 w-2.5" />
+                                            <span>{{ copiedNegativeModal ? 'Tersalin!' : 'Copy Negative' }}</span>
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        v-model="defaultNegativePrompt"
+                                        rows="2"
+                                        class="w-full rounded-xl border border-rose-500/30 bg-black/60 p-2 text-[10px] text-rose-200/90 font-mono leading-relaxed focus:outline-none focus:border-rose-400"
+                                    ></textarea>
+                                </div>
+
+                                <p class="text-[10px] text-neutral-400 flex items-center justify-between pt-0.5">
                                     <span>💡 Dapat diedit bebas sebelum disalin atau disimpan.</span>
                                     <span class="font-mono text-neutral-500">{{ capturePrompt.length }} karakter</span>
                                 </p>
@@ -1719,12 +1832,58 @@
                                 </div>
                             </div>
 
+                            <!-- Model AI Syntax Switcher Tabs for Lightbox -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between text-[10px]">
+                                    <span class="font-semibold uppercase tracking-wider text-neutral-400">Target Model AI:</span>
+                                    <span class="font-mono text-indigo-300">
+                                        {{ lightboxSelectedSyntax === 'midjourney' ? 'Midjourney v6.1' : (lightboxSelectedSyntax === 'sdxl' ? 'SDXL / ControlNet' : (lightboxSelectedSyntax === 'flux' ? 'Flux.1 / Krea' : 'Universal')) }}
+                                    </span>
+                                </div>
+                                <div class="grid grid-cols-4 gap-1 p-1 rounded-xl bg-black/40 border border-white/10">
+                                    <button
+                                        type="button"
+                                        @click="lightboxSelectedSyntax = 'universal'"
+                                        class="py-1 px-1 rounded-lg text-center text-[10px] font-medium transition-all"
+                                        :class="lightboxSelectedSyntax === 'universal' ? 'bg-indigo-600 text-white font-semibold shadow' : 'text-neutral-400 hover:text-white'"
+                                    >
+                                        Universal
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="lightboxSelectedSyntax = 'midjourney'"
+                                        class="py-1 px-1 rounded-lg text-center text-[10px] font-medium transition-all"
+                                        :class="lightboxSelectedSyntax === 'midjourney' ? 'bg-blue-600 text-white font-semibold shadow' : 'text-neutral-400 hover:text-white'"
+                                    >
+                                        Midjourney
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="lightboxSelectedSyntax = 'sdxl'"
+                                        class="py-1 px-1 rounded-lg text-center text-[10px] font-medium transition-all"
+                                        :class="lightboxSelectedSyntax === 'sdxl' ? 'bg-purple-600 text-white font-semibold shadow' : 'text-neutral-400 hover:text-white'"
+                                    >
+                                        SDXL
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="lightboxSelectedSyntax = 'flux'"
+                                        class="py-1 px-1 rounded-lg text-center text-[10px] font-medium transition-all"
+                                        :class="lightboxSelectedSyntax === 'flux' ? 'bg-emerald-600 text-white font-semibold shadow' : 'text-neutral-400 hover:text-white'"
+                                    >
+                                        Flux
+                                    </button>
+                                </div>
+                            </div>
+
                             <!-- AI Prompt Section -->
                             <div class="flex-1 flex flex-col p-4 rounded-2xl border border-indigo-500/25 bg-indigo-950/20 space-y-2.5">
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-center gap-2">
                                         <Sparkles class="h-4 w-4 text-indigo-400" />
-                                        <span class="text-xs font-semibold text-white">Prompt AI Arsitektur</span>
+                                        <span class="text-xs font-semibold text-white">
+                                            {{ lightboxSelectedSyntax === 'midjourney' ? 'Prompt Midjourney' : (lightboxSelectedSyntax === 'sdxl' ? 'Positive Prompt SDXL' : (lightboxSelectedSyntax === 'flux' ? 'Prompt Flux' : 'Prompt Arsitektur')) }}
+                                        </span>
                                         <span
                                             v-if="promptSaveStatus[activeLightboxCapture.id] === 'saving'"
                                             class="text-[10px] text-amber-400 animate-pulse font-mono"
@@ -1748,16 +1907,16 @@
                                     <button
                                         v-if="activeLightboxCapture.prompt"
                                         type="button"
-                                        @click="copyCapturePrompt(activeLightboxCapture)"
+                                        @click="copyLightboxSelectedPrompt(activeLightboxCapture)"
                                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shadow-sm"
                                         :class="copiedCaptureId === activeLightboxCapture.id
                                             ? 'bg-emerald-500 text-black'
-                                            : 'bg-indigo-600 hover:bg-indigo-500 text-white'"
-                                        title="Salin Prompt ke Clipboard"
+                                            : (lightboxSelectedSyntax === 'midjourney' ? 'bg-blue-600 hover:bg-blue-500 text-white' : (lightboxSelectedSyntax === 'sdxl' ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'))"
+                                        :title="`Salin prompt format ${lightboxSelectedSyntax}`"
                                     >
                                         <Check v-if="copiedCaptureId === activeLightboxCapture.id" class="h-3 w-3" />
                                         <Copy v-else class="h-3 w-3" />
-                                        <span>{{ copiedCaptureId === activeLightboxCapture.id ? 'Tersalin!' : 'Salin Prompt' }}</span>
+                                        <span>{{ copiedCaptureId === activeLightboxCapture.id ? 'Tersalin!' : (lightboxSelectedSyntax === 'midjourney' ? 'Copy Midjourney' : (lightboxSelectedSyntax === 'sdxl' ? 'Copy Positive' : 'Salin Prompt')) }}</span>
                                     </button>
                                 </div>
 
@@ -1766,9 +1925,9 @@
                                     v-if="isOwner"
                                     v-model="activeLightboxCapture.prompt"
                                     @blur="autoSaveCapturePrompt(activeLightboxCapture)"
-                                    rows="6"
+                                    rows="5"
                                     placeholder="Edit prompt AI di sini... Otomatis tersimpan ke server saat klik di luar."
-                                    class="w-full flex-1 min-h-[120px] rounded-xl border border-white/10 bg-black/50 p-3 text-xs text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400 leading-relaxed font-sans resize-y"
+                                    class="w-full flex-1 min-h-[105px] rounded-xl border border-white/10 bg-black/50 p-3 text-xs text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-indigo-400 leading-relaxed font-sans resize-y"
                                 ></textarea>
 
                                 <!-- Read-only text for Client -->
@@ -1783,8 +1942,36 @@
                                     Belum ada prompt AI untuk gambar ini.
                                 </p>
 
+                                <!-- Midjourney Parameters Indicator -->
+                                <div v-if="lightboxSelectedSyntax === 'midjourney' && activeLightboxCapture.prompt" class="p-2 rounded-xl bg-blue-950/40 border border-blue-500/30 flex items-center justify-between text-[10px]">
+                                    <span class="text-neutral-400">Parameter otomatis saat disalin:</span>
+                                    <span class="font-mono text-amber-300 font-semibold bg-black/50 px-2 py-0.5 rounded border border-blue-500/30">--iw 2.0 --ar 16:9 --style raw --v 6.1</span>
+                                </div>
+
+                                <!-- SDXL Negative Prompt Section -->
+                                <div v-if="lightboxSelectedSyntax === 'sdxl' && activeLightboxCapture.prompt" class="space-y-1 pt-1 border-t border-purple-500/20">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-semibold uppercase tracking-wider text-rose-300">Negative Prompt:</span>
+                                        <button
+                                            type="button"
+                                            @click="copyNegativePrompt"
+                                            class="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30 transition-all"
+                                            title="Salin Negative Prompt"
+                                        >
+                                            <Check v-if="copiedNegativeModal" class="h-2.5 w-2.5" />
+                                            <Copy v-else class="h-2.5 w-2.5" />
+                                            <span>{{ copiedNegativeModal ? 'Tersalin!' : 'Copy Negative' }}</span>
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        v-model="defaultNegativePrompt"
+                                        rows="2"
+                                        class="w-full rounded-xl border border-rose-500/30 bg-black/60 p-2 text-[10px] text-rose-200/90 font-mono leading-relaxed focus:outline-none focus:border-rose-400"
+                                    ></textarea>
+                                </div>
+
                                 <p class="text-[10px] text-neutral-400 flex items-center justify-between pt-1">
-                                    <span>💡 Siap disalin ke Midjourney / ChatGPT / SD.</span>
+                                    <span>💡 Siap disalin ke Midjourney / ControlNet / SD / Flux.</span>
                                     <span v-if="activeLightboxCapture.prompt" class="font-mono text-neutral-500">
                                         {{ activeLightboxCapture.prompt.length }} karakter
                                     </span>
@@ -1876,6 +2063,7 @@ import {
     GripVertical,
     Hand,
     Image,
+    Info,
     Layers,
     Lock,
     MapPin,
@@ -2559,6 +2747,26 @@ function generatePromptForCurrentView(providedAnalysis?: Analyzed3DView | null):
     return `${mandatoryPrefix} Viewport capture of ${room} ${projectContext}. Section state: ${clipContext}. Lighting: ${lightingContext}. Preserve authentic visible surface colors and textures. ${renderStyle}, highly detailed interior architecture, cinematic composition, award-winning architectural showcase.`;
 }
 
+type TargetModelSyntax = 'universal' | 'midjourney' | 'sdxl' | 'flux';
+const captureSelectedSyntax = ref<TargetModelSyntax>('universal');
+const lightboxSelectedSyntax = ref<TargetModelSyntax>('universal');
+
+const defaultNegativePrompt = ref(
+    'deformed architecture, crooked lines, altered geometry, wrong colors, color cast, extra walls, distorted perspective, oversaturated, blurry, low resolution, bad render artifacts, cartoon 3d look, watermark, signature'
+);
+const copiedNegativeModal = ref(false);
+
+const formattedCapturePrompt = computed(() => {
+    const raw = capturePrompt.value || '';
+    if (captureSelectedSyntax.value === 'midjourney') {
+        return `${raw} --iw 2.0 --ar 16:9 --style raw --v 6.1`;
+    }
+    if (captureSelectedSyntax.value === 'flux') {
+        return `Photorealistic architectural capture. ${raw}. Shot on Hasselblad H6D-100c, 35mm lens, f/8, 8k resolution, neutral white balance.`;
+    }
+    return raw;
+});
+
 function copyPromptText(text?: string | null) {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -2566,6 +2774,82 @@ function copyPromptText(text?: string | null) {
     setTimeout(() => {
         copiedPromptModal.value = false;
     }, 2000);
+}
+
+function copySelectedCapturePrompt() {
+    copyPromptText(formattedCapturePrompt.value);
+}
+
+function copyNegativePrompt() {
+    navigator.clipboard.writeText(defaultNegativePrompt.value);
+    copiedNegativeModal.value = true;
+    setTimeout(() => {
+        copiedNegativeModal.value = false;
+    }, 2000);
+}
+
+function getLightboxFormattedPrompt(capture: ProjectCaptureItem, syntax: TargetModelSyntax): string {
+    const raw = capture.prompt || '';
+    if (syntax === 'midjourney') {
+        return `${raw} --iw 2.0 --ar 16:9 --style raw --v 6.1`;
+    }
+    if (syntax === 'flux') {
+        return `Photorealistic architectural capture. ${raw}. Shot on Hasselblad H6D-100c, 35mm lens, f/8, 8k resolution, neutral white balance.`;
+    }
+    return raw;
+}
+
+function copyLightboxSelectedPrompt(capture: ProjectCaptureItem) {
+    const text = getLightboxFormattedPrompt(capture, lightboxSelectedSyntax.value);
+    navigator.clipboard.writeText(text);
+    copiedCaptureId.value = capture.id;
+    setTimeout(() => {
+        if (copiedCaptureId.value === capture.id) {
+            copiedCaptureId.value = null;
+        }
+    }, 2000);
+}
+
+function downloadDepthMap() {
+    if (!renderer || !scene || !camera) return;
+
+    const origBackground = scene.background;
+    const origOverride = scene.overrideMaterial;
+    const origNear = camera.near;
+    const origFar = camera.far;
+
+    try {
+        const dist = controls ? camera.position.distanceTo(controls.target) : 10;
+        camera.near = Math.max(0.1, dist * 0.1);
+        camera.far = Math.max(5, dist * 2.5);
+        camera.updateProjectionMatrix();
+
+        scene.overrideMaterial = new THREE.MeshDepthMaterial();
+        scene.background = new THREE.Color(0x000000);
+
+        renderer.render(scene, camera);
+        const depthDataUrl = renderer.domElement.toDataURL('image/png');
+
+        if (depthDataUrl) {
+            const a = document.createElement('a');
+            a.href = depthDataUrl;
+            const roomSlug = (captureRoomName.value || 'snapshot').replace(/\s+/g, '-').toLowerCase();
+            const timeSlug = (captureHour.value || '12-00').replace(':', '-');
+            a.download = `controlnet-depth-${roomSlug}-${timeSlug}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    } catch (err) {
+        console.error('Failed to generate depth map:', err);
+    } finally {
+        camera.near = origNear;
+        camera.far = origFar;
+        camera.updateProjectionMatrix();
+        scene.overrideMaterial = origOverride;
+        scene.background = origBackground;
+        renderer.render(scene, camera);
+    }
 }
 
 function copyCapturePrompt(capture: ProjectCaptureItem) {
