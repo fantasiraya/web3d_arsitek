@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { toast } from 'vue-sonner';
 import Konva from 'konva';
 import {
     DraftingCompass,
@@ -40,6 +41,9 @@ import {
     RotateCw,
     Hand,
     Focus,
+    Copy,
+    Clipboard,
+    Files,
 } from '@lucide/vue';
 
 interface SheetData {
@@ -70,6 +74,14 @@ interface ElementData {
     sort_order: number;
 }
 
+interface ProjectSheetItem {
+    id: string;
+    title: string;
+    type: string;
+    scale: string;
+    sort_order: number;
+}
+
 interface ArchitectProfile {
     name: string;
     company_name?: string | null;
@@ -82,6 +94,7 @@ const props = defineProps<{
     sheet: SheetData;
     project: ProjectData;
     elements: ElementData[];
+    projectSheets?: ProjectSheetItem[] | null;
     canEdit: boolean;
     architect?: ArchitectProfile | null;
 }>();
@@ -383,6 +396,194 @@ function selectAllElements() {
         count: allShapes.length,
     };
     mainLayer.batchDraw();
+}
+
+// ── COPY, PASTE & DUPLICATE (SALIN PER OBJEK ATAU SELURUH OBJEK) ───────────
+const CLIPBOARD_KEY = 'pitcharch_cad_clipboard';
+const clipboard = ref<Array<{ type: string; data: Record<string, any> }>>([]);
+let pasteCount = 1;
+
+function copySelected() {
+    let itemsToCopy: Array<{ type: string; data: Record<string, any> }> = [];
+
+    if (tr && tr.nodes().length > 0) {
+        const ids = new Set(tr.nodes().map((n) => n.id()));
+        itemsToCopy = elementList.value
+            .filter((el) => ids.has(el.id))
+            .map((el) => ({ type: el.type, data: JSON.parse(JSON.stringify(el.data)) }));
+    } else if (selectedNodeId.value === 'all') {
+        itemsToCopy = elementList.value.map((el) => ({
+            type: el.type,
+            data: JSON.parse(JSON.stringify(el.data)),
+        }));
+    } else if (selectedNodeId.value) {
+        const found = elementList.value.find((el) => el.id === selectedNodeId.value);
+        if (found) {
+            itemsToCopy = [{ type: found.type, data: JSON.parse(JSON.stringify(found.data)) }];
+        }
+    }
+
+    if (itemsToCopy.length === 0) {
+        toast.info('Pilih satu atau beberapa objek terlebih dahulu untuk disalin (klik atau blok di kanvas).');
+        return;
+    }
+
+    clipboard.value = itemsToCopy;
+    try {
+        sessionStorage.setItem(CLIPBOARD_KEY, JSON.stringify(itemsToCopy));
+    } catch {}
+
+    pasteCount = 1;
+    toast.success(`${itemsToCopy.length} objek disalin ke clipboard. Tekan Ctrl+V untuk menempel.`);
+}
+
+function pasteClipboard() {
+    if (!props.canEdit || !mainLayer) return;
+
+    let items = clipboard.value;
+    if (items.length === 0) {
+        try {
+            const raw = sessionStorage.getItem(CLIPBOARD_KEY);
+            if (raw) items = JSON.parse(raw);
+        } catch {}
+    }
+
+    if (!items || items.length === 0) {
+        toast.info('Clipboard kosong. Silakan salin objek (Ctrl+C) terlebih dahulu.');
+        return;
+    }
+
+    const offset = pasteCount * snap(40);
+    pasteCount++;
+
+    const newNodes: Konva.Group[] = [];
+    const newElements: Array<{ id: string; type: string; data: Record<string, any>; sort_order: number }> = [];
+
+    items.forEach((item) => {
+        const newId = 'el_' + Math.random().toString(36).substring(2, 9);
+        const clonedData = JSON.parse(JSON.stringify(item.data));
+        const newItem = {
+            id: newId,
+            type: item.type,
+            data: clonedData,
+            sort_order: elementList.value.length + newElements.length,
+        };
+
+        applyOffsetToElement(newItem, offset, offset);
+
+        newElements.push(newItem);
+        elementList.value.push(newItem);
+
+        const node = createShapeFromElement(newItem);
+        applyLayerVisibilityToNode(node, newItem.type);
+        mainLayer!.add(node);
+        newNodes.push(node);
+    });
+
+    if (tr && newNodes.length > 0) {
+        activeTool.value = 'select';
+        tr.nodes(newNodes);
+        if (newNodes.length === 1) {
+            selectedNodeId.value = newNodes[0].id();
+            const found = elementList.value.find((x) => x.id === newNodes[0].id());
+            selectedElementData.value = found ? { ...found.data, type: found.type } : null;
+        } else {
+            selectedNodeId.value = 'multi';
+            selectedElementData.value = {
+                type: `${newNodes.length} Objek Ditempel`,
+                count: newNodes.length,
+            };
+        }
+    }
+
+    mainLayer.batchDraw();
+    pushHistory();
+    triggerAutoSaveDebounced();
+    toast.success(`${newElements.length} objek berhasil ditempel ke kanvas.`);
+}
+
+function duplicateSelected() {
+    if (!props.canEdit || !mainLayer) return;
+
+    let itemsToDuplicate: Array<{ type: string; data: Record<string, any> }> = [];
+
+    if (tr && tr.nodes().length > 0) {
+        const ids = new Set(tr.nodes().map((n) => n.id()));
+        itemsToDuplicate = elementList.value
+            .filter((el) => ids.has(el.id))
+            .map((el) => ({ type: el.type, data: JSON.parse(JSON.stringify(el.data)) }));
+    } else if (selectedNodeId.value === 'all') {
+        itemsToDuplicate = elementList.value.map((el) => ({
+            type: el.type,
+            data: JSON.parse(JSON.stringify(el.data)),
+        }));
+    } else if (selectedNodeId.value) {
+        const found = elementList.value.find((el) => el.id === selectedNodeId.value);
+        if (found) {
+            itemsToDuplicate = [{ type: found.type, data: JSON.parse(JSON.stringify(found.data)) }];
+        }
+    }
+
+    if (itemsToDuplicate.length === 0) {
+        toast.info('Pilih satu atau beberapa objek terlebih dahulu untuk diduplikat.');
+        return;
+    }
+
+    const offset = snap(40);
+    const newNodes: Konva.Group[] = [];
+    const newElements: Array<{ id: string; type: string; data: Record<string, any>; sort_order: number }> = [];
+
+    itemsToDuplicate.forEach((item) => {
+        const newId = 'el_' + Math.random().toString(36).substring(2, 9);
+        const clonedData = JSON.parse(JSON.stringify(item.data));
+        const newItem = {
+            id: newId,
+            type: item.type,
+            data: clonedData,
+            sort_order: elementList.value.length + newElements.length,
+        };
+
+        applyOffsetToElement(newItem, offset, offset);
+
+        newElements.push(newItem);
+        elementList.value.push(newItem);
+
+        const node = createShapeFromElement(newItem);
+        applyLayerVisibilityToNode(node, newItem.type);
+        mainLayer!.add(node);
+        newNodes.push(node);
+    });
+
+    if (tr && newNodes.length > 0) {
+        activeTool.value = 'select';
+        tr.nodes(newNodes);
+        if (newNodes.length === 1) {
+            selectedNodeId.value = newNodes[0].id();
+            const found = elementList.value.find((x) => x.id === newNodes[0].id());
+            selectedElementData.value = found ? { ...found.data, type: found.type } : null;
+        } else {
+            selectedNodeId.value = 'multi';
+            selectedElementData.value = {
+                type: `${newNodes.length} Objek Diduplikat`,
+                count: newNodes.length,
+            };
+        }
+    }
+
+    mainLayer.batchDraw();
+    pushHistory();
+    triggerAutoSaveDebounced();
+    toast.success(`${newElements.length} objek berhasil diduplikat (Ctrl+D).`);
+}
+
+function copyAllElements() {
+    selectAllElements();
+    copySelected();
+}
+
+function duplicateAllElements() {
+    selectAllElements();
+    duplicateSelected();
 }
 
 // ── RAPATKAN LEMBAR KERJA KE GAMBAR (ELIMINASI SEMUA JARAK KOSONG) ─────────
@@ -1873,6 +2074,27 @@ function handleKeyDown(e: KeyboardEvent) {
         return;
     }
 
+    // Copy (Ctrl+C / Cmd+C) - Salin per objek atau banyak objek
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        copySelected();
+        return;
+    }
+
+    // Paste (Ctrl+V / Cmd+V) - Tempel objek dari clipboard
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        pasteClipboard();
+        return;
+    }
+
+    // Duplicate (Ctrl+D / Cmd+D) - Duplikat cepat objek
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        duplicateSelected();
+        return;
+    }
+
     // Undo / Redo
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -2058,6 +2280,13 @@ function zoom(direction: 'in' | 'out' | 'reset') {
     stage.batchDraw();
 }
 
+function switchSheet(e: Event) {
+    const target = e.target as HTMLSelectElement;
+    if (target.value && target.value !== props.sheet.id) {
+        router.visit(`/drawings/editor/${target.value}`);
+    }
+}
+
 onMounted(() => {
     nextTick(() => {
         initCanvas();
@@ -2112,6 +2341,25 @@ onUnmounted(() => {
                             <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30">
                                 {{ sheet.type.toUpperCase() }}
                             </span>
+
+                            <!-- Sheet Switcher Dropdown (7 Lembar Kerja / Ruangan) -->
+                            <div v-if="projectSheets && projectSheets.length > 1" class="relative inline-block ml-1">
+                                <select
+                                    :value="sheet.id"
+                                    @change="switchSheet"
+                                    class="bg-slate-900 border border-violet-500/40 text-violet-300 hover:text-white hover:border-violet-400 text-[11px] rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-400 font-medium cursor-pointer transition-colors shadow-sm"
+                                    title="Pilih Lembar Kerja Proyek Lainnya"
+                                >
+                                    <option
+                                        v-for="(s, idx) in projectSheets"
+                                        :key="s.id"
+                                        :value="s.id"
+                                        class="bg-slate-900 text-white py-1"
+                                    >
+                                        📄 Lembar {{ idx + 1 }}: {{ s.title }} ({{ s.scale }})
+                                    </option>
+                                </select>
+                            </div>
                         </div>
                         <p class="text-[11px] text-slate-400 -mt-0.5">
                             {{ project.title }} • Skala {{ sheet.scale }} • Kertas {{ paperSize }} ({{ orientation }})
@@ -2234,7 +2482,7 @@ onUnmounted(() => {
             <!-- Header Actions -->
             <div class="flex items-center gap-2">
                 <!-- Undo / Redo Buttons -->
-                <div class="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5 mr-2">
+                <div class="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5">
                     <button
                         @click="undo"
                         :disabled="historyIndex <= 0"
@@ -2250,6 +2498,31 @@ onUnmounted(() => {
                         title="Ulangi / Redo (Ctrl+Y)"
                     >
                         <Redo2 class="w-4 h-4" />
+                    </button>
+                </div>
+
+                <!-- Copy / Paste / Duplicate Button Group -->
+                <div v-if="canEdit" class="hidden md:flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5">
+                    <button
+                        @click="copySelected"
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                        title="Salin Objek Terpilih (Ctrl+C)"
+                    >
+                        <Copy class="w-4 h-4" />
+                    </button>
+                    <button
+                        @click="pasteClipboard"
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                        title="Tempel Objek dari Clipboard (Ctrl+V)"
+                    >
+                        <Clipboard class="w-4 h-4" />
+                    </button>
+                    <button
+                        @click="duplicateSelected"
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                        title="Duplikat Cepat Objek (Ctrl+D)"
+                    >
+                        <Files class="w-4 h-4" />
                     </button>
                 </div>
 
@@ -2701,6 +2974,26 @@ onUnmounted(() => {
                     </div>
                 </div>
 
+                <!-- Quick Copy & Duplicate Buttons in Inspector -->
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                        @click="copySelected"
+                        class="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors cursor-pointer"
+                        title="Salin Objek ke Clipboard (Ctrl+C)"
+                    >
+                        <Copy class="w-3.5 h-3.5 text-violet-400" />
+                        <span>Salin</span>
+                    </button>
+                    <button
+                        @click="duplicateSelected"
+                        class="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-medium bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 transition-colors cursor-pointer"
+                        title="Duplikat Cepat Objek (Ctrl+D)"
+                    >
+                        <Files class="w-3.5 h-3.5 text-violet-400" />
+                        <span>Duplikat</span>
+                    </button>
+                </div>
+
                 <button
                     @click="deleteSelected"
                     class="w-full py-2 rounded-xl text-xs font-medium bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors cursor-pointer"
@@ -2775,6 +3068,18 @@ onUnmounted(() => {
                     <div class="p-2 rounded-xl bg-white/5 flex justify-between">
                         <span class="text-slate-400">Redo</span>
                         <span class="text-violet-400 font-bold">Ctrl+Y</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                        <span class="text-slate-400">Salin Objek (Copy)</span>
+                        <span class="text-violet-400 font-bold">Ctrl+C</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                        <span class="text-slate-400">Tempel Objek (Paste)</span>
+                        <span class="text-violet-400 font-bold">Ctrl+V</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-2">
+                        <span class="text-slate-400">Duplikat Cepat Objek</span>
+                        <span class="text-violet-400 font-bold">Ctrl+D</span>
                     </div>
                     <div class="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex justify-between col-span-2">
                         <span class="text-emerald-300 font-semibold">AutoCAD Box Select (Blok Garis/Objek)</span>

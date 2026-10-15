@@ -92,14 +92,21 @@ class DrawingSheetController extends Controller
             $q->orderBy('sort_order');
         }]);
 
+        $projectSheets = DrawingSheet::where('project_id', $project->id)
+            ->select(['id', 'title', 'type', 'scale', 'sort_order'])
+            ->orderBy('sort_order')
+            ->orderBy('created_at')
+            ->get();
+
         $architect = $sheet->user;
 
         return Inertia::render('Drawing/Editor', [
-            'sheet'     => $sheet,
-            'project'   => $project->only(['id', 'title', 'user_id']),
-            'elements'  => $sheet->elements,
-            'canEdit'   => $canEdit,
-            'architect' => [
+            'sheet'         => $sheet,
+            'project'       => $project->only(['id', 'title', 'user_id']),
+            'elements'      => $sheet->elements,
+            'projectSheets' => $projectSheets,
+            'canEdit'       => $canEdit,
+            'architect'     => [
                 'name'         => $architect->name,
                 'company_name' => $architect->company_name,
                 'company_type' => $architect->company_type,
