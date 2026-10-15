@@ -43,8 +43,13 @@ import {
     Focus,
     Copy,
     Clipboard,
+    ClipboardPaste,
     Files,
     Plus,
+    ChevronDown,
+    ChevronRight,
+    ChevronLeft,
+    RotateCcw,
 } from '@lucide/vue';
 
 interface SheetData {
@@ -128,10 +133,18 @@ let paperLayer: Konva.Layer | null = null;
 let mainLayer: Konva.Layer | null = null;
 let tempLayer: Konva.Layer | null = null;
 let tr: Konva.Transformer | null = null;
+let selectionOverlay: Konva.Rect | null = null;
+
+// Header scroll indicators & export menu
+const headerContainerRef = ref<HTMLElement | null>(null);
+const canScrollLeft = ref(false);
+const canScrollRight = ref(false);
+const showExportMenu = ref(false);
 
 // ── CANVAS & PAPER DIMENSION STATE (FIGMA FRAME & AUTOCAD MODEL SPACE) ──────
 type CanvasMode = 'sheet' | 'infinite';
 const canvasMode = ref<CanvasMode>('sheet');
+const lastPresetBeforeAutofit = ref<string>(props.sheet.paper_size || 'A3');
 
 const orientation = ref<'landscape' | 'portrait'>(
     (props.sheet.orientation as 'landscape' | 'portrait') || 'landscape'
@@ -155,6 +168,146 @@ const paperY = ref<number>(60);
 const paperWidth = ref<number>(defaultInitialW);
 const paperHeight = ref<number>(defaultInitialH);
 const isResizingSheet = ref(false);
+
+// Multi-Paper Frames on the same canvas (Figma / CAD Multi-Layout)
+export interface PaperFrameData {
+    id: string;
+    title: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    size: string;
+    orientation: 'landscape' | 'portrait';
+    isMain: boolean;
+}
+
+const activeFocusedFrameId = ref<string>('main_frame');
+
+function getPaperFrames(): PaperFrameData[] {
+    const frames: PaperFrameData[] = [
+        {
+            id: 'main_frame',
+            title: props.sheet.title || 'Lembar 1',
+            x: paperX.value,
+            y: paperY.value,
+            width: paperWidth.value,
+            height: paperHeight.value,
+            size: paperSize.value,
+            orientation: orientation.value,
+            isMain: true,
+        },
+    ];
+
+    elementList.value
+        .filter((el) => el.type === 'paper_frame')
+        .forEach((el, idx) => {
+            const d = el.data || {};
+            frames.push({
+                id: el.id,
+                title: d.title || `Lembar ${idx + 2}`,
+                x: d.x ?? (paperX.value + (paperWidth.value + 120) * (idx + 1)),
+                y: d.y ?? paperY.value,
+                width: d.width || defaultInitialW,
+                height: d.height || defaultInitialH,
+                size: d.size || 'A3',
+                orientation: d.orientation || 'landscape',
+                isMain: false,
+            });
+        });
+
+    return frames;
+}
+
+const canvasPaperFrames = computed(() => getPaperFrames());
+
+function addPaperFrameToCanvas(customTitle?: string) {
+    const existingFrames = getPaperFrames();
+    const lastFrame = existingFrames[existingFrames.length - 1];
+
+    const w = orientation.value === 'portrait' ? 891 : 1260;
+    const h = orientation.value === 'portrait' ? 1260 : 891;
+
+    // Tempatkan bersebelahan di sebelah kanan kertas sebelumnya dengan jarak 120px
+    const nextX = lastFrame ? Math.round(lastFrame.x + lastFrame.width + 120) : 60;
+    const nextY = lastFrame ? lastFrame.y : 60;
+
+    const frameNumber = existingFrames.length + 1;
+    const title = customTitle || `Lembar ${frameNumber}: Ruangan ${frameNumber}`;
+
+    const newFrameElement = {
+        id: 'frame_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6),
+        type: 'paper_frame',
+        data: {
+            title,
+            x: nextX,
+            y: nextY,
+            width: w,
+            height: h,
+            size: 'A3',
+            orientation: orientation.value,
+        },
+        sort_order: elementList.value.length,
+    };
+
+    elementList.value.push(newFrameElement);
+    drawPaperBoundary();
+    focusOnFrame({
+        id: newFrameElement.id,
+        title,
+        x: nextX,
+        y: nextY,
+        width: w,
+        height: h,
+        size: 'A3',
+        orientation: orientation.value,
+        isMain: false,
+    });
+    triggerAutoSaveDebounced();
+    toast.success(`Berhasil menambahkan ${title} (${w}×${h} px) ke kanvas! Sekarang ada ${existingFrames.length + 1} lembar kertas berdampingan.`);
+}
+
+function removePaperFrame(frameId: string) {
+    const idx = elementList.value.findIndex((el) => el.id === frameId && el.type === 'paper_frame');
+    if (idx !== -1) {
+        elementList.value.splice(idx, 1);
+        drawPaperBoundary();
+        zoomToFit();
+        triggerAutoSaveDebounced();
+        toast.success('Lembar kertas tambahan berhasil dihapus.');
+    }
+}
+
+function focusOnFrame(frame: PaperFrameData) {
+    activeFocusedFrameId.value = frame.id;
+    if (canvasMode.value !== 'sheet') {
+        canvasMode.value = 'sheet';
+        drawGrid();
+        drawPaperBoundary();
+        restoreFromState(elementList.value, true);
+    }
+    if (!stage || !containerRef.value) return;
+
+    const containerW = containerRef.value.clientWidth || 1000;
+    const containerH = containerRef.value.clientHeight || 700;
+    const padding = 70;
+
+    const scaleX = (containerW - padding * 2) / frame.width;
+    const scaleY = (containerH - padding * 2) / frame.height;
+    const fitScale = Math.max(0.2, Math.min(1.5, Math.min(scaleX, scaleY)));
+
+    zoomLevel.value = fitScale;
+    stage.scale({ x: fitScale, y: fitScale });
+
+    const centerX = frame.x + frame.width / 2;
+    const centerY = frame.y + frame.height / 2;
+    const newX = containerW / 2 - centerX * fitScale;
+    const newY = containerH / 2 - centerY * fitScale;
+
+    stage.position({ x: newX, y: newY });
+    stage.batchDraw();
+    toast.success(`Fokus ke ${frame.title}`);
+}
 
 // Canvas state
 const isSnapToGrid = ref(true);
@@ -227,6 +380,59 @@ function redo() {
     }
 }
 
+function updateSelectionOverlay() {
+    if (!selectionOverlay || !tr || tr.nodes().length === 0 || !props.canEdit || activeTool.value !== 'select') {
+        if (selectionOverlay) selectionOverlay.visible(false);
+        return;
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    tr.nodes().forEach((node) => {
+        try {
+            const box = node.getClientRect({ skipTransform: false, relativeTo: mainLayer! });
+            minX = Math.min(minX, box.x);
+            minY = Math.min(minY, box.y);
+            maxX = Math.max(maxX, box.x + box.width);
+            maxY = Math.max(maxY, box.y + box.height);
+        } catch {
+            const nx = node.x();
+            const ny = node.y();
+            minX = Math.min(minX, nx);
+            minY = Math.min(minY, ny);
+            maxX = Math.max(maxX, nx + 50);
+            maxY = Math.max(maxY, ny + 50);
+        }
+    });
+
+    if (!isFinite(minX) || !isFinite(maxX)) {
+        selectionOverlay.visible(false);
+        return;
+    }
+
+    const pad = 6;
+    const x = Math.round(minX - pad);
+    const y = Math.round(minY - pad);
+    const w = Math.round(maxX - minX + pad * 2);
+    const h = Math.round(maxY - minY + pad * 2);
+
+    selectionOverlay.setAttrs({
+        x,
+        y,
+        width: Math.max(20, w),
+        height: Math.max(20, h),
+        visible: true,
+    });
+    (selectionOverlay as any)._baseX = x;
+    (selectionOverlay as any)._baseY = y;
+    selectionOverlay.moveToTop();
+    tr.moveToTop();
+    mainLayer?.batchDraw();
+}
+
 function restoreFromState(
     state: Array<{ id: string; type: string; data: Record<string, any>; sort_order: number }>,
     preserveSelection = false
@@ -236,17 +442,25 @@ function restoreFromState(
     elementList.value = state;
     if (!mainLayer) return;
 
-    // Clear existing nodes except transformer
-    const nodes = mainLayer.getChildren((node) => node !== tr);
-    nodes.forEach((n) => n.destroy());
+    // Clear existing nodes safely without mutating live array mid-iteration
+    tr?.nodes([]);
+    const existingChildren = [...mainLayer.getChildren()];
+    existingChildren.forEach((n) => {
+        if (n !== tr && n !== selectionOverlay) {
+            n.destroy();
+        }
+    });
 
     const reSelectedNodes: Konva.Group[] = [];
     elementList.value.forEach((item) => {
+        if (item.type === 'paper_frame') return;
         const node = createShapeFromElement(item);
-        applyLayerVisibilityToNode(node, item.type);
-        mainLayer!.add(node);
-        if (selectedIdsToKeep.includes(item.id)) {
-            reSelectedNodes.push(node);
+        if (node) {
+            applyLayerVisibilityToNode(node, item.type);
+            mainLayer!.add(node);
+            if (selectedIdsToKeep.includes(item.id)) {
+                reSelectedNodes.push(node);
+            }
         }
     });
 
@@ -265,11 +479,11 @@ function restoreFromState(
             };
         }
     } else {
-        tr?.nodes([]);
         selectedNodeId.value = null;
         selectedElementData.value = null;
     }
 
+    updateSelectionOverlay();
     mainLayer.batchDraw();
 }
 
@@ -304,6 +518,7 @@ function getLayerCategory(type: string): keyof typeof layersVisibility.value {
         case 'toilet':
         case 'bed':
         case 'table':
+        case 'dining_table':
             return 'furniture';
         case 'dimension':
             return 'dimensions';
@@ -340,8 +555,11 @@ function setCanvasMode(mode: CanvasMode) {
     drawGrid();
     drawPaperBoundary();
     restoreFromState(elementList.value, true);
+    zoomToFit();
     if (mode === 'infinite') {
-        zoomToFit();
+        toast.info('Mode AutoCAD Model Space (∞) aktif. Seluruh denah dan frame kertas tampak di kanvas tak terbatas.');
+    } else {
+        toast.info('Mode Frame Kertas aktif. Lembar kerja siap untuk tata letak & cetak.');
     }
 }
 
@@ -415,7 +633,7 @@ function applyOffsetToElement(item: { id: string; type: string; data: Record<str
 function selectAllElements() {
     if (!mainLayer || !tr || !props.canEdit) return;
     activeTool.value = 'select';
-    const allShapes = mainLayer.getChildren((node) => node !== tr) as Konva.Group[];
+    const allShapes = mainLayer.getChildren((node) => node !== tr && node !== selectionOverlay) as Konva.Group[];
     if (allShapes.length === 0) return;
 
     tr.nodes(allShapes);
@@ -424,12 +642,15 @@ function selectAllElements() {
         type: 'Semua Elemen Proyek (Multi-Seleksi)',
         count: allShapes.length,
     };
+    updateSelectionOverlay();
     mainLayer.batchDraw();
 }
 
 // ── COPY, PASTE & DUPLICATE (SALIN PER OBJEK ATAU SELURUH OBJEK) ───────────
 const CLIPBOARD_KEY = 'pitcharch_cad_clipboard';
 const clipboard = ref<Array<{ type: string; data: Record<string, any> }>>([]);
+const isJustCopied = ref(false);
+let copyTimer: any = null;
 let pasteCount = 1;
 
 function copySelected() {
@@ -463,7 +684,13 @@ function copySelected() {
     } catch {}
 
     pasteCount = 1;
-    toast.success(`${itemsToCopy.length} objek disalin ke clipboard. Tekan Ctrl+V untuk menempel.`);
+    isJustCopied.value = true;
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => {
+        isJustCopied.value = false;
+    }, 2500);
+
+    toast.success(`${itemsToCopy.length} objek berhasil disalin! Tekan tombol "Tempel" atau Ctrl+V untuk menempel.`);
 }
 
 function pasteClipboard() {
@@ -525,6 +752,7 @@ function pasteClipboard() {
                 count: newNodes.length,
             };
         }
+        updateSelectionOverlay();
     }
 
     mainLayer.batchDraw();
@@ -601,6 +829,7 @@ function duplicateSelected() {
                 count: newNodes.length,
             };
         }
+        updateSelectionOverlay();
     }
 
     mainLayer.batchDraw();
@@ -621,49 +850,131 @@ function duplicateAllElements() {
 
 // ── RAPATKAN LEMBAR KERJA KE GAMBAR (ELIMINASI SEMUA JARAK KOSONG) ─────────
 function autoFitSheetToDrawing() {
-    if (elementList.value.length === 0) return;
+    if (!stage) return;
+
+    if (canvasMode.value !== 'sheet') {
+        canvasMode.value = 'sheet';
+    }
+
+    const drawElements = elementList.value.filter((el) => el.type !== 'paper_frame');
+    if (drawElements.length === 0) {
+        toast.info('Belum ada objek denah arsitektur pada lembar ini. Silakan gambar dinding atau ruangan terlebih dahulu.');
+        return;
+    }
+
+    const frames = getPaperFrames();
+    const targetFrame = frames.find((f) => f.id === activeFocusedFrameId.value) || frames[0];
+
+    // Temukan elemen yang berada di dalam atau berdekatan dengan frame aktif
+    const frameElements = drawElements.filter((el) => {
+        const box = getElementBoundingBox(el);
+        const centerX = box.x + box.width / 2;
+        return centerX >= (targetFrame.x - 100) && centerX <= (targetFrame.x + targetFrame.width + 100);
+    });
+
+    const elementsToFit = frameElements.length > 0 ? frameElements : drawElements;
 
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
 
-    elementList.value.forEach((el) => {
-        const d = el.data || {};
-        if (d.x1 !== undefined && d.x2 !== undefined) {
-            minX = Math.min(minX, d.x1, d.x2);
-            maxX = Math.max(maxX, d.x1, d.x2);
-            minY = Math.min(minY, d.y1, d.y2);
-            maxY = Math.max(maxY, d.y1, d.y2);
-        } else if (d.x !== undefined) {
-            const w = d.width || d.size || 50;
-            const h = d.height || d.size || 50;
-            minX = Math.min(minX, d.x);
-            maxX = Math.max(maxX, d.x + w);
-            minY = Math.min(minY, d.y);
-            maxY = Math.max(maxY, d.y + h);
-        }
+    elementsToFit.forEach((el) => {
+        const box = getElementBoundingBox(el);
+        minX = Math.min(minX, box.x);
+        maxX = Math.max(maxX, box.x + box.width);
+        minY = Math.min(minY, box.y);
+        maxY = Math.max(maxY, box.y + box.height);
     });
 
-    if (!isFinite(minX)) return;
+    if (!isFinite(minX) || !isFinite(maxX)) {
+        toast.info('Koordinat objek belum dapat diukur.');
+        return;
+    }
 
-    canvasMode.value = 'sheet';
-    const padding = 40;
-    const kopH = 110;
+    if (paperSize.value !== 'Custom') {
+        lastPresetBeforeAutofit.value = paperSize.value;
+    }
 
-    paperX.value = Math.max(20, Math.round(minX - padding));
-    paperY.value = Math.max(20, Math.round(minY - padding));
-
+    const padding = 50;
+    const kopH = 120;
     const contentW = maxX - minX;
     const contentH = maxY - minY;
 
-    paperWidth.value = Math.max(800, Math.round(contentW + padding * 2 + 80));
-    paperHeight.value = Math.max(550, Math.round(contentH + padding * 2 + kopH + 40));
-    paperSize.value = 'Custom';
+    const newW = Math.max(800, Math.round(contentW + padding * 2 + 80));
+    const newH = Math.max(550, Math.round(contentH + padding * 2 + kopH + 40));
+    const newX = Math.max(20, Math.round(minX - padding));
+    const newY = Math.max(20, Math.round(minY - padding));
 
+    if (targetFrame.isMain) {
+        paperX.value = newX;
+        paperY.value = newY;
+        paperWidth.value = newW;
+        paperHeight.value = newH;
+        paperSize.value = 'Custom';
+    } else {
+        const frameEl = elementList.value.find((e) => e.id === targetFrame.id);
+        if (frameEl && frameEl.data) {
+            frameEl.data.x = newX;
+            frameEl.data.y = newY;
+            frameEl.data.width = newW;
+            frameEl.data.height = newH;
+            frameEl.data.size = 'Custom';
+        }
+    }
+
+    drawGrid();
     drawPaperBoundary();
-    zoomToFit();
+    restoreFromState(elementList.value, true);
+    focusOnFrame({
+        ...targetFrame,
+        x: newX,
+        y: newY,
+        width: newW,
+        height: newH,
+    });
     triggerAutoSaveDebounced();
+    toast.success(`Ukuran "${targetFrame.title}" berhasil dirapatkan presisi (${newW}×${newH} px).`);
+}
+
+function resetPaperToDefault() {
+    if (canvasMode.value !== 'sheet') {
+        canvasMode.value = 'sheet';
+    }
+
+    const preset = lastPresetBeforeAutofit.value || 'A3';
+    paperSize.value = preset;
+    const dims = STANDARD_SIZES[preset] || STANDARD_SIZES['A3'];
+    const w = orientation.value === 'portrait' ? dims.h : dims.w;
+    const h = orientation.value === 'portrait' ? dims.w : dims.h;
+
+    const frames = getPaperFrames();
+    const targetFrame = frames.find((f) => f.id === activeFocusedFrameId.value) || frames[0];
+
+    if (targetFrame.isMain) {
+        paperX.value = 60;
+        paperY.value = 60;
+        paperWidth.value = w;
+        paperHeight.value = h;
+    } else {
+        const frameEl = elementList.value.find((e) => e.id === targetFrame.id);
+        if (frameEl && frameEl.data) {
+            frameEl.data.width = w;
+            frameEl.data.height = h;
+            frameEl.data.size = preset;
+        }
+    }
+
+    drawGrid();
+    drawPaperBoundary();
+    restoreFromState(elementList.value, true);
+    focusOnFrame({
+        ...targetFrame,
+        width: w,
+        height: h,
+    });
+    triggerAutoSaveDebounced();
+    toast.success(`Ukuran "${targetFrame.title}" dikembalikan ke standar ISO ${preset} (${w}×${h} px).`);
 }
 
 // ── PUSATKAN TAMPILAN KANVAS (AUTOCAD ZOOM EXTENTS) ─────────────────────────
@@ -675,37 +986,24 @@ function zoomToFit() {
     let maxX = -Infinity;
     let maxY = -Infinity;
 
-    if (canvasMode.value === 'sheet') {
-        minX = paperX.value;
-        minY = paperY.value;
-        maxX = paperX.value + paperWidth.value;
-        maxY = paperY.value + paperHeight.value;
-    } else {
-        if (elementList.value.length === 0) {
-            stage.scale({ x: 1, y: 1 });
-            stage.position({ x: 80, y: 80 });
-            zoomLevel.value = 1;
-            stage.batchDraw();
-            return;
-        }
+    // 1. Kumpulkan seluruh frame kertas yang ada di kanvas
+    const frames = getPaperFrames();
+    frames.forEach((f) => {
+        minX = Math.min(minX, f.x);
+        maxX = Math.max(maxX, f.x + f.width);
+        minY = Math.min(minY, f.y);
+        maxY = Math.max(maxY, f.y + f.height);
+    });
 
-        elementList.value.forEach((el) => {
-            const d = el.data || {};
-            if (d.x1 !== undefined && d.x2 !== undefined) {
-                minX = Math.min(minX, d.x1, d.x2);
-                maxX = Math.max(maxX, d.x1, d.x2);
-                minY = Math.min(minY, d.y1, d.y2);
-                maxY = Math.max(maxY, d.y1, d.y2);
-            } else if (d.x !== undefined) {
-                const w = d.width || d.size || 50;
-                const h = d.height || d.size || 50;
-                minX = Math.min(minX, d.x);
-                maxX = Math.max(maxX, d.x + w);
-                minY = Math.min(minY, d.y);
-                maxY = Math.max(maxY, d.y + h);
-            }
-        });
-    }
+    // 2. Kumpulkan seluruh elemen gambar
+    const drawElements = elementList.value.filter((el) => el.type !== 'paper_frame');
+    drawElements.forEach((el) => {
+        const box = getElementBoundingBox(el);
+        minX = Math.min(minX, box.x);
+        maxX = Math.max(maxX, box.x + box.width);
+        minY = Math.min(minY, box.y);
+        maxY = Math.max(maxY, box.y + box.height);
+    });
 
     if (!isFinite(minX) || !isFinite(maxX)) {
         minX = 60;
@@ -722,16 +1020,19 @@ function zoomToFit() {
     const padding = 70;
     const scaleX = (containerW - padding * 2) / boxW;
     const scaleY = (containerH - padding * 2) / boxH;
-    const fitScale = Math.max(0.25, Math.min(2.0, Math.min(scaleX, scaleY)));
+    const fitScale = Math.max(0.06, Math.min(1.8, Math.min(scaleX, scaleY)));
 
     zoomLevel.value = fitScale;
     stage.scale({ x: fitScale, y: fitScale });
 
-    const newX = (containerW - boxW * fitScale) / 2 - minX * fitScale;
-    const newY = (containerH - boxH * fitScale) / 2 - minY * fitScale;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const newX = containerW / 2 - centerX * fitScale;
+    const newY = containerH / 2 - centerY * fitScale;
 
     stage.position({ x: newX, y: newY });
     stage.batchDraw();
+    toast.success('Tampilan kanvas dipusatkan (Zoom Extents).');
 }
 
 // ── DRAW PAPER BOUNDARY & ARCHITECTURAL TITLE BLOCK (FIGMA FRAME / CAD) ─────
@@ -739,383 +1040,421 @@ function drawPaperBoundary() {
     if (!paperLayer) return;
     paperLayer.destroyChildren();
 
+    const frames = getPaperFrames();
+
     // Mode Kanvas Tak Terbatas (AutoCAD Model Space)
     if (canvasMode.value === 'infinite') {
+        // 1. Gambar AutoCAD UCS Coordinate Axis di titik (0, 0)
+        const ucsGroup = new Konva.Group({ x: 0, y: 0, listening: false });
+        ucsGroup.add(new Konva.Arrow({
+            points: [0, 0, 80, 0],
+            pointerLength: 8,
+            pointerWidth: 6,
+            fill: '#ef4444',
+            stroke: '#ef4444',
+            strokeWidth: 2,
+        }));
+        ucsGroup.add(new Konva.Text({
+            x: 85,
+            y: -6,
+            text: 'X',
+            fontSize: 12,
+            fontStyle: 'bold',
+            fill: '#ef4444',
+        }));
+        ucsGroup.add(new Konva.Arrow({
+            points: [0, 0, 0, 80],
+            pointerLength: 8,
+            pointerWidth: 6,
+            fill: '#22c55e',
+            stroke: '#22c55e',
+            strokeWidth: 2,
+        }));
+        ucsGroup.add(new Konva.Text({
+            x: -6,
+            y: 85,
+            text: 'Y',
+            fontSize: 12,
+            fontStyle: 'bold',
+            fill: '#22c55e',
+        }));
+        ucsGroup.add(new Konva.Circle({
+            x: 0,
+            y: 0,
+            radius: 4,
+            fill: '#38bdf8',
+        }));
+        ucsGroup.add(new Konva.Text({
+            x: -40,
+            y: -18,
+            text: 'UCS (0, 0)',
+            fontSize: 10,
+            fontFamily: 'monospace',
+            fill: '#94a3b8',
+        }));
+        paperLayer.add(ucsGroup);
+
+        // 2. Gambar setiap frame kertas di Model Space (Batas Frame CAD)
+        frames.forEach((frame) => {
+            const fx = frame.x;
+            const fy = frame.y;
+            const fw = frame.width;
+            const fh = frame.height;
+
+            const bgRect = new Konva.Rect({
+                x: fx,
+                y: fy,
+                width: fw,
+                height: fh,
+                fill: 'rgba(30, 41, 59, 0.45)',
+                stroke: '#6366f1',
+                strokeWidth: 2,
+                dash: [12, 6],
+                shadowColor: '#6366f1',
+                shadowBlur: 14,
+                shadowOpacity: 0.25,
+                listening: false,
+            });
+            paperLayer.add(bgRect);
+
+            // Badge Header Model Frame (Bisa digeser)
+            const badgeGroup = new Konva.Group({
+                x: fx,
+                y: fy - 26,
+                draggable: props.canEdit,
+            });
+            badgeGroup.add(new Konva.Tag({
+                fill: '#312e81',
+                cornerRadius: 6,
+                stroke: '#6366f1',
+                strokeWidth: 1,
+            }));
+            badgeGroup.add(new Konva.Text({
+                text: `📐 Model Frame: ${frame.title} • ${fw}×${fh} px`,
+                fontSize: 10,
+                fontFamily: 'sans-serif',
+                fontStyle: 'bold',
+                fill: '#c7d2fe',
+                padding: 4,
+            }));
+
+            if (props.canEdit) {
+                badgeGroup.on('mouseenter', () => { if (stage && !isSpacePressed.value) stage.container().style.cursor = 'move'; });
+                badgeGroup.on('mouseleave', () => { if (stage && !isSpacePressed.value) stage.container().style.cursor = 'default'; });
+                badgeGroup.on('dragmove', () => {
+                    const newX = Math.round(badgeGroup.x());
+                    const newY = Math.round(badgeGroup.y() + 26);
+                    if (frame.isMain) {
+                        paperX.value = newX;
+                        paperY.value = newY;
+                    } else {
+                        const el = elementList.value.find((e) => e.id === frame.id);
+                        if (el && el.data) {
+                            el.data.x = newX;
+                            el.data.y = newY;
+                        }
+                    }
+                    drawPaperBoundary();
+                });
+                badgeGroup.on('dragend', () => {
+                    drawPaperBoundary();
+                    triggerAutoSaveDebounced();
+                });
+            }
+            paperLayer.add(badgeGroup);
+        });
+
         paperLayer.batchDraw();
         return;
     }
 
-    const px = paperX.value;
-    const py = paperY.value;
-    const pw = paperWidth.value;
-    const ph = paperHeight.value;
+    // Mode Frame Kertas Putih (Sheet Mode):
+    frames.forEach((frame) => {
+        const fx = frame.x;
+        const fy = frame.y;
+        const fw = frame.width;
+        const fh = frame.height;
 
-    // 1. Figma Frame Title Bar (Draggable Header untuk menggeser posisi kertas semaunya)
-    if (props.canEdit) {
-        const headerGroup = new Konva.Group({
-            x: px,
-            y: py - 26,
-            draggable: true,
-        });
+        // 1. Draggable Frame Header (Figma style)
+        if (props.canEdit) {
+            const headerGroup = new Konva.Group({
+                x: fx,
+                y: fy - 26,
+                draggable: true,
+            });
 
-        const headerTag = new Konva.Tag({
-            fill: '#4338ca',
-            cornerRadius: 6,
-            shadowColor: '#4338ca',
-            shadowBlur: 8,
-            shadowOpacity: 0.35,
-        });
+            headerGroup.add(new Konva.Tag({
+                fill: frame.isMain ? '#4338ca' : '#059669',
+                cornerRadius: 6,
+                shadowColor: frame.isMain ? '#4338ca' : '#059669',
+                shadowBlur: 8,
+                shadowOpacity: 0.35,
+            }));
 
-        const headerText = new Konva.Text({
-            text: `✛ ${props.sheet.title}  •  ${pw}×${ph} px (Tarik untuk geser lembar)`,
-            fontSize: 10,
-            fontFamily: 'sans-serif',
-            fontStyle: 'bold',
+            headerGroup.add(new Konva.Text({
+                text: `✛ ${frame.title}  •  ${fw}×${fh} px (Tarik untuk geser)`,
+                fontSize: 10,
+                fontFamily: 'sans-serif',
+                fontStyle: 'bold',
+                fill: '#ffffff',
+                padding: 4,
+            }));
+
+            // Tombol Hapus Frame Tambahan (jika bukan frame utama)
+            if (!frame.isMain) {
+                const delBtn = new Konva.Label({
+                    x: Math.min(220, fw - 40),
+                    y: 2,
+                });
+                delBtn.add(new Konva.Tag({
+                    fill: '#dc2626',
+                    cornerRadius: 4,
+                }));
+                delBtn.add(new Konva.Text({
+                    text: '✕ Hapus',
+                    fontSize: 9,
+                    fontStyle: 'bold',
+                    fill: '#ffffff',
+                    padding: 3,
+                }));
+                delBtn.on('click tap', (e) => {
+                    e.cancelBubble = true;
+                    removePaperFrame(frame.id);
+                });
+                headerGroup.add(delBtn);
+            }
+
+            headerGroup.on('mouseenter', () => {
+                if (stage && !isSpacePressed.value) stage.container().style.cursor = 'move';
+            });
+            headerGroup.on('mouseleave', () => {
+                if (stage && !isResizingSheet.value && !isSpacePressed.value) {
+                    stage.container().style.cursor = activeTool.value === 'select' ? 'default' : (activeTool.value === 'pan' ? 'grab' : 'crosshair');
+                }
+            });
+            headerGroup.on('dragmove', () => {
+                const newX = Math.round(headerGroup.x());
+                const newY = Math.round(headerGroup.y() + 26);
+                if (frame.isMain) {
+                    paperX.value = newX;
+                    paperY.value = newY;
+                } else {
+                    const el = elementList.value.find((e) => e.id === frame.id);
+                    if (el && el.data) {
+                        el.data.x = newX;
+                        el.data.y = newY;
+                    }
+                }
+                drawPaperBoundary();
+            });
+            headerGroup.on('dragend', () => {
+                drawPaperBoundary();
+                triggerAutoSaveDebounced();
+            });
+
+            paperLayer.add(headerGroup);
+        }
+
+        // 2. White Paper Rectangle
+        const paperRect = new Konva.Rect({
+            x: fx,
+            y: fy,
+            width: fw,
+            height: fh,
             fill: '#ffffff',
-            padding: 4,
+            shadowColor: '#000000',
+            shadowBlur: 30,
+            shadowOpacity: 0.25,
+            shadowOffset: { x: 0, y: 15 },
+            listening: false,
         });
 
-        headerGroup.add(headerTag);
-        headerGroup.add(headerText);
-
-        headerGroup.on('mouseenter', () => {
-            if (stage && !isSpacePressed.value) stage.container().style.cursor = 'move';
-        });
-        headerGroup.on('mouseleave', () => {
-            if (stage && !isResizingSheet.value && !isSpacePressed.value) {
-                stage.container().style.cursor = activeTool.value === 'select' ? 'default' : (activeTool.value === 'pan' ? 'grab' : 'crosshair');
-            }
-        });
-        headerGroup.on('dragmove', () => {
-            paperX.value = Math.round(headerGroup.x());
-            paperY.value = Math.round(headerGroup.y() + 26);
-            drawPaperBoundary();
-        });
-        headerGroup.on('dragend', () => {
-            drawPaperBoundary();
-            triggerAutoSaveDebounced();
+        // 3. Border Frame (Garis Tepi Arsitektur Standar ISO)
+        const margin = 20;
+        const frameRect = new Konva.Rect({
+            x: fx + margin,
+            y: fy + margin,
+            width: Math.max(100, fw - margin * 2),
+            height: Math.max(100, fh - margin * 2),
+            stroke: '#0f172a',
+            strokeWidth: 2,
+            listening: false,
         });
 
-        paperLayer.add(headerGroup);
-    }
+        // 4. Kop Gambar (Title Block) Profesional Dinamis (Menempel di Sudut Kanan Bawah)
+        const kopW = Math.min(340, Math.max(200, fw - margin * 2 - 20));
+        const kopH = Math.min(110, Math.max(80, fh - margin * 2 - 20));
+        const kopX = fx + fw - margin - kopW;
+        const kopY = fy + fh - margin - kopH;
 
-    // 2. Outer Paper Shadow (Lembar Kerja Kertas Putih)
-    const paperRect = new Konva.Rect({
-        x: px,
-        y: py,
-        width: pw,
-        height: ph,
-        fill: '#ffffff',
-        shadowColor: '#000000',
-        shadowBlur: 30,
-        shadowOpacity: 0.25,
-        shadowOffset: { x: 0, y: 15 },
-        listening: false,
-    });
-
-    // 3. Border Frame (Garis Tepi Arsitektur Standar ISO)
-    const margin = 20;
-    const frameRect = new Konva.Rect({
-        x: px + margin,
-        y: py + margin,
-        width: Math.max(100, pw - margin * 2),
-        height: Math.max(100, ph - margin * 2),
-        stroke: '#0f172a',
-        strokeWidth: 2,
-        listening: false,
-    });
-
-    // 4. Kop Gambar (Title Block) Profesional Dinamis (Menempel di Sudut Kanan Bawah)
-    const kopW = Math.min(340, Math.max(200, pw - margin * 2 - 20));
-    const kopH = Math.min(110, Math.max(80, ph - margin * 2 - 20));
-    const kopX = px + pw - margin - kopW;
-    const kopY = py + ph - margin - kopH;
-
-    const kopRect = new Konva.Rect({
-        x: kopX,
-        y: kopY,
-        width: kopW,
-        height: kopH,
-        stroke: '#0f172a',
-        strokeWidth: 1.5,
-        fill: '#f8fafc',
-        listening: false,
-    });
-
-    // Header Studio Arsitek
-    const companyTitle = props.architect?.company_name
-        ? `${props.architect?.company_type ? props.architect.company_type + ' ' : ''}${props.architect.company_name}`.toUpperCase()
-        : 'STUDIO ARSITEKTUR';
-
-    const kopStudio = new Konva.Text({
-        x: kopX + 12,
-        y: kopY + 12,
-        text: companyTitle,
-        fontSize: 12,
-        fontStyle: 'bold',
-        fontFamily: 'sans-serif',
-        fill: '#4338ca',
-        listening: false,
-    });
-
-    const kopTitle = new Konva.Text({
-        x: kopX + 12,
-        y: kopY + 30,
-        text: props.sheet.title,
-        fontSize: 13,
-        fontStyle: 'bold',
-        fontFamily: 'sans-serif',
-        fill: '#0f172a',
-        listening: false,
-    });
-
-    const kopProject = new Konva.Text({
-        x: kopX + 12,
-        y: kopY + 50,
-        text: `PROYEK: ${props.project.title}`,
-        fontSize: 11,
-        fontFamily: 'sans-serif',
-        fill: '#475569',
-        listening: false,
-    });
-
-    const todayDate = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-    const kopMeta = new Konva.Text({
-        x: kopX + 12,
-        y: kopY + 70,
-        text: `SKALA: ${props.sheet.scale}   |   KERTAS: ${paperSize.value} (${pw}×${ph}px)\nTGL: ${todayDate}   |   KOTA: ${props.architect?.city_name || 'Indonesia'}`,
-        fontSize: 10,
-        fontFamily: 'monospace',
-        fill: '#64748b',
-        listening: false,
-    });
-
-    paperLayer.add(paperRect);
-    paperLayer.add(frameRect);
-    paperLayer.add(kopRect);
-    paperLayer.add(kopStudio);
-    paperLayer.add(kopTitle);
-    paperLayer.add(kopProject);
-    paperLayer.add(kopMeta);
-
-    // ── FIGMA-STYLE DYNAMIC RESIZE HANDLES ──────────────────────────────────────
-    if (props.canEdit) {
-        // 1. Sudut Kanan Bawah (Resize Lebar & Tinggi)
-        const cornerGroup = new Konva.Group({
-            x: px + pw,
-            y: py + ph,
-            draggable: true,
+        const kopRect = new Konva.Rect({
+            x: kopX,
+            y: kopY,
+            width: kopW,
+            height: kopH,
+            stroke: '#0f172a',
+            strokeWidth: 1.5,
+            fill: '#f8fafc',
+            listening: false,
         });
 
-        const cornerHandle = new Konva.Circle({
-            radius: 8,
-            fill: '#6366f1',
-            stroke: '#ffffff',
-            strokeWidth: 2.5,
-            shadowColor: '#6366f1',
-            shadowBlur: 10,
-            shadowOpacity: 0.6,
+        const companyTitle = props.architect?.company_name
+            ? `${props.architect?.company_type ? props.architect.company_type + ' ' : ''}${props.architect.company_name}`.toUpperCase()
+            : 'STUDIO ARSITEKTUR';
+
+        const kopStudio = new Konva.Text({
+            x: kopX + 12,
+            y: kopY + 12,
+            text: companyTitle,
+            fontSize: 12,
+            fontStyle: 'bold',
+            fontFamily: 'sans-serif',
+            fill: '#4338ca',
+            listening: false,
         });
 
-        const cornerTooltip = new Konva.Label({
-            x: 12,
-            y: 12,
-            opacity: 0.9,
-        });
-        cornerTooltip.add(new Konva.Tag({
+        const kopTitle = new Konva.Text({
+            x: kopX + 12,
+            y: kopY + 30,
+            text: frame.title,
+            fontSize: 13,
+            fontStyle: 'bold',
+            fontFamily: 'sans-serif',
             fill: '#0f172a',
-            cornerRadius: 6,
-            pointerDirection: 'none',
-        }));
-        cornerTooltip.add(new Konva.Text({
-            text: `${pw} × ${ph} px`,
-            fontFamily: 'monospace',
+            listening: false,
+        });
+
+        const kopProject = new Konva.Text({
+            x: kopX + 12,
+            y: kopY + 50,
+            text: `PROYEK: ${props.project.title}`,
+            fontSize: 11,
+            fontFamily: 'sans-serif',
+            fill: '#475569',
+            listening: false,
+        });
+
+        const todayDate = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+        const kopMeta = new Konva.Text({
+            x: kopX + 12,
+            y: kopY + 70,
+            text: `SKALA: ${props.sheet.scale}   |   KERTAS: ${frame.size} (${fw}×${fh}px)\nTGL: ${todayDate}   |   KOTA: ${props.architect?.city_name || 'Indonesia'}`,
             fontSize: 10,
-            padding: 4,
-            fill: '#c7d2fe',
-        }));
-
-        cornerGroup.add(cornerHandle);
-        cornerGroup.add(cornerTooltip);
-
-        cornerGroup.on('mouseenter', () => {
-            if (stage && !isSpacePressed.value) stage.container().style.cursor = 'nwse-resize';
-        });
-        cornerGroup.on('mouseleave', () => {
-            if (stage && !isResizingSheet.value && !isSpacePressed.value) {
-                stage.container().style.cursor = activeTool.value === 'select' ? 'default' : (activeTool.value === 'pan' ? 'grab' : 'crosshair');
-            }
-        });
-        cornerGroup.on('dragstart', () => {
-            isResizingSheet.value = true;
-        });
-        cornerGroup.on('dragmove', () => {
-            const newW = Math.max(500, Math.round(cornerGroup.x() - paperX.value));
-            const newH = Math.max(350, Math.round(cornerGroup.y() - paperY.value));
-            paperWidth.value = newW;
-            paperHeight.value = newH;
-            paperSize.value = 'Custom';
-
-            paperRect.width(newW);
-            paperRect.height(newH);
-            frameRect.width(newW - margin * 2);
-            frameRect.height(newH - margin * 2);
-
-            const nKopW = Math.min(340, Math.max(200, newW - margin * 2 - 20));
-            const nKopH = Math.min(110, Math.max(80, newH - margin * 2 - 20));
-            const nKopX = paperX.value + newW - margin - nKopW;
-            const nKopY = paperY.value + newH - margin - nKopH;
-
-            kopRect.position({ x: nKopX, y: nKopY });
-            kopRect.size({ width: nKopW, height: nKopH });
-            kopStudio.position({ x: nKopX + 12, y: nKopY + 12 });
-            kopTitle.position({ x: nKopX + 12, y: nKopY + 30 });
-            kopProject.position({ x: nKopX + 12, y: nKopY + 50 });
-            kopMeta.position({ x: nKopX + 12, y: nKopY + 70 });
-            kopMeta.text(`SKALA: ${props.sheet.scale}   |   KERTAS: Custom (${newW}×${newH}px)\nTGL: ${todayDate}   |   KOTA: ${props.architect?.city_name || 'Indonesia'}`);
-
-            (cornerTooltip.findOne('Text') as Konva.Text)?.text(`${newW} × ${newH} px`);
-            paperLayer?.batchDraw();
-        });
-        cornerGroup.on('dragend', () => {
-            isResizingSheet.value = false;
-            drawPaperBoundary();
-            triggerAutoSaveDebounced();
+            fontFamily: 'monospace',
+            fill: '#64748b',
+            listening: false,
         });
 
-        paperLayer.add(cornerGroup);
+        paperLayer.add(paperRect);
+        paperLayer.add(frameRect);
+        paperLayer.add(kopRect);
+        paperLayer.add(kopStudio);
+        paperLayer.add(kopTitle);
+        paperLayer.add(kopProject);
+        paperLayer.add(kopMeta);
 
-        // 2. Tepi Kanan (Resize Lebar)
-        const rightEdgeGroup = new Konva.Group({
-            x: px + pw,
-            y: py + ph / 2,
-            draggable: true,
-            dragBoundFunc: (pos) => ({
-                x: pos.x,
-                y: stage!.y() + (py + ph / 2) * stage!.scaleY(),
-            }),
-        });
-        const rightHandle = new Konva.Rect({
-            x: -3,
-            y: -15,
-            width: 6,
-            height: 30,
-            cornerRadius: 3,
-            fill: '#818cf8',
-            stroke: '#ffffff',
-            strokeWidth: 1.5,
-        });
-        rightEdgeGroup.add(rightHandle);
+        // Figma resize handle for main frame
+        if (frame.isMain && props.canEdit) {
+            const cornerGroup = new Konva.Group({
+                x: fx + fw,
+                y: fy + fh,
+                draggable: true,
+            });
 
-        rightEdgeGroup.on('mouseenter', () => {
-            if (stage && !isSpacePressed.value) stage.container().style.cursor = 'ew-resize';
-        });
-        rightEdgeGroup.on('mouseleave', () => {
-            if (stage && !isResizingSheet.value && !isSpacePressed.value) {
-                stage.container().style.cursor = activeTool.value === 'select' ? 'default' : (activeTool.value === 'pan' ? 'grab' : 'crosshair');
-            }
-        });
-        rightEdgeGroup.on('dragmove', () => {
-            const newW = Math.max(500, Math.round(rightEdgeGroup.x() - paperX.value));
-            paperWidth.value = newW;
-            paperSize.value = 'Custom';
-            drawPaperBoundary();
-        });
-        rightEdgeGroup.on('dragend', () => {
-            drawPaperBoundary();
-            triggerAutoSaveDebounced();
-        });
-        paperLayer.add(rightEdgeGroup);
+            cornerGroup.add(new Konva.Circle({
+                radius: 8,
+                fill: '#6366f1',
+                stroke: '#ffffff',
+                strokeWidth: 2.5,
+                shadowColor: '#6366f1',
+                shadowBlur: 10,
+                shadowOpacity: 0.6,
+            }));
 
-        // 3. Tepi Kiri (Resize Lebar dari Kiri - Untuk menghilangkan jarak kosong di kiri!)
-        const leftEdgeGroup = new Konva.Group({
-            x: px,
-            y: py + ph / 2,
-            draggable: true,
-            dragBoundFunc: (pos) => ({
-                x: pos.x,
-                y: stage!.y() + (py + ph / 2) * stage!.scaleY(),
-            }),
-        });
-        const leftHandle = new Konva.Rect({
-            x: -3,
-            y: -15,
-            width: 6,
-            height: 30,
-            cornerRadius: 3,
-            fill: '#818cf8',
-            stroke: '#ffffff',
-            strokeWidth: 1.5,
-        });
-        leftEdgeGroup.add(leftHandle);
-
-        leftEdgeGroup.on('mouseenter', () => {
-            if (stage && !isSpacePressed.value) stage.container().style.cursor = 'ew-resize';
-        });
-        leftEdgeGroup.on('mouseleave', () => {
-            if (stage && !isResizingSheet.value && !isSpacePressed.value) {
-                stage.container().style.cursor = activeTool.value === 'select' ? 'default' : (activeTool.value === 'pan' ? 'grab' : 'crosshair');
-            }
-        });
-        leftEdgeGroup.on('dragmove', () => {
-            const newX = Math.round(leftEdgeGroup.x());
-            const dx = newX - paperX.value;
-            const newW = paperWidth.value - dx;
-            if (newW >= 400) {
-                paperX.value = newX;
-                paperWidth.value = newW;
+            cornerGroup.on('mouseenter', () => { if (stage && !isSpacePressed.value) stage.container().style.cursor = 'nwse-resize'; });
+            cornerGroup.on('mouseleave', () => { if (stage && !isResizingSheet.value && !isSpacePressed.value) stage.container().style.cursor = 'default'; });
+            cornerGroup.on('dragstart', () => { isResizingSheet.value = true; });
+            cornerGroup.on('dragmove', () => {
+                paperWidth.value = Math.max(400, Math.round(cornerGroup.x() - paperX.value));
+                paperHeight.value = Math.max(300, Math.round(cornerGroup.y() - paperY.value));
                 paperSize.value = 'Custom';
                 drawPaperBoundary();
-            }
-        });
-        leftEdgeGroup.on('dragend', () => {
-            drawPaperBoundary();
-            triggerAutoSaveDebounced();
-        });
-        paperLayer.add(leftEdgeGroup);
+            });
+            cornerGroup.on('dragend', () => {
+                isResizingSheet.value = false;
+                drawPaperBoundary();
+                triggerAutoSaveDebounced();
+            });
 
-        // 4. Tepi Bawah (Resize Tinggi)
-        const bottomEdgeGroup = new Konva.Group({
-            x: px + pw / 2,
-            y: py + ph,
-            draggable: true,
-            dragBoundFunc: (pos) => ({
-                x: stage!.x() + (px + pw / 2) * stage!.scaleX(),
-                y: pos.y,
-            }),
-        });
-        const bottomHandle = new Konva.Rect({
-            x: -15,
-            y: -3,
-            width: 30,
-            height: 6,
-            cornerRadius: 3,
-            fill: '#818cf8',
-            stroke: '#ffffff',
-            strokeWidth: 1.5,
-        });
-        bottomEdgeGroup.add(bottomHandle);
+            paperLayer.add(cornerGroup);
 
-        bottomEdgeGroup.on('mouseenter', () => {
-            if (stage && !isSpacePressed.value) stage.container().style.cursor = 'ns-resize';
-        });
-        bottomEdgeGroup.on('mouseleave', () => {
-            if (stage && !isResizingSheet.value && !isSpacePressed.value) {
-                stage.container().style.cursor = activeTool.value === 'select' ? 'default' : (activeTool.value === 'pan' ? 'grab' : 'crosshair');
-            }
-        });
-        bottomEdgeGroup.on('dragmove', () => {
-            const newH = Math.max(350, Math.round(bottomEdgeGroup.y() - paperY.value));
-            paperHeight.value = newH;
-            paperSize.value = 'Custom';
-            drawPaperBoundary();
-        });
-        bottomEdgeGroup.on('dragend', () => {
-            drawPaperBoundary();
-            triggerAutoSaveDebounced();
-        });
-        paperLayer.add(bottomEdgeGroup);
-    }
+            // Tepi Kanan
+            const rightEdgeGroup = new Konva.Group({
+                x: fx + fw,
+                y: fy + fh / 2,
+                draggable: true,
+                dragBoundFunc: (pos) => ({
+                    x: pos.x,
+                    y: stage!.y() + (fy + fh / 2) * stage!.scaleY(),
+                }),
+            });
+            rightEdgeGroup.add(new Konva.Rect({
+                x: -3,
+                y: -15,
+                width: 6,
+                height: 30,
+                cornerRadius: 3,
+                fill: '#818cf8',
+                stroke: '#ffffff',
+                strokeWidth: 1.5,
+            }));
+            rightEdgeGroup.on('mouseenter', () => { if (stage && !isSpacePressed.value) stage.container().style.cursor = 'ew-resize'; });
+            rightEdgeGroup.on('mouseleave', () => { if (stage && !isResizingSheet.value && !isSpacePressed.value) stage.container().style.cursor = 'default'; });
+            rightEdgeGroup.on('dragmove', () => {
+                paperWidth.value = Math.max(400, Math.round(rightEdgeGroup.x() - paperX.value));
+                paperSize.value = 'Custom';
+                drawPaperBoundary();
+            });
+            rightEdgeGroup.on('dragend', () => {
+                drawPaperBoundary();
+                triggerAutoSaveDebounced();
+            });
+            paperLayer.add(rightEdgeGroup);
+
+            // Tepi Bawah
+            const bottomEdgeGroup = new Konva.Group({
+                x: fx + fw / 2,
+                y: fy + fh,
+                draggable: true,
+                dragBoundFunc: (pos) => ({
+                    x: stage!.x() + (fx + fw / 2) * stage!.scaleX(),
+                    y: pos.y,
+                }),
+            });
+            bottomEdgeGroup.add(new Konva.Rect({
+                x: -15,
+                y: -3,
+                width: 30,
+                height: 6,
+                cornerRadius: 3,
+                fill: '#818cf8',
+                stroke: '#ffffff',
+                strokeWidth: 1.5,
+            }));
+            bottomEdgeGroup.on('mouseenter', () => { if (stage && !isSpacePressed.value) stage.container().style.cursor = 'ns-resize'; });
+            bottomEdgeGroup.on('mouseleave', () => { if (stage && !isResizingSheet.value && !isSpacePressed.value) stage.container().style.cursor = 'default'; });
+            bottomEdgeGroup.on('dragmove', () => {
+                paperHeight.value = Math.max(300, Math.round(bottomEdgeGroup.y() - paperY.value));
+                paperSize.value = 'Custom';
+                drawPaperBoundary();
+            });
+            bottomEdgeGroup.on('dragend', () => {
+                drawPaperBoundary();
+                triggerAutoSaveDebounced();
+            });
+            paperLayer.add(bottomEdgeGroup);
+        }
+    });
 
     paperLayer.batchDraw();
 }
@@ -1163,6 +1502,7 @@ function drawGrid() {
 
 // ── CREATE ARCHITECTURAL SYMBOLS (SHAPES) ──────────────────────────────────
 function createShapeFromElement(el: { id: string; type: string; data: Record<string, any> }): Konva.Group {
+    if (el.type === 'paper_frame') return null as any;
     const data = el.data || {};
     const group = new Konva.Group({
         id: el.id,
@@ -1415,7 +1755,8 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
             break;
         }
 
-        case 'table': {
+        case 'table':
+        case 'dining_table': {
             // Meja Makan dengan Kursi
             const x = data.x ?? 0;
             const y = data.y ?? 0;
@@ -1541,24 +1882,30 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
         }
     }
 
-    let prevGroupPos = { x: 0, y: 0 };
+    let groupStartPositions = new Map<Konva.Node, { x: number; y: number }>();
+    let isMultiDragging = false;
+
     group.on('dragstart', () => {
-        prevGroupPos = { x: group.x(), y: group.y() };
+        groupStartPositions.clear();
+        isMultiDragging = Boolean(tr && tr.nodes().length > 1 && tr.nodes().includes(group));
+        if (isMultiDragging && tr) {
+            tr.nodes().forEach((n) => {
+                groupStartPositions.set(n, { x: n.x(), y: n.y() });
+            });
+        }
     });
 
     group.on('dragmove', () => {
-        const curX = group.x();
-        const curY = group.y();
-        const dx = curX - prevGroupPos.x;
-        const dy = curY - prevGroupPos.y;
-        prevGroupPos = { x: curX, y: curY };
-
-        // Real-time synchronization: Geser semua objek yang terblok bersamaan saat mouse bergerak
-        if (tr && tr.nodes().length > 1 && tr.nodes().includes(group)) {
+        if (isMultiDragging && tr) {
+            const dx = group.x();
+            const dy = group.y();
             tr.nodes().forEach((n) => {
                 if (n !== group) {
-                    n.x(n.x() + dx);
-                    n.y(n.y() + dy);
+                    const orig = groupStartPositions.get(n);
+                    if (orig) {
+                        n.x(orig.x + dx);
+                        n.y(orig.y + dy);
+                    }
                 }
             });
             tr.update();
@@ -1571,10 +1918,10 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
         if (totalDx === 0 && totalDy === 0) return;
 
         // Terapkan akumulasi pergeseran ke seluruh elemen yang terpilih
-        if (tr && tr.nodes().length > 1 && tr.nodes().includes(group)) {
+        if (isMultiDragging && tr) {
             tr.nodes().forEach((n) => {
                 const f = elementList.value.find((x) => x.id === n.id());
-                if (f) applyOffsetToElement(f, n.x(), n.y());
+                if (f) applyOffsetToElement(f, totalDx, totalDy);
             });
         } else {
             const found = elementList.value.find((x) => x.id === el.id);
@@ -1609,7 +1956,7 @@ function initCanvas() {
 
     tr = new Konva.Transformer({
         rotateEnabled: true,
-        shouldOverdrawWholeArea: true,
+        shouldOverdrawWholeArea: false,
         borderStroke: '#8b5cf6',
         borderStrokeWidth: 1.5,
         anchorStroke: '#8b5cf6',
@@ -1617,6 +1964,89 @@ function initCanvas() {
         anchorSize: 8,
     });
     mainLayer.add(tr);
+
+    selectionOverlay = new Konva.Rect({
+        visible: false,
+        draggable: true,
+        fill: 'rgba(139, 92, 246, 0.06)',
+        stroke: 'rgba(139, 92, 246, 0.35)',
+        strokeWidth: 1,
+        dash: [4, 4],
+        cornerRadius: 4,
+        listening: true,
+    });
+    mainLayer.add(selectionOverlay);
+
+    let prevOverlayPos = { x: 0, y: 0 };
+    let totalOverlayDx = 0;
+    let totalOverlayDy = 0;
+    let overlayStartNodePositions = new Map<Konva.Node, { x: number; y: number }>();
+
+    selectionOverlay.on('mouseenter', () => {
+        if (stage && !isSpacePressed.value) stage.container().style.cursor = 'move';
+    });
+    selectionOverlay.on('mouseleave', () => {
+        if (stage && !isSpacePressed.value) {
+            stage.container().style.cursor = activeTool.value === 'select' ? 'default' : (activeTool.value === 'pan' ? 'grab' : 'crosshair');
+        }
+    });
+
+    selectionOverlay.on('dragstart', () => {
+        prevOverlayPos = { x: selectionOverlay!.x(), y: selectionOverlay!.y() };
+        totalOverlayDx = 0;
+        totalOverlayDy = 0;
+        overlayStartNodePositions.clear();
+        if (tr) {
+            tr.nodes().forEach((n) => {
+                overlayStartNodePositions.set(n, { x: n.x(), y: n.y() });
+            });
+        }
+    });
+
+    selectionOverlay.on('dragmove', () => {
+        const curX = selectionOverlay!.x();
+        const curY = selectionOverlay!.y();
+        const dx = curX - prevOverlayPos.x;
+        const dy = curY - prevOverlayPos.y;
+        prevOverlayPos = { x: curX, y: curY };
+        totalOverlayDx += dx;
+        totalOverlayDy += dy;
+
+        if (tr && tr.nodes().length > 0) {
+            tr.nodes().forEach((n) => {
+                const orig = overlayStartNodePositions.get(n);
+                if (orig) {
+                    n.x(orig.x + totalOverlayDx);
+                    n.y(orig.y + totalOverlayDy);
+                }
+            });
+            tr.update();
+            mainLayer?.batchDraw();
+        }
+    });
+
+    selectionOverlay.on('dragend', () => {
+        if (totalOverlayDx !== 0 || totalOverlayDy !== 0) {
+            if (tr && tr.nodes().length > 0) {
+                tr.nodes().forEach((n) => {
+                    const f = elementList.value.find((x) => x.id === n.id());
+                    if (f) applyOffsetToElement(f, totalOverlayDx, totalOverlayDy);
+                });
+            }
+            restoreFromState(elementList.value, true);
+            pushHistory();
+            triggerAutoSaveDebounced();
+        } else {
+            updateSelectionOverlay();
+        }
+    });
+
+    tr.on('transform', () => {
+        updateSelectionOverlay();
+    });
+    tr.on('transformend', () => {
+        updateSelectionOverlay();
+    });
 
     stage.add(paperLayer);
     stage.add(gridLayer);
@@ -1648,11 +2078,16 @@ function loadExistingElements() {
         };
         elementList.value.push(item);
 
-        const node = createShapeFromElement(item);
-        applyLayerVisibilityToNode(node, item.type);
-        mainLayer!.add(node);
+        if (item.type !== 'paper_frame') {
+            const node = createShapeFromElement(item);
+            if (node) {
+                applyLayerVisibilityToNode(node, item.type);
+                mainLayer!.add(node);
+            }
+        }
     });
 
+    drawPaperBoundary();
     mainLayer.batchDraw();
 }
 
@@ -1705,6 +2140,86 @@ function rectEncloses(
     );
 }
 
+function finishBoxSelection(e?: any) {
+    if (!isBoxSelecting && !selectionBoxRect) {
+        tempLayer?.destroyChildren();
+        tempLayer?.batchDraw();
+        return;
+    }
+
+    isBoxSelecting = false;
+    const pos = stage?.getPointerPosition();
+    let endPt = boxStartPt;
+    if (pos && stage) {
+        try {
+            const transform = stage.getAbsoluteTransform().copy().invert();
+            endPt = transform.point(pos);
+        } catch {}
+    }
+
+    const boxX = Math.min(boxStartPt.x, endPt.x);
+    const boxY = Math.min(boxStartPt.y, endPt.y);
+    const boxW = Math.abs(endPt.x - boxStartPt.x);
+    const boxH = Math.abs(endPt.y - boxStartPt.y);
+    const isCrossing = endPt.x < boxStartPt.x;
+
+    if (selectionBoxRect) {
+        selectionBoxRect.destroy();
+        selectionBoxRect = null;
+    }
+    tempLayer?.destroyChildren();
+    tempLayer?.batchDraw();
+
+    // Jika kotak ditarik lebih dari 6px, lakukan filtering elemen
+    if (boxW > 6 && boxH > 6 && mainLayer) {
+        const selectionRect = { x: boxX, y: boxY, width: boxW, height: boxH };
+
+        const matchedElements = elementList.value.filter((el) => {
+            if (el.type === 'paper_frame') return false;
+            const elBox = getElementBoundingBox(el);
+            return isCrossing
+                ? rectsIntersect(selectionRect, elBox)
+                : rectEncloses(selectionRect, elBox);
+        });
+
+        const matchedIds = new Set(matchedElements.map((el) => el.id));
+        const matchedNodes = mainLayer.getChildren((node) =>
+            node !== tr && node !== selectionOverlay && matchedIds.has(node.id())
+        ) as Konva.Group[];
+
+        let finalNodes = matchedNodes;
+        const isShiftOrCtrl = Boolean(e?.shiftKey || e?.ctrlKey || (e?.evt && (e.evt.shiftKey || e.evt.ctrlKey)));
+        if (isShiftOrCtrl) {
+            const currentNodes = tr?.nodes() || [];
+            const combined = [...currentNodes];
+            matchedNodes.forEach((n) => {
+                if (!combined.includes(n)) combined.push(n);
+            });
+            finalNodes = combined;
+        }
+
+        tr?.nodes(finalNodes);
+
+        if (finalNodes.length === 1) {
+            selectedNodeId.value = finalNodes[0].id();
+            const found = elementList.value.find((x) => x.id === finalNodes[0].id());
+            selectedElementData.value = found ? { ...found.data, type: found.type } : null;
+        } else if (finalNodes.length > 1) {
+            selectedNodeId.value = 'multi';
+            selectedElementData.value = {
+                type: `${finalNodes.length} Objek Terblok`,
+                count: finalNodes.length,
+            };
+        } else if (!isShiftOrCtrl) {
+            selectedNodeId.value = null;
+            selectedElementData.value = null;
+        }
+
+        updateSelectionOverlay();
+        mainLayer.batchDraw();
+    }
+}
+
 // ── DRAWING INTERACTIONS & TOOL SWITCHING ──────────────────────────────────
 let isDrawing = false;
 let startX = 0;
@@ -1727,6 +2242,8 @@ function setupDrawingInteractions() {
 
         // Selection Tool (AutoCAD Click Selection + AutoCAD Box Drag Selection)
         if (activeTool.value === 'select') {
+            if (e.target === selectionOverlay) return;
+
             const clickedOnTransformer = e.target.getParent()?.className === 'Transformer' || e.target.className === 'Transformer';
             if (clickedOnTransformer) return;
 
@@ -1762,6 +2279,7 @@ function setupDrawingInteractions() {
                     const currentNodes = tr?.nodes() || [];
                     if (currentNodes.length > 1 && currentNodes.includes(parentGroup)) {
                         // Pertahankan multi-seleksi agar user bisa men-drag semua objek bersamaan
+                        updateSelectionOverlay();
                         return;
                     } else {
                         selectedNodeId.value = parentGroup.id();
@@ -1771,6 +2289,7 @@ function setupDrawingInteractions() {
                         selectedElementData.value = found ? { ...found.data, type: found.type } : null;
                     }
                 }
+                updateSelectionOverlay();
                 mainLayer?.batchDraw();
                 return;
             }
@@ -1795,6 +2314,7 @@ function setupDrawingInteractions() {
                 selectedNodeId.value = null;
                 selectedElementData.value = null;
                 tr?.nodes([]);
+                updateSelectionOverlay();
                 mainLayer?.batchDraw();
             }
 
@@ -1936,72 +2456,8 @@ function setupDrawingInteractions() {
         }
 
         // Selesaikan seleksi kotak AutoCAD Marquee Box Selection
-        if (isBoxSelecting) {
-            isBoxSelecting = false;
-            const pos = stage?.getPointerPosition();
-            let endPt = boxStartPt;
-            if (pos && stage) {
-                const transform = stage.getAbsoluteTransform().copy().invert();
-                endPt = transform.point(pos);
-            }
-
-            const boxX = Math.min(boxStartPt.x, endPt.x);
-            const boxY = Math.min(boxStartPt.y, endPt.y);
-            const boxW = Math.abs(endPt.x - boxStartPt.x);
-            const boxH = Math.abs(endPt.y - boxStartPt.y);
-            const isCrossing = endPt.x < boxStartPt.x;
-
-            if (selectionBoxRect) {
-                selectionBoxRect.destroy();
-                selectionBoxRect = null;
-                tempLayer?.batchDraw();
-            }
-
-            // Jika kotak ditarik lebih dari 5px, lakukan filtering elemen
-            if (boxW > 5 && boxH > 5 && mainLayer) {
-                const selectionRect = { x: boxX, y: boxY, width: boxW, height: boxH };
-
-                const matchedElements = elementList.value.filter((el) => {
-                    const elBox = getElementBoundingBox(el);
-                    return isCrossing
-                        ? rectsIntersect(selectionRect, elBox)
-                        : rectEncloses(selectionRect, elBox);
-                });
-
-                const matchedIds = new Set(matchedElements.map((el) => el.id));
-                const matchedNodes = mainLayer.getChildren((node) =>
-                    node !== tr && matchedIds.has(node.id())
-                ) as Konva.Group[];
-
-                let finalNodes = matchedNodes;
-                if (e.evt?.shiftKey || e.evt?.ctrlKey) {
-                    const currentNodes = tr?.nodes() || [];
-                    const combined = [...currentNodes];
-                    matchedNodes.forEach((n) => {
-                        if (!combined.includes(n)) combined.push(n);
-                    });
-                    finalNodes = combined;
-                }
-
-                tr?.nodes(finalNodes);
-
-                if (finalNodes.length === 1) {
-                    selectedNodeId.value = finalNodes[0].id();
-                    const found = elementList.value.find((x) => x.id === finalNodes[0].id());
-                    selectedElementData.value = found ? { ...found.data, type: found.type } : null;
-                } else if (finalNodes.length > 1) {
-                    selectedNodeId.value = 'multi';
-                    selectedElementData.value = {
-                        type: `${finalNodes.length} Objek Terblok`,
-                        count: finalNodes.length,
-                    };
-                } else if (!e.evt?.shiftKey && !e.evt?.ctrlKey) {
-                    selectedNodeId.value = null;
-                    selectedElementData.value = null;
-                }
-
-                mainLayer.batchDraw();
-            }
+        if (isBoxSelecting || selectionBoxRect) {
+            finishBoxSelection(e);
             return;
         }
 
@@ -2137,6 +2593,41 @@ function handleKeyDown(e: KeyboardEvent) {
         return;
     }
 
+    // Escape key closes modals/menus, cancels box selection, and clears selection
+    if (e.key === 'Escape') {
+        if (showHelpModal.value) {
+            showHelpModal.value = false;
+            return;
+        }
+        if (showNewSheetModal.value) {
+            showNewSheetModal.value = false;
+            return;
+        }
+        if (showExportMenu.value) {
+            showExportMenu.value = false;
+            return;
+        }
+        if (isBoxSelecting || selectionBoxRect) {
+            isBoxSelecting = false;
+            if (selectionBoxRect) {
+                selectionBoxRect.destroy();
+                selectionBoxRect = null;
+            }
+            tempLayer?.destroyChildren();
+            tempLayer?.batchDraw();
+            return;
+        }
+        if (tr && tr.nodes().length > 0) {
+            tr.nodes([]);
+            selectedNodeId.value = null;
+            selectedElementData.value = null;
+            updateSelectionOverlay();
+            mainLayer?.batchDraw();
+        }
+        activeTool.value = 'select';
+        return;
+    }
+
     // Spacebar hold for Pan
     if (e.code === 'Space' && !isSpacePressed.value) {
         e.preventDefault();
@@ -2230,19 +2721,22 @@ watch(activeTool, (tool) => {
 
     if (tool === 'select') {
         if (containerRef.value) containerRef.value.style.cursor = 'default';
-        mainLayer.getChildren((node) => node !== tr).forEach((n) => n.draggable(props.canEdit));
+        mainLayer.getChildren((node) => node !== tr && node !== selectionOverlay).forEach((n) => n.draggable(props.canEdit));
+        updateSelectionOverlay();
     } else if (tool === 'pan') {
         if (containerRef.value) containerRef.value.style.cursor = 'grab';
         tr?.nodes([]);
         selectedNodeId.value = null;
         selectedElementData.value = null;
-        mainLayer.getChildren((node) => node !== tr).forEach((n) => n.draggable(false));
+        selectionOverlay?.visible(false);
+        mainLayer.getChildren((node) => node !== tr && node !== selectionOverlay).forEach((n) => n.draggable(false));
     } else {
         if (containerRef.value) containerRef.value.style.cursor = 'crosshair';
         tr?.nodes([]);
         selectedNodeId.value = null;
         selectedElementData.value = null;
-        mainLayer.getChildren((node) => node !== tr).forEach((n) => n.draggable(false));
+        selectionOverlay?.visible(false);
+        mainLayer.getChildren((node) => node !== tr && node !== selectionOverlay).forEach((n) => n.draggable(false));
     }
     mainLayer.batchDraw();
 });
@@ -2298,6 +2792,7 @@ function deleteSelected() {
         tr.nodes([]);
         selectedNodeId.value = null;
         selectedElementData.value = null;
+        updateSelectionOverlay();
         mainLayer.batchDraw();
         pushHistory();
         triggerAutoSaveDebounced();
@@ -2305,11 +2800,13 @@ function deleteSelected() {
     }
 
     if (selectedNodeId.value === 'all') {
-        mainLayer.getChildren((node) => node !== tr).forEach((n) => n.destroy());
+        const toDelete = [...mainLayer.getChildren((node) => node !== tr && node !== selectionOverlay)];
+        toDelete.forEach((n) => n.destroy());
         elementList.value = [];
         tr.nodes([]);
         selectedNodeId.value = null;
         selectedElementData.value = null;
+        updateSelectionOverlay();
         mainLayer.batchDraw();
         pushHistory();
         triggerAutoSaveDebounced();
@@ -2416,32 +2913,85 @@ function submitNewSheet() {
 
 function switchSheet(e: Event) {
     const target = e.target as HTMLSelectElement;
+    if (target.value === '__ADD_PAPER_FRAME__') {
+        target.value = props.sheet.id;
+        addPaperFrameToCanvas();
+        return;
+    }
     if (target.value === '__NEW_SHEET__') {
         target.value = props.sheet.id;
         openNewSheetModal();
         return;
     }
     if (target.value && target.value !== props.sheet.id) {
-        router.visit(`/drawings/${target.value}`);
+        navigateToSheet(target.value);
     }
 }
+
+function navigateToSheet(targetId: string) {
+    if (targetId === props.sheet.id) {
+        if (canvasMode.value !== 'sheet') {
+            setCanvasMode('sheet');
+        } else {
+            zoomToFit();
+        }
+        return;
+    }
+    router.visit(`/drawings/${targetId}`);
+}
+
+function checkHeaderScroll() {
+    if (!headerContainerRef.value) return;
+    const el = headerContainerRef.value;
+    canScrollLeft.value = el.scrollLeft > 15;
+    canScrollRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 15;
+}
+
+function scrollHeader(direction: 'left' | 'right') {
+    if (!headerContainerRef.value) return;
+    const step = 280;
+    headerContainerRef.value.scrollBy({
+        left: direction === 'right' ? step : -step,
+        behavior: 'smooth',
+    });
+    setTimeout(checkHeaderScroll, 320);
+}
+
+const handleDocumentClick = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest('.export-menu-container')) {
+        showExportMenu.value = false;
+    }
+};
+
+const handleGlobalMouseUp = (e: MouseEvent | TouchEvent) => {
+    if (isBoxSelecting || selectionBoxRect) {
+        finishBoxSelection(e);
+    }
+};
 
 onMounted(() => {
     nextTick(() => {
         initCanvas();
+        checkHeaderScroll();
         setTimeout(() => {
             zoomToFit();
-        }, 120);
+            checkHeaderScroll();
+        }, 150);
     });
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('click', handleDocumentClick);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('touchend', handleGlobalMouseUp);
 
     const handleResize = () => {
         if (!containerRef.value || !stage) return;
         stage.width(containerRef.value.clientWidth);
         stage.height(containerRef.value.clientHeight);
         stage.batchDraw();
+        checkHeaderScroll();
     };
 
     window.addEventListener('resize', handleResize);
@@ -2450,6 +3000,9 @@ onMounted(() => {
 onUnmounted(() => {
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
+    window.removeEventListener('click', handleDocumentClick);
+    window.removeEventListener('mouseup', handleGlobalMouseUp);
+    window.removeEventListener('touchend', handleGlobalMouseUp);
     stage?.destroy();
     clearTimeout(autoSaveTimer);
 });
@@ -2459,301 +3012,385 @@ onUnmounted(() => {
     <Head :title="`${sheet.title} — Lembar Kerja CAD 2D`" />
 
     <div class="h-screen w-screen flex flex-col bg-slate-900 text-slate-100 overflow-hidden select-none">
-        <!-- TOP CAD HEADER BAR -->
-        <header class="h-14 bg-slate-950 border-b border-white/10 px-3 sm:px-4 flex items-center justify-between z-30 shrink-0 gap-2 overflow-x-auto scrollbar-none">
-            <div class="flex items-center gap-2 sm:gap-3 shrink-0">
-                <Link
-                    href="/drawings"
-                    class="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors shrink-0"
-                    title="Kembali ke Daftar Lembar Kerja"
-                >
-                    <ArrowLeft class="w-5 h-5" />
-                </Link>
+        <!-- TOP CAD HEADER BAR WITH SCROLL DISCOVERY & OVERFLOW AWARENESS -->
+        <div class="relative z-30 shrink-0 bg-slate-950 border-b border-white/10">
+            <!-- Scroll Indicator Left -->
+            <button
+                v-if="canScrollLeft"
+                @click="scrollHeader('left')"
+                type="button"
+                class="absolute left-2 top-2.5 z-40 p-1.5 rounded-xl bg-slate-800/95 hover:bg-slate-700 text-white shadow-lg border border-white/15 backdrop-blur-md transition-all cursor-pointer flex items-center gap-1 text-[11px]"
+                title="Geser melihat tools di sebelah kiri"
+            >
+                <ChevronLeft class="w-4 h-4" />
+            </button>
 
-                <div class="flex items-center gap-2 sm:gap-2.5 min-w-0">
-                    <div class="w-8 h-8 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30 shrink-0">
-                        <DraftingCompass class="w-4 h-4" />
-                    </div>
-                    <div class="min-w-0">
-                        <div class="flex items-center gap-1.5 sm:gap-2">
-                            <h2 class="text-xs sm:text-sm font-bold text-white tracking-tight truncate max-w-[110px] sm:max-w-[160px] md:max-w-xs">{{ sheet.title }}</h2>
-                            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30 shrink-0">
-                                {{ sheet.type.toUpperCase() }}
-                            </span>
+            <!-- Scroll Indicator Right (Pemberitahuan Bahwa Masih Ada Tools Lainnya) -->
+            <button
+                v-if="canScrollRight"
+                @click="scrollHeader('right')"
+                type="button"
+                class="absolute right-2 top-2.5 z-40 px-2.5 py-1.5 rounded-xl bg-violet-600/95 hover:bg-violet-600 text-white shadow-xl shadow-violet-900/60 border border-violet-400/40 backdrop-blur-md transition-all cursor-pointer flex items-center gap-1.5 text-[11px] font-bold animate-pulse"
+                title="Masih ada tools lainnya di sebelah kanan — Klik untuk geser"
+            >
+                <span>Tools Lainnya</span>
+                <ChevronRight class="w-3.5 h-3.5" />
+            </button>
 
-                            <!-- Sheet Switcher Dropdown (Pilih Lembar Kerja / Ruangan) -->
-                            <div v-if="projectSheets && projectSheets.length > 0" class="relative inline-block ml-0.5 shrink-0">
-                                <select
-                                    :value="sheet.id"
-                                    @change="switchSheet"
-                                    class="bg-slate-900 border border-violet-500/40 text-violet-300 hover:text-white hover:border-violet-400 text-[11px] rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-400 font-medium cursor-pointer transition-colors shadow-sm max-w-[130px] sm:max-w-[180px] truncate"
-                                    title="Pilih Lembar Kerja Lainnya atau Buat Kertas Baru"
-                                >
-                                    <option
-                                        v-for="(s, idx) in projectSheets"
-                                        :key="s.id"
-                                        :value="s.id"
-                                        class="bg-slate-900 text-white py-1"
-                                    >
-                                        📄 Lembar {{ idx + 1 }}: {{ s.title }} ({{ s.scale }})
-                                    </option>
-                                    <option v-if="canEdit" value="__NEW_SHEET__" class="bg-violet-950 text-violet-300 font-bold py-1">
-                                        ➕ + Buat Kertas Baru...
-                                    </option>
-                                </select>
-                            </div>
+            <header
+                ref="headerContainerRef"
+                @scroll="checkHeaderScroll"
+                class="h-14 px-3 sm:px-4 flex items-center justify-between gap-3 overflow-x-auto scrollbar-none"
+            >
+                <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                    <Link
+                        href="/drawings"
+                        class="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors shrink-0"
+                        title="Kembali ke Daftar Lembar Kerja"
+                    >
+                        <ArrowLeft class="w-5 h-5" />
+                    </Link>
 
-                            <!-- Tombol Tambah Lembar / Kertas Baru Langsung -->
-                            <button
-                                v-if="canEdit"
-                                @click="openNewSheetModal"
-                                type="button"
-                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-violet-600/30 hover:bg-violet-600 text-violet-200 hover:text-white border border-violet-500/40 transition-all cursor-pointer shadow-sm shrink-0"
-                                title="Buat Lembar Kerja / Kertas Baru di Proyek Ini"
-                            >
-                                <Plus class="w-3 h-3" />
-                                <span class="hidden sm:inline">Kertas Baru</span>
-                            </button>
+                    <div class="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                        <div class="w-8 h-8 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30 shrink-0">
+                            <DraftingCompass class="w-4 h-4" />
                         </div>
-                        <p class="text-[10px] sm:text-[11px] text-slate-400 -mt-0.5 hidden md:block truncate max-w-[200px] lg:max-w-sm">
-                            {{ project.title }} • Skala {{ sheet.scale }} • Kertas {{ paperSize }} ({{ orientation }})
-                        </p>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-1.5 sm:gap-2">
+                                <h2 class="text-xs sm:text-sm font-bold text-white tracking-tight truncate max-w-[110px] sm:max-w-[160px] md:max-w-xs">{{ sheet.title }}</h2>
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30 shrink-0">
+                                    {{ sheet.type.toUpperCase() }}
+                                </span>
+
+                                <!-- Sheet Switcher Dropdown (Pilih Lembar Kerja / Ruangan) -->
+                                <div v-if="projectSheets && projectSheets.length > 0" class="relative inline-block ml-0.5 shrink-0">
+                                    <select
+                                        :value="sheet.id"
+                                        @change="switchSheet"
+                                        class="bg-slate-900 border border-violet-500/40 text-violet-300 hover:text-white hover:border-violet-400 text-[11px] rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-400 font-medium cursor-pointer transition-colors shadow-sm max-w-[130px] sm:max-w-[180px] truncate"
+                                        title="Pilih Lembar Kerja Lainnya atau Buat Kertas Baru"
+                                    >
+                                        <option
+                                            v-for="(s, idx) in projectSheets"
+                                            :key="s.id"
+                                            :value="s.id"
+                                            class="bg-slate-900 text-white py-1"
+                                        >
+                                            📄 Lembar {{ idx + 1 }}: {{ s.title }} ({{ s.scale }})
+                                        </option>
+                                        <option v-if="canEdit" value="__ADD_PAPER_FRAME__" class="bg-emerald-950 text-emerald-300 font-bold py-1">
+                                            ➕ + Tambah Kertas ke Kanvas Ini
+                                        </option>
+                                        <option v-if="canEdit" value="__NEW_SHEET__" class="bg-violet-950 text-violet-300 font-medium py-1">
+                                            📄 + Buat File Lembar Baru...
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <!-- Tombol Tambah Lembar / Kertas Baru Langsung -->
+                                <button
+                                    v-if="canEdit"
+                                    @click="openNewSheetModal"
+                                    type="button"
+                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-violet-600/30 hover:bg-violet-600 text-violet-200 hover:text-white border border-violet-500/40 transition-all cursor-pointer shadow-sm shrink-0"
+                                    title="Buat Lembar Kerja / File Kertas Baru di Proyek Ini"
+                                >
+                                    <Plus class="w-3 h-3" />
+                                    <span class="hidden sm:inline">Kertas Baru</span>
+                                </button>
+
+                                <!-- Tombol Tambah Kertas ke Kanvas Ini (Berdampingan sehingga 1 lembar kerja ada 2 kertas) -->
+                                <button
+                                    v-if="canEdit"
+                                    @click="addPaperFrameToCanvas()"
+                                    type="button"
+                                    class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-500/40 transition-all cursor-pointer shadow-sm shrink-0"
+                                    title="Tambah Area Kertas Baru ke Kanvas Ini (Berdampingan sehingga dalam 1 lembar kerja ada 2 kertas atau lebih)"
+                                >
+                                    <Plus class="w-3 h-3" />
+                                    <span>+ Kertas ke Kanvas</span>
+                                </button>
+                            </div>
+                            <p class="text-[10px] sm:text-[11px] text-slate-400 -mt-0.5 hidden md:block truncate max-w-[200px] lg:max-w-sm">
+                                {{ project.title }} • Skala {{ sheet.scale }} • Kertas {{ paperSize }} ({{ orientation }})
+                            </p>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- DYNAMIC FRAME & CANVAS CONTROLS (FIGMA RESIZABLE SHEET & AUTOCAD MODEL SPACE) -->
-            <div class="hidden lg:flex items-center gap-1.5 xl:gap-2.5 bg-slate-900 border border-white/10 rounded-2xl px-2.5 py-1 shrink-0">
-                <!-- Mode Switch: Frame Lembar Kerja vs AutoCAD Model Space -->
-                <div class="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10 shrink-0">
-                    <button
-                        @click="setCanvasMode('sheet')"
-                        :class="[
-                            'flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer',
-                            canvasMode === 'sheet'
-                                ? 'bg-violet-600 text-white shadow-sm font-semibold'
-                                : 'text-slate-400 hover:text-white'
-                        ]"
-                        title="Mode Frame Lembar Kerja Dinamis (Figma & Paper Space)"
-                    >
-                        <LayoutTemplate class="w-3.5 h-3.5" />
-                        <span><span class="hidden xl:inline">Frame </span>Kertas</span>
-                    </button>
-                    <button
-                        @click="setCanvasMode('infinite')"
-                        :class="[
-                            'flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer',
-                            canvasMode === 'infinite'
-                                ? 'bg-violet-600 text-white shadow-sm font-semibold'
-                                : 'text-slate-400 hover:text-white'
-                        ]"
-                        title="Mode Kanvas Tak Terbatas (AutoCAD Model Space ∞)"
-                    >
-                        <InfinityIcon class="w-3.5 h-3.5" />
-                        <span><span class="hidden xl:inline">AutoCAD </span>Model<span class="hidden xl:inline"> (∞)</span></span>
-                    </button>
-                </div>
-
-                <!-- Paper Frame Controls (Aktif saat mode Frame Kertas) -->
-                <template v-if="canvasMode === 'sheet'">
-                    <div class="h-4 w-px bg-white/10 shrink-0"></div>
-
-                    <!-- Preset Ukuran Kertas ISO -->
-                    <select
-                        :value="paperSize"
-                        @change="applyPaperPreset(($event.target as HTMLSelectElement).value)"
-                        class="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer shrink-0"
-                        title="Preset Ukuran Kertas Standar ISO"
-                    >
-                        <option value="A0" class="bg-slate-900 text-white">A0 (3564 × 2520)</option>
-                        <option value="A1" class="bg-slate-900 text-white">A1 (2520 × 1782)</option>
-                        <option value="A2" class="bg-slate-900 text-white">A2 (1782 × 1260)</option>
-                        <option value="A3" class="bg-slate-900 text-white">A3 (1260 × 891)</option>
-                        <option value="A4" class="bg-slate-900 text-white">A4 (891 × 630)</option>
-                        <option value="Custom" class="bg-slate-900 text-white">Custom (Dinamis)</option>
-                    </select>
-
-                    <!-- Numeric Input Width (W) & Height (H) ala Figma -->
-                    <div class="hidden 2xl:flex items-center gap-1.5 text-xs font-mono shrink-0">
-                        <span class="text-slate-400 text-[10px]">W:</span>
-                        <input
-                            type="number"
-                            :value="paperWidth"
-                            @change="onWidthInput(Number(($event.target as HTMLInputElement).value))"
-                            class="w-16 bg-white/5 border border-white/10 rounded-lg px-1.5 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
-                            min="400"
-                            max="20000"
-                            step="50"
-                            title="Lebar Kertas Dinamis (px)"
-                        />
-                        <span class="text-slate-500 text-[10px]">×</span>
-                        <span class="text-slate-400 text-[10px]">H:</span>
-                        <input
-                            type="number"
-                            :value="paperHeight"
-                            @change="onHeightInput(Number(($event.target as HTMLInputElement).value))"
-                            class="w-16 bg-white/5 border border-white/10 rounded-lg px-1.5 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
-                            min="300"
-                            max="20000"
-                            step="50"
-                            title="Tinggi Kertas Dinamis (px)"
-                        />
+                <!-- DYNAMIC FRAME & CANVAS CONTROLS (FIGMA RESIZABLE SHEET & AUTOCAD MODEL SPACE) -->
+                <div class="hidden lg:flex items-center gap-1.5 xl:gap-2.5 bg-slate-900 border border-white/10 rounded-2xl px-2.5 py-1 shrink-0">
+                    <!-- Mode Switch: Frame Lembar Kerja vs AutoCAD Model Space -->
+                    <div class="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10 shrink-0">
+                        <button
+                            @click="setCanvasMode('sheet')"
+                            type="button"
+                            :class="[
+                                'flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer',
+                                canvasMode === 'sheet'
+                                    ? 'bg-violet-600 text-white shadow-sm font-semibold'
+                                    : 'text-slate-400 hover:text-white'
+                            ]"
+                            title="Mode Frame Lembar Kerja Dinamis (Figma & Paper Space)"
+                        >
+                            <LayoutTemplate class="w-3.5 h-3.5" />
+                            <span><span class="hidden xl:inline">Frame </span>Kertas</span>
+                        </button>
+                        <button
+                            @click="setCanvasMode('infinite')"
+                            type="button"
+                            :class="[
+                                'flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer',
+                                canvasMode === 'infinite'
+                                    ? 'bg-violet-600 text-white shadow-sm font-semibold'
+                                    : 'text-slate-400 hover:text-white'
+                            ]"
+                            title="Mode Kanvas Tak Terbatas (AutoCAD Model Space ∞)"
+                        >
+                            <InfinityIcon class="w-3.5 h-3.5" />
+                            <span><span class="hidden xl:inline">AutoCAD </span>Model<span class="hidden xl:inline"> (∞)</span></span>
+                        </button>
                     </div>
 
-                    <!-- Putar Orientasi (Landscape / Portrait) -->
-                    <button
-                        @click="toggleOrientation"
-                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
-                        :title="`Putar Orientasi (${orientation === 'landscape' ? 'Landscape ke Portrait' : 'Portrait ke Landscape'})`"
-                    >
-                        <RotateCw class="w-3.5 h-3.5" />
-                    </button>
+                    <!-- Paper Frame Controls (Aktif saat mode Frame Kertas) -->
+                    <template v-if="canvasMode === 'sheet'">
+                        <div class="h-4 w-px bg-white/10 shrink-0"></div>
+
+                        <!-- Preset Ukuran Kertas ISO -->
+                        <select
+                            :value="paperSize"
+                            @change="applyPaperPreset(($event.target as HTMLSelectElement).value)"
+                            class="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer shrink-0"
+                            title="Preset Ukuran Kertas Standar ISO"
+                        >
+                            <option value="A0" class="bg-slate-900 text-white">A0 (3564 × 2520)</option>
+                            <option value="A1" class="bg-slate-900 text-white">A1 (2520 × 1782)</option>
+                            <option value="A2" class="bg-slate-900 text-white">A2 (1782 × 1260)</option>
+                            <option value="A3" class="bg-slate-900 text-white">A3 (1260 × 891)</option>
+                            <option value="A4" class="bg-slate-900 text-white">A4 (891 × 630)</option>
+                            <option value="Custom" class="bg-slate-900 text-white">Custom (Dinamis)</option>
+                        </select>
+
+                        <!-- Numeric Input Width (W) & Height (H) ala Figma -->
+                        <div class="hidden 2xl:flex items-center gap-1.5 text-xs font-mono shrink-0">
+                            <span class="text-slate-400 text-[10px]">W:</span>
+                            <input
+                                type="number"
+                                :value="paperWidth"
+                                @change="onWidthInput(Number(($event.target as HTMLInputElement).value))"
+                                class="w-16 bg-white/5 border border-white/10 rounded-lg px-1.5 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
+                                min="400"
+                                max="20000"
+                                step="50"
+                                title="Lebar Kertas Dinamis (px)"
+                            />
+                            <span class="text-slate-500 text-[10px]">×</span>
+                            <span class="text-slate-400 text-[10px]">H:</span>
+                            <input
+                                type="number"
+                                :value="paperHeight"
+                                @change="onHeightInput(Number(($event.target as HTMLInputElement).value))"
+                                class="w-16 bg-white/5 border border-white/10 rounded-lg px-1.5 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
+                                min="300"
+                                max="20000"
+                                step="50"
+                                title="Tinggi Kertas Dinamis (px)"
+                            />
+                        </div>
+
+                        <!-- Putar Orientasi (Landscape / Portrait) -->
+                        <button
+                            @click="toggleOrientation"
+                            type="button"
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
+                            :title="`Putar Orientasi (${orientation === 'landscape' ? 'Landscape ke Portrait' : 'Portrait ke Landscape'})`"
+                        >
+                            <RotateCw class="w-3.5 h-3.5" />
+                        </button>
+                    </template>
 
                     <div class="h-4 w-px bg-white/10 shrink-0"></div>
 
-                    <!-- Rapatkan Lembar ke Gambar (Hilangkan Jarak Kosong) -->
+                    <!-- 3 TOMBOL KONTROL UTAMA: RAPATKAN, RESET ISO, PUSATKAN (TERSEDIA DI SEMUA MODE) -->
+                    <!-- 1. Rapatkan Lembar ke Gambar (Hilangkan Jarak Kosong) -->
                     <button
                         @click="autoFitSheetToDrawing"
-                        class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 transition-colors cursor-pointer shrink-0"
-                        title="Rapatkan Lembar Kerja ke Gambar (Hilangkan Jarak Kosong)"
+                        type="button"
+                        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
+                        title="Rapatkan Lembar Kerja ke Gambar (Hilangkan Semua Jarak Kosong)"
                     >
                         <Sparkles class="w-3.5 h-3.5 text-indigo-400" />
-                        <span class="hidden 2xl:inline">Rapatkan Kertas</span>
+                        <span class="hidden sm:inline">Rapatkan Kertas</span>
                     </button>
 
-                    <!-- Pusatkan Tampilan (AutoCAD Zoom Extents) -->
+                    <!-- 2. Kembalikan Ukuran Kertas ke Standar ISO -->
+                    <button
+                        @click="resetPaperToDefault"
+                        type="button"
+                        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 hover:text-white border border-amber-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
+                        title="Kembalikan ukuran kertas ke standar ISO awal (A3 / Preset)"
+                    >
+                        <RotateCcw class="w-3.5 h-3.5 text-amber-400" />
+                        <span class="hidden sm:inline">Reset ISO</span>
+                    </button>
+
+                    <!-- 3. Pusatkan Tampilan (AutoCAD Zoom Extents) -->
                     <button
                         @click="zoomToFit"
-                        class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-colors cursor-pointer shrink-0"
-                        title="Pusatkan Gambar ke Layar (AutoCAD Zoom Extents / Z)"
+                        type="button"
+                        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-500/15 hover:bg-sky-500/30 text-sky-300 hover:text-white border border-sky-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
+                        title="Pusatkan Seluruh Gambar & Kertas ke Layar (AutoCAD Zoom Extents / Z)"
                     >
                         <Focus class="w-3.5 h-3.5 text-sky-400" />
-                        <span class="hidden 2xl:inline">Pusatkan</span>
-                    </button>
-                </template>
-            </div>
-
-            <!-- Header Actions -->
-            <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                <!-- Undo / Redo Buttons -->
-                <div class="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5 shrink-0">
-                    <button
-                        @click="undo"
-                        :disabled="historyIndex <= 0"
-                        class="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors cursor-pointer"
-                        title="Urungkan / Undo (Ctrl+Z)"
-                    >
-                        <Undo2 class="w-4 h-4" />
-                    </button>
-                    <button
-                        @click="redo"
-                        :disabled="historyIndex >= historyStack.length - 1"
-                        class="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors cursor-pointer"
-                        title="Ulangi / Redo (Ctrl+Y)"
-                    >
-                        <Redo2 class="w-4 h-4" />
+                        <span class="hidden sm:inline">Pusatkan</span>
                     </button>
                 </div>
 
-                <!-- Copy / Paste / Duplicate Button Group -->
-                <div v-if="canEdit" class="hidden md:flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5 shrink-0">
+                <!-- Header Actions -->
+                <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    <!-- Undo / Redo Buttons -->
+                    <div class="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5 shrink-0">
+                        <button
+                            @click="undo"
+                            :disabled="historyIndex <= 0"
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors cursor-pointer"
+                            title="Urungkan / Undo (Ctrl+Z)"
+                        >
+                            <Undo2 class="w-4 h-4" />
+                        </button>
+                        <button
+                            @click="redo"
+                            :disabled="historyIndex >= historyStack.length - 1"
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors cursor-pointer"
+                            title="Ulangi / Redo (Ctrl+Y)"
+                        >
+                            <Redo2 class="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <!-- Copy / Paste / Duplicate Button Group -->
+                    <div v-if="canEdit" class="hidden md:flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5 shrink-0">
+                        <button
+                            @click="copySelected"
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                            title="Salin Objek Terpilih (Ctrl+C)"
+                        >
+                            <Copy class="w-4 h-4" />
+                        </button>
+                        <button
+                            @click="pasteClipboard"
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                            title="Tempel Objek dari Clipboard (Ctrl+V)"
+                        >
+                            <Clipboard class="w-4 h-4" />
+                        </button>
+                        <button
+                            @click="duplicateSelected"
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                            title="Duplikat Cepat Objek (Ctrl+D)"
+                        >
+                            <Files class="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <!-- Layers Panel Button -->
                     <button
-                        @click="copySelected"
-                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                        title="Salin Objek Terpilih (Ctrl+C)"
+                        @click="showLayerPanel = !showLayerPanel"
+                        :class="[
+                            'inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer shrink-0',
+                            showLayerPanel
+                                ? 'bg-violet-600/20 text-violet-300 border-violet-500/40'
+                                : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                        ]"
+                        title="Buka Panel Layer Arsitektur"
                     >
-                        <Copy class="w-4 h-4" />
+                        <Layers class="w-3.5 h-3.5" />
+                        <span class="hidden sm:inline">Layer</span>
                     </button>
+
+                    <!-- Help Button -->
                     <button
-                        @click="pasteClipboard"
-                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                        title="Tempel Objek dari Clipboard (Ctrl+V)"
+                        @click="showHelpModal = true"
+                        class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
+                        title="Petunjuk Hotkeys CAD"
                     >
-                        <Clipboard class="w-4 h-4" />
+                        <HelpCircle class="w-4 h-4" />
                     </button>
+
+                    <!-- Save Status & Button -->
                     <button
-                        @click="duplicateSelected"
-                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                        title="Duplikat Cepat Objek (Ctrl+D)"
+                        v-if="canEdit"
+                        @click="saveElements(false)"
+                        :disabled="isSaving"
+                        :class="[
+                            'inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm shrink-0',
+                            saveSuccess
+                                ? 'bg-emerald-600 text-white'
+                                : isAutoSaving
+                                    ? 'bg-amber-600/80 text-white'
+                                    : 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-600/30'
+                        ]"
                     >
-                        <Files class="w-4 h-4" />
+                        <Loader2 v-if="isSaving || isAutoSaving" class="w-3.5 h-3.5 animate-spin" />
+                        <Check v-else-if="saveSuccess" class="w-3.5 h-3.5" />
+                        <Save v-else class="w-3.5 h-3.5" />
+                        <span>{{ isSaving ? 'Menyimpan...' : (isAutoSaving ? 'Auto-Save...' : (saveSuccess ? 'Tersimpan!' : 'Simpan')) }}</span>
                     </button>
+
+                    <!-- Compact Export Dropdown Menu (DXF, SVG, PNG) -->
+                    <div class="relative export-menu-container shrink-0">
+                        <button
+                            @click="showExportMenu = !showExportMenu"
+                            class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors cursor-pointer shrink-0"
+                            title="Pilihan Download & Export Gambar CAD"
+                        >
+                            <Download class="w-3.5 h-3.5 text-sky-400" />
+                            <span class="hidden sm:inline">Export</span>
+                            <ChevronDown class="w-3 h-3 text-slate-400" />
+                        </button>
+
+                        <div
+                            v-if="showExportMenu"
+                            class="absolute right-0 top-full mt-1.5 w-52 bg-slate-950 border border-white/15 rounded-2xl shadow-2xl p-1.5 z-50 flex flex-col gap-1 text-xs text-slate-200 backdrop-blur-xl"
+                        >
+                            <a
+                                :href="`/drawings/${sheet.id}/export-dxf`"
+                                class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors"
+                                title="Download file AutoCAD .DXF"
+                            >
+                                <FileCode class="w-4 h-4 text-amber-400 shrink-0" />
+                                <div>
+                                    <div class="font-semibold text-white">AutoCAD (.DXF)</div>
+                                    <div class="text-[10px] text-slate-400">Kompatibel AutoCAD / CAD 2D</div>
+                                </div>
+                            </a>
+                            <a
+                                :href="`/drawings/${sheet.id}/export-svg`"
+                                class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors"
+                                title="Download format vektor .SVG"
+                            >
+                                <Download class="w-4 h-4 text-sky-400 shrink-0" />
+                                <div>
+                                    <div class="font-semibold text-white">Vektor (.SVG)</div>
+                                    <div class="text-[10px] text-slate-400">Grafik vektor resolusi tajam</div>
+                                </div>
+                            </a>
+                            <button
+                                @click="exportPng(); showExportMenu = false"
+                                class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left w-full cursor-pointer"
+                                title="Download sebagai gambar PNG"
+                            >
+                                <Sparkles class="w-4 h-4 text-emerald-400 shrink-0" />
+                                <div>
+                                    <div class="font-semibold text-white">Gambar (.PNG)</div>
+                                    <div class="text-[10px] text-slate-400">Snapshot gambar denah</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
                 </div>
-
-                <!-- Layers Panel Button -->
-                <button
-                    @click="showLayerPanel = !showLayerPanel"
-                    :class="[
-                        'inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer shrink-0',
-                        showLayerPanel
-                            ? 'bg-violet-600/20 text-violet-300 border-violet-500/40'
-                            : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
-                    ]"
-                    title="Buka Panel Layer Arsitektur"
-                >
-                    <Layers class="w-3.5 h-3.5" />
-                    <span class="hidden sm:inline">Layer</span>
-                </button>
-
-                <!-- Help Button -->
-                <button
-                    @click="showHelpModal = true"
-                    class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
-                    title="Petunjuk Hotkeys CAD"
-                >
-                    <HelpCircle class="w-4 h-4" />
-                </button>
-
-                <!-- Save Status & Button -->
-                <button
-                    v-if="canEdit"
-                    @click="saveElements(false)"
-                    :disabled="isSaving"
-                    :class="[
-                        'inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm shrink-0',
-                        saveSuccess
-                            ? 'bg-emerald-600 text-white'
-                            : isAutoSaving
-                                ? 'bg-amber-600/80 text-white'
-                                : 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-600/30'
-                    ]"
-                >
-                    <Loader2 v-if="isSaving || isAutoSaving" class="w-3.5 h-3.5 animate-spin" />
-                    <Check v-else-if="saveSuccess" class="w-3.5 h-3.5" />
-                    <Save v-else class="w-3.5 h-3.5" />
-                    <span>{{ isSaving ? 'Menyimpan...' : (isAutoSaving ? 'Auto-Save...' : (saveSuccess ? 'Tersimpan!' : 'Simpan')) }}</span>
-                </button>
-
-                <!-- Export DXF (AutoCAD) -->
-                <a
-                    :href="`/drawings/${sheet.id}/export-dxf`"
-                    class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors shrink-0"
-                    title="Export file AutoCAD .DXF"
-                >
-                    <FileCode class="w-3.5 h-3.5 text-amber-400" />
-                    <span class="hidden sm:inline">DXF</span>
-                </a>
-
-                <!-- Export SVG -->
-                <a
-                    :href="`/drawings/${sheet.id}/export-svg`"
-                    class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors shrink-0"
-                    title="Export format Vektor .SVG"
-                >
-                    <Download class="w-3.5 h-3.5 text-sky-400" />
-                    <span class="hidden sm:inline">SVG</span>
-                </a>
-
-                <!-- Export PNG Image -->
-                <button
-                    @click="exportPng"
-                    class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
-                    title="Simpan sebagai Gambar PNG"
-                >
-                    <Download class="w-4 h-4" />
-                </button>
-            </div>
-        </header>
+            </header>
+        </div>
 
         <!-- WORKSPACE BODY (TOOLBAR + CANVAS + INSPECTOR + LAYER PANEL) -->
         <div class="flex-1 flex relative overflow-hidden">
@@ -3060,12 +3697,34 @@ onUnmounted(() => {
                     <Maximize class="w-4 h-4" />
                 </button>
 
+                <div class="h-4 w-px bg-white/10"></div>
+
+                <!-- 3 Tombol Utama di Bottom Bar -->
+                <button
+                    @click="autoFitSheetToDrawing"
+                    class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all cursor-pointer shadow-sm"
+                    title="Rapatkan Kertas ke Gambar (Hilangkan Jarak Kosong)"
+                >
+                    <Sparkles class="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Rapatkan</span>
+                </button>
+
+                <button
+                    @click="resetPaperToDefault"
+                    class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 hover:text-white border border-amber-500/30 transition-all cursor-pointer shadow-sm"
+                    title="Reset Kertas ke Standar ISO (A3)"
+                >
+                    <RotateCcw class="w-3.5 h-3.5 text-amber-400" />
+                    <span>Reset ISO</span>
+                </button>
+
                 <button
                     @click="zoomToFit"
-                    class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                    class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-sky-500/15 hover:bg-sky-500/30 text-sky-300 hover:text-white border border-sky-500/30 transition-all cursor-pointer shadow-sm"
                     title="Pusatkan Gambar ke Layar / Zoom Extents (Z)"
                 >
-                    <Focus class="w-4 h-4 text-sky-400" />
+                    <Focus class="w-3.5 h-3.5 text-sky-400" />
+                    <span>Pusatkan</span>
                 </button>
 
                 <div class="h-4 w-px bg-white/10"></div>
@@ -3128,24 +3787,44 @@ onUnmounted(() => {
                     </div>
                 </div>
 
-                <!-- Quick Copy & Duplicate Buttons in Inspector -->
-                <div class="grid grid-cols-2 gap-2 pt-1">
+                <!-- Quick Copy, Paste & Duplicate Buttons in Inspector -->
+                <div class="grid grid-cols-3 gap-1.5 pt-1">
                     <button
                         @click="copySelected"
-                        class="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors cursor-pointer"
+                        :class="[
+                            'flex items-center justify-center gap-1 py-2 px-1 rounded-xl text-xs font-semibold transition-all cursor-pointer',
+                            isJustCopied
+                                ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/50 shadow-md shadow-emerald-950/50'
+                                : 'bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10'
+                        ]"
                         title="Salin Objek ke Clipboard (Ctrl+C)"
                     >
-                        <Copy class="w-3.5 h-3.5 text-violet-400" />
-                        <span>Salin</span>
+                        <Check v-if="isJustCopied" class="w-3.5 h-3.5 text-emerald-400" />
+                        <Copy v-else class="w-3.5 h-3.5 text-violet-400" />
+                        <span>{{ isJustCopied ? 'Tersalin!' : 'Salin' }}</span>
                     </button>
+
+                    <button
+                        @click="pasteClipboard"
+                        class="flex items-center justify-center gap-1 py-2 px-1 rounded-xl text-xs font-medium bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/20 transition-colors cursor-pointer"
+                        title="Tempel Objek dari Clipboard (Ctrl+V)"
+                    >
+                        <ClipboardPaste class="w-3.5 h-3.5 text-sky-400" />
+                        <span>Tempel</span>
+                    </button>
+
                     <button
                         @click="duplicateSelected"
-                        class="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-medium bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 transition-colors cursor-pointer"
+                        class="flex items-center justify-center gap-1 py-2 px-1 rounded-xl text-xs font-medium bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 transition-colors cursor-pointer"
                         title="Duplikat Cepat Objek (Ctrl+D)"
                     >
                         <Files class="w-3.5 h-3.5 text-violet-400" />
                         <span>Duplikat</span>
                     </button>
+                </div>
+
+                <div v-if="isJustCopied" class="text-[11px] font-medium text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 p-2 rounded-xl text-center">
+                    ✓ Objek berhasil disalin! Tekan tombol <strong>Tempel</strong> atau <strong>Ctrl+V</strong>.
                 </div>
 
                 <button
@@ -3163,120 +3842,238 @@ onUnmounted(() => {
             ></div>
         </div>
 
-        <!-- HELP & HOTKEYS MODAL -->
-        <div v-if="showHelpModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div class="bg-slate-950 w-full max-w-md rounded-3xl border border-white/10 p-6 shadow-2xl space-y-5 text-xs text-slate-300">
-                <div class="flex items-center justify-between border-b border-white/10 pb-3">
-                    <div class="flex items-center gap-2">
-                        <HelpCircle class="w-4 h-4 text-violet-400" />
-                        <h3 class="text-sm font-bold text-white">Panduan & Pintasan Tombol (Hotkeys) CAD</h3>
-                    </div>
-                    <button @click="showHelpModal = false" class="text-slate-400 hover:text-white">✕</button>
-                </div>
+        <!-- AUTOCAD BOTTOM LAYOUT & SHEET TAB BAR -->
+        <footer class="h-9 bg-slate-950 border-t border-white/10 px-2 sm:px-4 flex items-center justify-between text-xs shrink-0 select-none z-20 overflow-x-auto scrollbar-none">
+            <div class="flex items-center gap-1 shrink-0 overflow-x-auto scrollbar-none">
+                <!-- AutoCAD Model Space Tab -->
+                <button
+                    @click="setCanvasMode('infinite')"
+                    type="button"
+                    :class="[
+                        'flex items-center gap-1.5 px-3 py-1 rounded-t-lg font-mono text-[11px] font-semibold border-b-2 transition-all cursor-pointer',
+                        canvasMode === 'infinite'
+                            ? 'bg-violet-600/20 text-violet-300 border-violet-500'
+                            : 'text-slate-400 hover:text-white border-transparent hover:bg-white/5'
+                    ]"
+                    title="AutoCAD Model Space (Kanvas Tak Terbatas - Lihat semua denah & frame kertas)"
+                >
+                    <InfinityIcon class="w-3.5 h-3.5" />
+                    <span>Model (∞)</span>
+                </button>
 
-                <div class="grid grid-cols-2 gap-2 font-mono">
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Pilih / Transform</span>
-                        <span class="text-violet-400 font-bold">V</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Dinding Tebal</span>
-                        <span class="text-violet-400 font-bold">W</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Ruangan Kotak</span>
-                        <span class="text-violet-400 font-bold">R</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Pintu Swing</span>
-                        <span class="text-violet-400 font-bold">D</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Jendela</span>
-                        <span class="text-violet-400 font-bold">J</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Kolom Beton</span>
-                        <span class="text-violet-400 font-bold">C</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Tangga 2D</span>
-                        <span class="text-violet-400 font-bold">S</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Dimensi Ukuran</span>
-                        <span class="text-violet-400 font-bold">M</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Teks / Label</span>
-                        <span class="text-violet-400 font-bold">T</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Penghapus</span>
-                        <span class="text-violet-400 font-bold">E</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Undo</span>
-                        <span class="text-violet-400 font-bold">Ctrl+Z</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Redo</span>
-                        <span class="text-violet-400 font-bold">Ctrl+Y</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Salin Objek (Copy)</span>
-                        <span class="text-violet-400 font-bold">Ctrl+C</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                        <span class="text-slate-400">Tempel Objek (Paste)</span>
-                        <span class="text-violet-400 font-bold">Ctrl+V</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-2">
-                        <span class="text-slate-400">Duplikat Cepat Objek</span>
-                        <span class="text-violet-400 font-bold">Ctrl+D</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex justify-between col-span-2">
-                        <span class="text-emerald-300 font-semibold">AutoCAD Box Select (Blok Garis/Objek)</span>
-                        <span class="text-emerald-400 font-bold">Klik & Drag di Kanvas</span>
-                    </div>
-                    <div class="px-2 py-1 bg-white/5 rounded-xl col-span-2 text-[11px] text-slate-400 space-y-1">
-                        <div>• <strong class="text-emerald-400">Kanan ke Kiri (Hijau Putus-putus):</strong> Memilih semua garis/objek yang tersentuh kotak (Crossing).</div>
-                        <div>• <strong class="text-sky-400">Kiri ke Kanan (Biru Solid):</strong> Memilih hanya garis/objek yang berada di dalam kotak (Window).</div>
-                        <div>• <strong class="text-violet-400">Shift + Klik:</strong> Menambah / mengurangi pilihan objek satu per satu.</div>
-                        <div>• <strong class="text-amber-400">Tarik Objek:</strong> Geser salah satu objek terblok untuk menggeser semuanya bersamaan.</div>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-2">
-                        <span class="text-slate-400">Pilih Semua & Geser Seluruh Proyek</span>
-                        <span class="text-amber-400 font-bold">Ctrl+A</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-2">
-                        <span class="text-slate-400">Pusatkan Gambar (Zoom Extents)</span>
-                        <span class="text-sky-400 font-bold">Z</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-2">
-                        <span class="text-slate-400">Geser Kanvas Bebas (Pan)</span>
-                        <span class="text-emerald-400 font-bold">H atau Spasi + Drag</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-2">
-                        <span class="text-slate-400">Scroll Layar Y (Atas / Bawah)</span>
-                        <span class="text-violet-400 font-bold">Ctrl + Scroll Mouse</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-2">
-                        <span class="text-slate-400">Scroll Layar X (Kiri / Kanan)</span>
-                        <span class="text-violet-400 font-bold">Shift + Scroll Mouse</span>
-                    </div>
-                    <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-2">
-                        <span class="text-slate-400">Zoom Presisi Kursor</span>
-                        <span class="text-violet-400 font-bold">Roda Mouse (Scroll)</span>
-                    </div>
-                </div>
+                <div class="h-4 w-px bg-white/10 mx-1 shrink-0"></div>
 
-                <div class="text-center pt-2 border-t border-white/10">
+                <!-- In-Canvas Paper Frames Tabs (Lembar 1, Lembar 2, dst yang ada di kanvas ini) -->
+                <button
+                    v-for="(f, idx) in canvasPaperFrames"
+                    :key="f.id"
+                    @click="focusOnFrame(f)"
+                    type="button"
+                    :class="[
+                        'flex items-center gap-1.5 px-3 py-1 rounded-t-lg font-mono text-[11px] border-b-2 transition-all cursor-pointer shrink-0 max-w-[170px] truncate',
+                        canvasMode === 'sheet' && activeFocusedFrameId === f.id
+                            ? 'bg-white/10 text-white font-bold border-emerald-400'
+                            : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-white/5'
+                    ]"
+                    :title="`Fokus ke ${f.title} (${f.width}×${f.height}px)`"
+                >
+                    <LayoutTemplate class="w-3 h-3 text-emerald-400 shrink-0" />
+                    <span class="truncate">{{ f.title }}</span>
+                </button>
+
+                <!-- + Tambah Kertas ke Kanvas Ini (Langsung Berdampingan) -->
+                <button
+                    v-if="canEdit"
+                    @click="addPaperFrameToCanvas()"
+                    type="button"
+                    class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-500/40 transition-all cursor-pointer ml-1 shrink-0 shadow-sm"
+                    title="Tambah Area Kertas Baru ke Kanvas Ini (Berdampingan sehingga 1 lembar kerja ada 2 kertas)"
+                >
+                    <Plus class="w-3 h-3" />
+                    <span>+ Kertas ke Kanvas</span>
+                </button>
+
+                <!-- Separator if projectSheets exist -->
+                <div v-if="projectSheets && projectSheets.length > 1" class="h-4 w-px bg-white/10 mx-1.5 shrink-0"></div>
+
+                <!-- Project File Switcher (File Lembar Lain dalam Proyek) -->
+                <template v-if="projectSheets && projectSheets.length > 1">
+                    <button
+                        v-for="(s, idx) in projectSheets.filter(p => p.id !== sheet.id)"
+                        :key="s.id"
+                        @click="navigateToSheet(s.id)"
+                        type="button"
+                        class="flex items-center gap-1.5 px-2.5 py-1 rounded-t-lg font-mono text-[10px] text-slate-400 hover:text-white hover:bg-white/5 border-b-2 border-transparent transition-all cursor-pointer shrink-0 max-w-[140px] truncate opacity-75 hover:opacity-100"
+                        :title="`Buka File Lembar Lain: ${s.title} (${s.scale})`"
+                    >
+                        <Files class="w-3 h-3 text-slate-500 shrink-0" />
+                        <span class="truncate">{{ s.title }}</span>
+                    </button>
+                </template>
+
+                <!-- + Buat Lembar Dokumen Baru -->
+                <button
+                    v-if="canEdit"
+                    @click="openNewSheetModal"
+                    type="button"
+                    class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10 transition-all cursor-pointer ml-1 shrink-0"
+                    title="Buat Dokumen / File Lembar Kerja Baru di Proyek Ini"
+                >
+                    <Plus class="w-3 h-3" />
+                    <span class="hidden xl:inline">File Baru</span>
+                </button>
+            </div>
+
+            <!-- Status Info CAD (Kanan) -->
+            <div class="hidden md:flex items-center gap-3 font-mono text-[11px] text-slate-400 shrink-0 pl-3">
+                <span>Unit: <strong class="text-slate-200">{{ sheet.unit }}</strong></span>
+                <span>Skala: <strong class="text-slate-200">{{ sheet.scale }}</strong></span>
+                <span>Zoom: <strong class="text-violet-300">{{ Math.round(zoomLevel * 100) }}%</strong></span>
+                <span v-if="canvasMode === 'sheet'">Kertas: <strong class="text-emerald-400">{{ paperSize }}</strong></span>
+                <span v-else class="text-amber-400 font-semibold">Mode Model (∞)</span>
+            </div>
+        </footer>
+
+        <!-- HELP & HOTKEYS MODAL (RESPONSIVE & FIXED CLOSE BUTTON) -->
+        <div v-if="showHelpModal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-sm">
+            <div class="bg-slate-950 w-full max-w-3xl max-h-[90vh] sm:max-h-[85vh] rounded-3xl border border-white/10 shadow-2xl flex flex-col text-xs text-slate-300 overflow-hidden">
+                <!-- Sticky Header with Close Button -->
+                <div class="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-slate-950">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-7 h-7 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30 shrink-0">
+                            <HelpCircle class="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-white">Panduan & Pintasan Tombol (Hotkeys) CAD</h3>
+                            <p class="text-[11px] text-slate-400">Pintasan keyboard & kontrol navigasi kanvas 2D arsitek</p>
+                        </div>
+                    </div>
                     <button
                         @click="showHelpModal = false"
-                        class="px-5 py-2 rounded-xl bg-violet-600 text-white font-medium text-xs hover:bg-violet-500 transition-colors"
+                        type="button"
+                        class="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer text-base leading-none"
+                        title="Tutup (Esc)"
                     >
-                        Tutup Panduan
+                        ✕
+                    </button>
+                </div>
+
+                <!-- Scrollable Body with Responsive Multi-Column Grid -->
+                <div class="p-4 sm:p-6 overflow-y-auto custom-scroll flex-1 space-y-4">
+                    <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Navigasi Kanvas & Seleksi Objek</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 font-mono">
+                        <div class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col gap-1 col-span-1 sm:col-span-2 lg:col-span-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-emerald-300 font-semibold">AutoCAD Box Select (Blok Garis/Objek)</span>
+                                <span class="text-emerald-400 font-bold">Klik & Drag di Kanvas</span>
+                            </div>
+                            <div class="text-[11px] text-slate-400 space-y-0.5 mt-1">
+                                <div>• <strong class="text-emerald-400">Kanan ke Kiri (Hijau Putus-putus):</strong> Memilih semua garis/objek yang tersentuh kotak (Crossing).</div>
+                                <div>• <strong class="text-sky-400">Kiri ke Kanan (Biru Solid):</strong> Memilih hanya garis/objek yang berada di dalam kotak (Window).</div>
+                                <div>• <strong class="text-violet-400">Shift + Klik:</strong> Menambah / mengurangi pilihan objek satu per satu.</div>
+                                <div>• <strong class="text-amber-400">Tarik Objek:</strong> Geser langsung di dalam area objek yang terpilih untuk memindahkan seluruhnya bersamaan.</div>
+                            </div>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-1 sm:col-span-2 lg:col-span-3">
+                            <span class="text-slate-400">Scroll Layar Atas / Bawah</span>
+                            <span class="text-violet-400 font-bold">Ctrl + Scroll Mouse</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-1 sm:col-span-2 lg:col-span-3">
+                            <span class="text-slate-400">Scroll Layar Samping Kiri / Kanan</span>
+                            <span class="text-violet-400 font-bold">Shift + Scroll Mouse</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Geser Kanvas (Pan)</span>
+                            <span class="text-emerald-400 font-bold">H / Spasi</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Pusatkan Gambar</span>
+                            <span class="text-sky-400 font-bold">Z</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Pilih Semua Objek</span>
+                            <span class="text-amber-400 font-bold">Ctrl+A</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Zoom Presisi</span>
+                            <span class="text-violet-400 font-bold">Scroll Mouse</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Salin Objek (Copy)</span>
+                            <span class="text-violet-400 font-bold">Ctrl+C</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Tempel (Paste)</span>
+                            <span class="text-violet-400 font-bold">Ctrl+V</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Duplikat Cepat</span>
+                            <span class="text-violet-400 font-bold">Ctrl+D</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Undo</span>
+                            <span class="text-violet-400 font-bold">Ctrl+Z</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Redo</span>
+                            <span class="text-violet-400 font-bold">Ctrl+Y</span>
+                        </div>
+                    </div>
+
+                    <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider pt-2">Pintasan Alat Gambar (Drawing Tools)</div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 font-mono">
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Pilih (Select)</span>
+                            <span class="text-violet-400 font-bold">V</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Dinding Tebal</span>
+                            <span class="text-violet-400 font-bold">W</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Ruangan Kotak</span>
+                            <span class="text-violet-400 font-bold">R</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Pintu Swing</span>
+                            <span class="text-violet-400 font-bold">D</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Jendela</span>
+                            <span class="text-violet-400 font-bold">J</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Kolom Beton</span>
+                            <span class="text-violet-400 font-bold">C</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Tangga 2D</span>
+                            <span class="text-violet-400 font-bold">S</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Dimensi Ukuran</span>
+                            <span class="text-violet-400 font-bold">M</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Teks / Label</span>
+                            <span class="text-violet-400 font-bold">T</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Penghapus</span>
+                            <span class="text-violet-400 font-bold">E</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sticky Footer with Always-Visible Close Button -->
+                <div class="px-5 py-3 border-t border-white/10 flex items-center justify-between bg-slate-950 shrink-0">
+                    <span class="text-[11px] text-slate-500 hidden sm:inline">Tekan Esc atau klik tombol untuk menutup</span>
+                    <button
+                        @click="showHelpModal = false"
+                        type="button"
+                        class="w-full sm:w-auto px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-medium text-xs transition-colors cursor-pointer shadow-md shadow-violet-600/30"
+                    >
+                        Tutup Panduan (Esc)
                     </button>
                 </div>
             </div>
@@ -3298,7 +4095,24 @@ onUnmounted(() => {
                     <button @click="showNewSheetModal = false" class="text-slate-400 hover:text-white p-1">✕</button>
                 </div>
 
+                <!-- OPSI CEPAT: TAMBAH KERTAS BERDAMPINGAN KE KANVAS SAAT INI -->
+                <div class="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="text-xs font-bold text-emerald-300">Tambah ke Kanvas Ini (Berdampingan)?</div>
+                        <div class="text-[11px] text-slate-400 truncate">Buat 2 kertas dalam 1 lembar kerja tanpa pindah halaman.</div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="addPaperFrameToCanvas(newSheetForm.title || undefined); showNewSheetModal = false;"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shrink-0 cursor-pointer shadow-md shadow-emerald-900/40 transition-all"
+                    >
+                        <Plus class="w-3.5 h-3.5" />
+                        <span>+ Ke Kanvas Ini</span>
+                    </button>
+                </div>
+
                 <form @submit.prevent="submitNewSheet" class="space-y-3.5">
+                    <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider -mb-1">Atau Buat File Lembar Kerja Terpisah:</div>
                     <!-- Judul Lembar Kerja -->
                     <div>
                         <label class="block text-xs font-semibold text-slate-300 mb-1">
