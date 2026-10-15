@@ -142,6 +142,8 @@ const headerContainerRef = ref<HTMLElement | null>(null);
 const canScrollLeft = ref(false);
 const canScrollRight = ref(false);
 const showExportMenu = ref(false);
+const showExportModal = ref(false);
+const isExporting = ref(false);
 
 // ── CANVAS & PAPER DIMENSION STATE (FIGMA FRAME & AUTOCAD MODEL SPACE) ──────
 type CanvasMode = 'sheet' | 'infinite';
@@ -2902,6 +2904,10 @@ function handleKeyDown(e: KeyboardEvent) {
             showNewSheetModal.value = false;
             return;
         }
+        if (showExportModal.value) {
+            showExportModal.value = false;
+            return;
+        }
         if (showExportMenu.value) {
             showExportMenu.value = false;
             return;
@@ -3133,9 +3139,10 @@ function deleteSelected() {
     }
 }
 
-function exportPng() {
+function exportPng(exportPaperOnly = false) {
     if (!stage) return;
     showExportMenu.value = false;
+    showExportModal.value = false;
     const oldNodes = tr?.nodes() || [];
     tr?.nodes([]);
     if (selectionOverlay) selectionOverlay.visible(false);
@@ -3145,7 +3152,26 @@ function exportPng() {
     stage.batchDraw();
 
     try {
-        const dataURL = stage.toDataURL({ pixelRatio: 2 });
+        let dataURL = '';
+        if (exportPaperOnly && canvasMode.value === 'sheet') {
+            const scale = stage.scaleX() || 1;
+            const px = stage.x() + paperX.value * scale;
+            const py = stage.y() + paperY.value * scale;
+            const pw = paperWidth.value * scale;
+            const ph = paperHeight.value * scale;
+            const pixelRatio = Math.max(2, 2 / scale);
+
+            dataURL = stage.toDataURL({
+                x: px,
+                y: py,
+                width: pw,
+                height: ph,
+                pixelRatio,
+            });
+        } else {
+            dataURL = stage.toDataURL({ pixelRatio: 2 });
+        }
+
         const link = document.createElement('a');
         link.download = `${props.sheet.title || 'gambar_kerja'}.png`;
         link.href = dataURL;
@@ -3166,23 +3192,61 @@ function exportPng() {
 }
 
 async function exportWithSave(type: 'dxf' | 'svg') {
-    showExportMenu.value = false;
+    isExporting.value = true;
     toast.info(`Mempersiapkan download file ${type.toUpperCase()}...`);
     try {
-        await saveElements(true);
-    } catch {}
-    const url = type === 'dxf' ? `/drawings/${props.sheet.id}/export-dxf` : `/drawings/${props.sheet.id}/export-svg`;
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = '';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success(`File ${type.toUpperCase()} berhasil diunduh!`);
+        if (props.canEdit) {
+            await saveElements(true);
+        }
+
+        const url = type === 'dxf' ? `/drawings/${props.sheet.id}/export-dxf` : `/drawings/${props.sheet.id}/export-svg`;
+        const response = await fetch(url, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `${props.sheet.title || 'gambar_kerja'}.${type}`;
+        document.body.appendChild(link);
+        link.click();
+
+        setTimeout(() => {
+            if (link.parentNode) link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+        }, 600);
+
+        toast.success(`File ${type.toUpperCase()} berhasil diunduh!`);
+    } catch (err) {
+        console.error(`Export ${type} failed:`, err);
+        // Fallback standard direct download
+        const fallbackUrl = type === 'dxf' ? `/drawings/${props.sheet.id}/export-dxf` : `/drawings/${props.sheet.id}/export-svg`;
+        const link = document.createElement('a');
+        link.href = fallbackUrl;
+        link.setAttribute('download', `${props.sheet.title || 'gambar_kerja'}.${type}`);
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+            if (link.parentNode) link.parentNode.removeChild(link);
+        }, 500);
+        toast.info(`Mengunduh file ${type.toUpperCase()}...`);
+    } finally {
+        isExporting.value = false;
+        showExportModal.value = false;
+        showExportMenu.value = false;
+    }
 }
 
 function exportPdfOrPrint() {
     showExportMenu.value = false;
+    showExportModal.value = false;
     const oldNodes = tr?.nodes() || [];
     tr?.nodes([]);
     if (selectionOverlay) selectionOverlay.visible(false);
@@ -3198,7 +3262,7 @@ function exportPdfOrPrint() {
             updateSelectionOverlay();
         }
         stage?.batchDraw();
-    }, 200);
+    }, 250);
 }
 
 function zoom(direction: 'in' | 'out' | 'reset') {
@@ -3371,401 +3435,427 @@ onUnmounted(() => {
     <Head :title="`${sheet.title} — Lembar Kerja CAD 2D`" />
 
     <div class="h-screen w-screen flex flex-col bg-slate-900 text-slate-100 overflow-hidden select-none">
-        <!-- TOP CAD HEADER BAR WITH SCROLL DISCOVERY & OVERFLOW AWARENESS -->
-        <div class="relative z-30 shrink-0 bg-slate-950 border-b border-white/10">
-            <!-- Scroll Indicator Left -->
-            <button
-                v-if="canScrollLeft"
-                @click="scrollHeader('left')"
-                type="button"
-                class="absolute left-2 top-2.5 z-40 p-1.5 rounded-xl bg-slate-800/95 hover:bg-slate-700 text-white shadow-lg border border-white/15 backdrop-blur-md transition-all cursor-pointer flex items-center gap-1 text-[11px]"
-                title="Geser melihat tools di sebelah kiri"
-            >
-                <ChevronLeft class="w-4 h-4" />
-            </button>
+        <!-- TOP CAD HEADER BAR -->
+        <header class="relative z-30 shrink-0 h-14 px-3 sm:px-4 flex items-center justify-between gap-2 sm:gap-3 bg-slate-950 border-b border-white/10">
+            <!-- 1. Left Fixed Brand & Sheet Controls -->
+            <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                <Link
+                    href="/drawings"
+                    class="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors shrink-0"
+                    title="Kembali ke Daftar Lembar Kerja"
+                >
+                    <ArrowLeft class="w-5 h-5" />
+                </Link>
 
-            <!-- Scroll Indicator Right (Pemberitahuan Bahwa Masih Ada Tools Lainnya) -->
-            <button
-                v-if="canScrollRight"
-                @click="scrollHeader('right')"
-                type="button"
-                class="absolute right-2 top-2.5 z-40 px-2.5 py-1.5 rounded-xl bg-violet-600/95 hover:bg-violet-600 text-white shadow-xl shadow-violet-900/60 border border-violet-400/40 backdrop-blur-md transition-all cursor-pointer flex items-center gap-1.5 text-[11px] font-bold animate-pulse"
-                title="Masih ada tools lainnya di sebelah kanan — Klik untuk geser"
-            >
-                <span>Tools Lainnya</span>
-                <ChevronRight class="w-3.5 h-3.5" />
-            </button>
+                <div class="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                    <div class="w-8 h-8 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30 shrink-0">
+                        <DraftingCompass class="w-4 h-4" />
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5 sm:gap-2">
+                            <h2 class="text-xs sm:text-sm font-bold text-white tracking-tight truncate max-w-[110px] sm:max-w-[160px] md:max-w-xs">{{ sheet.title }}</h2>
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30 shrink-0">
+                                {{ sheet.type.toUpperCase() }}
+                            </span>
 
-            <header
-                ref="headerContainerRef"
-                @scroll="checkHeaderScroll"
-                class="h-14 px-3 sm:px-4 flex items-center justify-between gap-3 overflow-x-auto scrollbar-none"
-            >
-                <div class="flex items-center gap-2 sm:gap-3 shrink-0">
-                    <Link
-                        href="/drawings"
-                        class="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors shrink-0"
-                        title="Kembali ke Daftar Lembar Kerja"
-                    >
-                        <ArrowLeft class="w-5 h-5" />
-                    </Link>
-
-                    <div class="flex items-center gap-2 sm:gap-2.5 min-w-0">
-                        <div class="w-8 h-8 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30 shrink-0">
-                            <DraftingCompass class="w-4 h-4" />
-                        </div>
-                        <div class="min-w-0">
-                            <div class="flex items-center gap-1.5 sm:gap-2">
-                                <h2 class="text-xs sm:text-sm font-bold text-white tracking-tight truncate max-w-[110px] sm:max-w-[160px] md:max-w-xs">{{ sheet.title }}</h2>
-                                <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30 shrink-0">
-                                    {{ sheet.type.toUpperCase() }}
-                                </span>
-
-                                <!-- Sheet Switcher Dropdown (Pilih Lembar Kerja / Ruangan) -->
-                                <div v-if="projectSheets && projectSheets.length > 0" class="relative inline-block ml-0.5 shrink-0">
-                                    <select
-                                        :value="sheet.id"
-                                        @change="switchSheet"
-                                        class="bg-slate-900 border border-violet-500/40 text-violet-300 hover:text-white hover:border-violet-400 text-[11px] rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-400 font-medium cursor-pointer transition-colors shadow-sm max-w-[130px] sm:max-w-[180px] truncate"
-                                        title="Pilih Lembar Kerja Lainnya atau Buat Kertas Baru"
+                            <!-- Sheet Switcher Dropdown (Pilih Lembar Kerja / Ruangan) -->
+                            <div v-if="projectSheets && projectSheets.length > 0" class="relative inline-block ml-0.5 shrink-0">
+                                <select
+                                    :value="sheet.id"
+                                    @change="switchSheet"
+                                    class="bg-slate-900 border border-violet-500/40 text-violet-300 hover:text-white hover:border-violet-400 text-[11px] rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-400 font-medium cursor-pointer transition-colors shadow-sm max-w-[130px] sm:max-w-[180px] truncate"
+                                    title="Pilih Lembar Kerja Lainnya atau Buat Kertas Baru"
+                                >
+                                    <option
+                                        v-for="(s, idx) in projectSheets"
+                                        :key="s.id"
+                                        :value="s.id"
+                                        class="bg-slate-900 text-white py-1"
                                     >
-                                        <option
-                                            v-for="(s, idx) in projectSheets"
-                                            :key="s.id"
-                                            :value="s.id"
-                                            class="bg-slate-900 text-white py-1"
-                                        >
-                                            📄 Lembar {{ idx + 1 }}: {{ s.title }} ({{ s.scale }})
-                                        </option>
-                                        <option v-if="canEdit" value="__ADD_PAPER_FRAME__" class="bg-emerald-950 text-emerald-300 font-bold py-1">
-                                            ➕ + Tambah Kertas ke Kanvas Ini
-                                        </option>
-                                        <option v-if="canEdit" value="__NEW_SHEET__" class="bg-violet-950 text-violet-300 font-medium py-1">
-                                            📄 + Buat File Lembar Baru...
-                                        </option>
-                                    </select>
-                                </div>
-
-                                <!-- Tombol Tambah Lembar / Kertas Baru Langsung -->
-                                <button
-                                    v-if="canEdit"
-                                    @click="openNewSheetModal"
-                                    type="button"
-                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-violet-600/30 hover:bg-violet-600 text-violet-200 hover:text-white border border-violet-500/40 transition-all cursor-pointer shadow-sm shrink-0"
-                                    title="Buat Lembar Kerja / File Kertas Baru di Proyek Ini"
-                                >
-                                    <Plus class="w-3 h-3" />
-                                    <span class="hidden sm:inline">Kertas Baru</span>
-                                </button>
-
-                                <!-- Tombol Tambah Kertas ke Kanvas Ini (Berdampingan sehingga 1 lembar kerja ada 2 kertas) -->
-                                <button
-                                    v-if="canEdit"
-                                    @click="addPaperFrameToCanvas()"
-                                    type="button"
-                                    class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-500/40 transition-all cursor-pointer shadow-sm shrink-0"
-                                    title="Tambah Area Kertas Baru ke Kanvas Ini (Berdampingan sehingga dalam 1 lembar kerja ada 2 kertas atau lebih)"
-                                >
-                                    <Plus class="w-3 h-3" />
-                                    <span>+ Kertas ke Kanvas</span>
-                                </button>
+                                        📄 Lembar {{ idx + 1 }}: {{ s.title }} ({{ s.scale }})
+                                    </option>
+                                    <option v-if="canEdit" value="__ADD_PAPER_FRAME__" class="bg-emerald-950 text-emerald-300 font-bold py-1">
+                                        ➕ + Tambah Kertas ke Kanvas Ini
+                                    </option>
+                                    <option v-if="canEdit" value="__NEW_SHEET__" class="bg-violet-950 text-violet-300 font-medium py-1">
+                                        📄 + Buat File Lembar Baru...
+                                    </option>
+                                </select>
                             </div>
-                            <p class="text-[10px] sm:text-[11px] text-slate-400 -mt-0.5 hidden md:block truncate max-w-[200px] lg:max-w-sm">
-                                {{ project.title }} • Skala {{ sheet.scale }} • Kertas {{ paperSize }} ({{ orientation }})
-                            </p>
+
+                            <!-- Tombol Tambah Lembar / Kertas Baru Langsung -->
+                            <button
+                                v-if="canEdit"
+                                @click="openNewSheetModal"
+                                type="button"
+                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-violet-600/30 hover:bg-violet-600 text-violet-200 hover:text-white border border-violet-500/40 transition-all cursor-pointer shadow-sm shrink-0"
+                                title="Buat Lembar Kerja / File Kertas Baru di Proyek Ini"
+                            >
+                                <Plus class="w-3 h-3" />
+                                <span class="hidden sm:inline">Kertas Baru</span>
+                            </button>
+
+                            <!-- Tombol Tambah Kertas ke Kanvas Ini (Berdampingan sehingga 1 lembar kerja ada 2 kertas) -->
+                            <button
+                                v-if="canEdit"
+                                @click="addPaperFrameToCanvas()"
+                                type="button"
+                                class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-500/40 transition-all cursor-pointer shadow-sm shrink-0"
+                                title="Tambah Area Kertas Baru ke Kanvas Ini (Berdampingan sehingga dalam 1 lembar kerja ada 2 kertas atau lebih)"
+                            >
+                                <Plus class="w-3 h-3" />
+                                <span>+ Kertas ke Kanvas</span>
+                            </button>
                         </div>
+                        <p class="text-[10px] sm:text-[11px] text-slate-400 -mt-0.5 hidden md:block truncate max-w-[200px] lg:max-w-sm">
+                            {{ project.title }} • Skala {{ sheet.scale }} • Kertas {{ paperSize }} ({{ orientation }})
+                        </p>
                     </div>
                 </div>
+            </div>
 
-                <!-- DYNAMIC FRAME & CANVAS CONTROLS (FIGMA RESIZABLE SHEET & AUTOCAD MODEL SPACE) -->
-                <div class="hidden lg:flex items-center gap-1.5 xl:gap-2.5 bg-slate-900 border border-white/10 rounded-2xl px-2.5 py-1 shrink-0">
-                    <!-- Mode Switch: Frame Lembar Kerja vs AutoCAD Model Space -->
-                    <div class="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10 shrink-0">
-                        <button
-                            @click="setCanvasMode('sheet')"
-                            type="button"
-                            :class="[
-                                'flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer',
-                                canvasMode === 'sheet'
-                                    ? 'bg-violet-600 text-white shadow-sm font-semibold'
-                                    : 'text-slate-400 hover:text-white'
-                            ]"
-                            title="Mode Frame Lembar Kerja Dinamis (Figma & Paper Space)"
-                        >
-                            <LayoutTemplate class="w-3.5 h-3.5" />
-                            <span><span class="hidden xl:inline">Frame </span>Kertas</span>
-                        </button>
-                        <button
-                            @click="setCanvasMode('infinite')"
-                            type="button"
-                            :class="[
-                                'flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer',
-                                canvasMode === 'infinite'
-                                    ? 'bg-violet-600 text-white shadow-sm font-semibold'
-                                    : 'text-slate-400 hover:text-white'
-                            ]"
-                            title="Mode Kanvas Tak Terbatas (AutoCAD Model Space ∞)"
-                        >
-                            <InfinityIcon class="w-3.5 h-3.5" />
-                            <span><span class="hidden xl:inline">AutoCAD </span>Model<span class="hidden xl:inline"> (∞)</span></span>
-                        </button>
-                    </div>
+            <!-- 2. Middle Scrollable Frame & Canvas Controls -->
+            <div class="relative flex-1 min-w-0 hidden lg:flex items-center">
+                <!-- Scroll Indicator Left -->
+                <button
+                    v-if="canScrollLeft"
+                    @click="scrollHeader('left')"
+                    type="button"
+                    class="absolute -left-1 top-1/2 -translate-y-1/2 z-20 p-1 rounded-lg bg-slate-800/95 hover:bg-slate-700 text-white shadow-lg border border-white/15 backdrop-blur-md transition-all cursor-pointer flex items-center"
+                    title="Geser melihat tools di sebelah kiri"
+                >
+                    <ChevronLeft class="w-3.5 h-3.5" />
+                </button>
 
-                    <!-- Paper Frame Controls (Aktif saat mode Frame Kertas) -->
-                    <template v-if="canvasMode === 'sheet'">
+                <!-- Scrollable Tools Wrapper -->
+                <div
+                    ref="headerContainerRef"
+                    @scroll="checkHeaderScroll"
+                    class="w-full flex items-center justify-center gap-1.5 xl:gap-2.5 overflow-x-auto scrollbar-none py-1 px-2"
+                >
+                    <!-- DYNAMIC FRAME & CANVAS CONTROLS (FIGMA RESIZABLE SHEET & AUTOCAD MODEL SPACE) -->
+                    <div class="flex items-center gap-1.5 xl:gap-2.5 bg-slate-900 border border-white/10 rounded-2xl px-2.5 py-1 shrink-0">
+                        <!-- Mode Switch: Frame Lembar Kerja vs AutoCAD Model Space -->
+                        <div class="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10 shrink-0">
+                            <button
+                                @click="setCanvasMode('sheet')"
+                                type="button"
+                                :class="[
+                                    'flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer',
+                                    canvasMode === 'sheet'
+                                        ? 'bg-violet-600 text-white shadow-sm font-semibold'
+                                        : 'text-slate-400 hover:text-white'
+                                ]"
+                                title="Mode Frame Lembar Kerja Dinamis (Figma & Paper Space)"
+                            >
+                                <LayoutTemplate class="w-3.5 h-3.5" />
+                                <span><span class="hidden xl:inline">Frame </span>Kertas</span>
+                            </button>
+                            <button
+                                @click="setCanvasMode('infinite')"
+                                type="button"
+                                :class="[
+                                    'flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer',
+                                    canvasMode === 'infinite'
+                                        ? 'bg-violet-600 text-white shadow-sm font-semibold'
+                                        : 'text-slate-400 hover:text-white'
+                                ]"
+                                title="Mode Kanvas Tak Terbatas (AutoCAD Model Space ∞)"
+                            >
+                                <InfinityIcon class="w-3.5 h-3.5" />
+                                <span><span class="hidden xl:inline">AutoCAD </span>Model<span class="hidden xl:inline"> (∞)</span></span>
+                            </button>
+                        </div>
+
+                        <!-- Paper Frame Controls (Aktif saat mode Frame Kertas) -->
+                        <template v-if="canvasMode === 'sheet'">
+                            <div class="h-4 w-px bg-white/10 shrink-0"></div>
+
+                            <!-- Preset Ukuran Kertas ISO -->
+                            <select
+                                :value="paperSize"
+                                @change="applyPaperPreset(($event.target as HTMLSelectElement).value)"
+                                class="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer shrink-0"
+                                title="Preset Ukuran Kertas Standar ISO"
+                            >
+                                <option value="A0" class="bg-slate-900 text-white">A0 (3564 × 2520)</option>
+                                <option value="A1" class="bg-slate-900 text-white">A1 (2520 × 1782)</option>
+                                <option value="A2" class="bg-slate-900 text-white">A2 (1782 × 1260)</option>
+                                <option value="A3" class="bg-slate-900 text-white">A3 (1260 × 891)</option>
+                                <option value="A4" class="bg-slate-900 text-white">A4 (891 × 630)</option>
+                                <option value="Custom" class="bg-slate-900 text-white">Custom (Dinamis)</option>
+                            </select>
+
+                            <!-- Numeric Input Width (W) & Height (H) ala Figma -->
+                            <div class="hidden 2xl:flex items-center gap-1.5 text-xs font-mono shrink-0">
+                                <span class="text-slate-400 text-[10px]">W:</span>
+                                <input
+                                    type="number"
+                                    :value="paperWidth"
+                                    @change="onWidthInput(Number(($event.target as HTMLInputElement).value))"
+                                    class="w-16 bg-white/5 border border-white/10 rounded-lg px-1.5 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
+                                    min="400"
+                                    max="20000"
+                                    step="50"
+                                    title="Lebar Kertas Dinamis (px)"
+                                />
+                                <span class="text-slate-500 text-[10px]">×</span>
+                                <span class="text-slate-400 text-[10px]">H:</span>
+                                <input
+                                    type="number"
+                                    :value="paperHeight"
+                                    @change="onHeightInput(Number(($event.target as HTMLInputElement).value))"
+                                    class="w-16 bg-white/5 border border-white/10 rounded-lg px-1.5 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
+                                    min="300"
+                                    max="20000"
+                                    step="50"
+                                    title="Tinggi Kertas Dinamis (px)"
+                                />
+                            </div>
+
+                            <!-- Putar Orientasi (Landscape / Portrait) -->
+                            <button
+                                @click="toggleOrientation"
+                                type="button"
+                                class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
+                                :title="`Putar Orientasi (${orientation === 'landscape' ? 'Landscape ke Portrait' : 'Portrait ke Landscape'})`"
+                            >
+                                <RotateCw class="w-3.5 h-3.5" />
+                            </button>
+                        </template>
+
                         <div class="h-4 w-px bg-white/10 shrink-0"></div>
 
-                        <!-- Preset Ukuran Kertas ISO -->
-                        <select
-                            :value="paperSize"
-                            @change="applyPaperPreset(($event.target as HTMLSelectElement).value)"
-                            class="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer shrink-0"
-                            title="Preset Ukuran Kertas Standar ISO"
-                        >
-                            <option value="A0" class="bg-slate-900 text-white">A0 (3564 × 2520)</option>
-                            <option value="A1" class="bg-slate-900 text-white">A1 (2520 × 1782)</option>
-                            <option value="A2" class="bg-slate-900 text-white">A2 (1782 × 1260)</option>
-                            <option value="A3" class="bg-slate-900 text-white">A3 (1260 × 891)</option>
-                            <option value="A4" class="bg-slate-900 text-white">A4 (891 × 630)</option>
-                            <option value="Custom" class="bg-slate-900 text-white">Custom (Dinamis)</option>
-                        </select>
-
-                        <!-- Numeric Input Width (W) & Height (H) ala Figma -->
-                        <div class="hidden 2xl:flex items-center gap-1.5 text-xs font-mono shrink-0">
-                            <span class="text-slate-400 text-[10px]">W:</span>
-                            <input
-                                type="number"
-                                :value="paperWidth"
-                                @change="onWidthInput(Number(($event.target as HTMLInputElement).value))"
-                                class="w-16 bg-white/5 border border-white/10 rounded-lg px-1.5 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
-                                min="400"
-                                max="20000"
-                                step="50"
-                                title="Lebar Kertas Dinamis (px)"
-                            />
-                            <span class="text-slate-500 text-[10px]">×</span>
-                            <span class="text-slate-400 text-[10px]">H:</span>
-                            <input
-                                type="number"
-                                :value="paperHeight"
-                                @change="onHeightInput(Number(($event.target as HTMLInputElement).value))"
-                                class="w-16 bg-white/5 border border-white/10 rounded-lg px-1.5 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
-                                min="300"
-                                max="20000"
-                                step="50"
-                                title="Tinggi Kertas Dinamis (px)"
-                            />
-                        </div>
-
-                        <!-- Putar Orientasi (Landscape / Portrait) -->
+                        <!-- 3 TOMBOL KONTROL UTAMA: RAPATKAN, RESET ISO, PUSATKAN (TERSEDIA DI SEMUA MODE) -->
+                        <!-- 1. Rapatkan Lembar ke Gambar (Hilangkan Jarak Kosong) -->
                         <button
-                            @click="toggleOrientation"
+                            @click="autoFitSheetToDrawing"
                             type="button"
-                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
-                            :title="`Putar Orientasi (${orientation === 'landscape' ? 'Landscape ke Portrait' : 'Portrait ke Landscape'})`"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
+                            title="Rapatkan Lembar Kerja ke Gambar (Hilangkan Semua Jarak Kosong)"
                         >
-                            <RotateCw class="w-3.5 h-3.5" />
+                            <Sparkles class="w-3.5 h-3.5 text-indigo-400" />
+                            <span class="hidden sm:inline">Rapatkan Kertas</span>
                         </button>
-                    </template>
 
-                    <div class="h-4 w-px bg-white/10 shrink-0"></div>
+                        <!-- 2. Kembalikan Ukuran Kertas ke Standar ISO -->
+                        <button
+                            @click="resetPaperToDefault"
+                            type="button"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 hover:text-white border border-amber-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
+                            title="Kembalikan ukuran kertas ke standar ISO awal (A3 / Preset)"
+                        >
+                            <RotateCcw class="w-3.5 h-3.5 text-amber-400" />
+                            <span class="hidden sm:inline">Reset ISO</span>
+                        </button>
 
-                    <!-- 3 TOMBOL KONTROL UTAMA: RAPATKAN, RESET ISO, PUSATKAN (TERSEDIA DI SEMUA MODE) -->
-                    <!-- 1. Rapatkan Lembar ke Gambar (Hilangkan Jarak Kosong) -->
+                        <!-- 3. Pusatkan Tampilan (AutoCAD Zoom Extents) -->
+                        <button
+                            @click="zoomToFit"
+                            type="button"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-500/15 hover:bg-sky-500/30 text-sky-300 hover:text-white border border-sky-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
+                            title="Pusatkan Seluruh Gambar & Kertas ke Layar (AutoCAD Zoom Extents / Z)"
+                        >
+                            <Focus class="w-3.5 h-3.5 text-sky-400" />
+                            <span class="hidden sm:inline">Pusatkan</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Scroll Indicator Right -->
+                <button
+                    v-if="canScrollRight"
+                    @click="scrollHeader('right')"
+                    type="button"
+                    class="absolute -right-1 top-1/2 -translate-y-1/2 z-20 p-1 rounded-lg bg-violet-600/95 hover:bg-violet-600 text-white shadow-lg border border-violet-400/40 backdrop-blur-md transition-all cursor-pointer flex items-center animate-pulse"
+                    title="Masih ada tools lainnya — Klik untuk geser"
+                >
+                    <ChevronRight class="w-3.5 h-3.5" />
+                </button>
+            </div>
+
+            <!-- 3. Right Fixed Actions Section (Unclipped & Always Accessible) -->
+            <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <!-- Undo / Redo Buttons -->
+                <div class="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5 shrink-0">
                     <button
-                        @click="autoFitSheetToDrawing"
-                        type="button"
-                        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
-                        title="Rapatkan Lembar Kerja ke Gambar (Hilangkan Semua Jarak Kosong)"
+                        @click="undo"
+                        :disabled="historyIndex <= 0"
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors cursor-pointer"
+                        title="Urungkan / Undo (Ctrl+Z)"
                     >
-                        <Sparkles class="w-3.5 h-3.5 text-indigo-400" />
-                        <span class="hidden sm:inline">Rapatkan Kertas</span>
+                        <Undo2 class="w-4 h-4" />
                     </button>
-
-                    <!-- 2. Kembalikan Ukuran Kertas ke Standar ISO -->
                     <button
-                        @click="resetPaperToDefault"
-                        type="button"
-                        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 hover:text-white border border-amber-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
-                        title="Kembalikan ukuran kertas ke standar ISO awal (A3 / Preset)"
+                        @click="redo"
+                        :disabled="historyIndex >= historyStack.length - 1"
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors cursor-pointer"
+                        title="Ulangi / Redo (Ctrl+Y)"
                     >
-                        <RotateCcw class="w-3.5 h-3.5 text-amber-400" />
-                        <span class="hidden sm:inline">Reset ISO</span>
-                    </button>
-
-                    <!-- 3. Pusatkan Tampilan (AutoCAD Zoom Extents) -->
-                    <button
-                        @click="zoomToFit"
-                        type="button"
-                        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-500/15 hover:bg-sky-500/30 text-sky-300 hover:text-white border border-sky-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
-                        title="Pusatkan Seluruh Gambar & Kertas ke Layar (AutoCAD Zoom Extents / Z)"
-                    >
-                        <Focus class="w-3.5 h-3.5 text-sky-400" />
-                        <span class="hidden sm:inline">Pusatkan</span>
+                        <Redo2 class="w-4 h-4" />
                     </button>
                 </div>
 
-                <!-- Header Actions -->
-                <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                    <!-- Undo / Redo Buttons -->
-                    <div class="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5 shrink-0">
-                        <button
-                            @click="undo"
-                            :disabled="historyIndex <= 0"
-                            class="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors cursor-pointer"
-                            title="Urungkan / Undo (Ctrl+Z)"
-                        >
-                            <Undo2 class="w-4 h-4" />
-                        </button>
-                        <button
-                            @click="redo"
-                            :disabled="historyIndex >= historyStack.length - 1"
-                            class="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors cursor-pointer"
-                            title="Ulangi / Redo (Ctrl+Y)"
-                        >
-                            <Redo2 class="w-4 h-4" />
-                        </button>
-                    </div>
-
-                    <!-- Copy / Paste / Duplicate Button Group -->
-                    <div v-if="canEdit" class="hidden md:flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5 shrink-0">
-                        <button
-                            @click="copySelected"
-                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                            title="Salin Objek Terpilih (Ctrl+C)"
-                        >
-                            <Copy class="w-4 h-4" />
-                        </button>
-                        <button
-                            @click="pasteClipboard"
-                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                            title="Tempel Objek dari Clipboard (Ctrl+V)"
-                        >
-                            <Clipboard class="w-4 h-4" />
-                        </button>
-                        <button
-                            @click="duplicateSelected"
-                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                            title="Duplikat Cepat Objek (Ctrl+D)"
-                        >
-                            <Files class="w-4 h-4" />
-                        </button>
-                    </div>
-
-                    <!-- Layers Panel Button -->
+                <!-- Copy / Paste / Duplicate Button Group -->
+                <div v-if="canEdit" class="hidden md:flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5 shrink-0">
                     <button
-                        @click="showLayerPanel = !showLayerPanel"
-                        :class="[
-                            'inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer shrink-0',
-                            showLayerPanel
-                                ? 'bg-violet-600/20 text-violet-300 border-violet-500/40'
-                                : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
-                        ]"
-                        title="Buka Panel Layer Arsitektur"
+                        @click="copySelected"
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                        title="Salin Objek Terpilih (Ctrl+C)"
                     >
-                        <Layers class="w-3.5 h-3.5" />
-                        <span class="hidden sm:inline">Layer</span>
+                        <Copy class="w-4 h-4" />
+                    </button>
+                    <button
+                        @click="pasteClipboard"
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                        title="Tempel Objek dari Clipboard (Ctrl+V)"
+                    >
+                        <Clipboard class="w-4 h-4" />
+                    </button>
+                    <button
+                        @click="duplicateSelected"
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                        title="Duplikat Cepat Objek (Ctrl+D)"
+                    >
+                        <Files class="w-4 h-4" />
+                    </button>
+                </div>
+
+                <!-- Layers Panel Button -->
+                <button
+                    @click="showLayerPanel = !showLayerPanel"
+                    :class="[
+                        'inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer shrink-0',
+                        showLayerPanel
+                            ? 'bg-violet-600/20 text-violet-300 border-violet-500/40'
+                            : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                    ]"
+                    title="Buka Panel Layer Arsitektur"
+                >
+                    <Layers class="w-3.5 h-3.5" />
+                    <span class="hidden sm:inline">Layer</span>
+                </button>
+
+                <!-- Help Button -->
+                <button
+                    @click="showHelpModal = true"
+                    class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
+                    title="Petunjuk Hotkeys CAD"
+                >
+                    <HelpCircle class="w-4 h-4" />
+                </button>
+
+                <!-- Save Status & Button -->
+                <button
+                    v-if="canEdit"
+                    @click="saveElements(false)"
+                    :disabled="isSaving"
+                    :class="[
+                        'inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm shrink-0',
+                        saveSuccess
+                            ? 'bg-emerald-600 text-white'
+                            : isAutoSaving
+                                ? 'bg-amber-600/80 text-white'
+                                : 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-600/30'
+                    ]"
+                >
+                    <Loader2 v-if="isSaving || isAutoSaving" class="w-3.5 h-3.5 animate-spin" />
+                    <Check v-else-if="saveSuccess" class="w-3.5 h-3.5" />
+                    <Save v-else class="w-3.5 h-3.5" />
+                    <span>{{ isSaving ? 'Menyimpan...' : (isAutoSaving ? 'Auto-Save...' : (saveSuccess ? 'Tersimpan!' : 'Simpan')) }}</span>
+                </button>
+
+                <!-- Compact Export Dropdown Menu (DXF, SVG, PNG, PDF) -->
+                <div class="relative export-menu-container shrink-0">
+                    <button
+                        @click="showExportMenu = !showExportMenu"
+                        class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors cursor-pointer shrink-0"
+                        title="Pilihan Download & Export Gambar CAD"
+                    >
+                        <Download class="w-3.5 h-3.5 text-sky-400" />
+                        <span class="hidden sm:inline">Export</span>
+                        <ChevronDown class="w-3 h-3 text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': showExportMenu }" />
                     </button>
 
-                    <!-- Help Button -->
-                    <button
-                        @click="showHelpModal = true"
-                        class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
-                        title="Petunjuk Hotkeys CAD"
+                    <div
+                        v-if="showExportMenu"
+                        class="absolute right-0 top-full mt-2 w-64 bg-slate-950 border border-white/15 rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-1 text-xs text-slate-200 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150"
                     >
-                        <HelpCircle class="w-4 h-4" />
-                    </button>
-
-                    <!-- Save Status & Button -->
-                    <button
-                        v-if="canEdit"
-                        @click="saveElements(false)"
-                        :disabled="isSaving"
-                        :class="[
-                            'inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm shrink-0',
-                            saveSuccess
-                                ? 'bg-emerald-600 text-white'
-                                : isAutoSaving
-                                    ? 'bg-amber-600/80 text-white'
-                                    : 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-600/30'
-                        ]"
-                    >
-                        <Loader2 v-if="isSaving || isAutoSaving" class="w-3.5 h-3.5 animate-spin" />
-                        <Check v-else-if="saveSuccess" class="w-3.5 h-3.5" />
-                        <Save v-else class="w-3.5 h-3.5" />
-                        <span>{{ isSaving ? 'Menyimpan...' : (isAutoSaving ? 'Auto-Save...' : (saveSuccess ? 'Tersimpan!' : 'Simpan')) }}</span>
-                    </button>
-
-                    <!-- Compact Export Dropdown Menu (DXF, SVG, PNG) -->
-                    <div class="relative export-menu-container shrink-0">
-                        <button
-                            @click="showExportMenu = !showExportMenu"
-                            class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors cursor-pointer shrink-0"
-                            title="Pilihan Download & Export Gambar CAD"
-                        >
-                            <Download class="w-3.5 h-3.5 text-sky-400" />
-                            <span class="hidden sm:inline">Export</span>
-                            <ChevronDown class="w-3 h-3 text-slate-400" />
-                        </button>
-
-                        <div
-                            v-if="showExportMenu"
-                            class="absolute right-0 top-full mt-1.5 w-56 bg-slate-950 border border-white/15 rounded-2xl shadow-2xl p-1.5 z-50 flex flex-col gap-1 text-xs text-slate-200 backdrop-blur-xl"
-                        >
-                            <button
-                                @click="exportWithSave('dxf')"
-                                class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left w-full cursor-pointer"
-                                title="Download file AutoCAD .DXF standar"
-                            >
-                                <FileCode class="w-4 h-4 text-amber-400 shrink-0" />
-                                <div>
-                                    <div class="font-semibold text-white">AutoCAD (.DXF)</div>
-                                    <div class="text-[10px] text-slate-400">Kompatibel AutoCAD / CAD 2D</div>
-                                </div>
-                            </button>
-
-                            <button
-                                @click="exportWithSave('svg')"
-                                class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left w-full cursor-pointer"
-                                title="Download format vektor .SVG"
-                            >
-                                <Download class="w-4 h-4 text-sky-400 shrink-0" />
-                                <div>
-                                    <div class="font-semibold text-white">Vektor (.SVG)</div>
-                                    <div class="text-[10px] text-slate-400">Grafik vektor resolusi tajam</div>
-                                </div>
-                            </button>
-
-                            <button
-                                @click="exportPng"
-                                class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left w-full cursor-pointer"
-                                title="Download sebagai gambar PNG resolusi tinggi"
-                            >
-                                <Sparkles class="w-4 h-4 text-emerald-400 shrink-0" />
-                                <div>
-                                    <div class="font-semibold text-white">Gambar (.PNG)</div>
-                                    <div class="text-[10px] text-slate-400">Snapshot resolusi tinggi 2×</div>
-                                </div>
-                            </button>
-
-                            <div class="h-px bg-white/10 my-0.5"></div>
-
-                            <button
-                                @click="exportPdfOrPrint"
-                                class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left w-full cursor-pointer"
-                                title="Cetak atau Simpan sebagai PDF"
-                            >
-                                <Printer class="w-4 h-4 text-indigo-400 shrink-0" />
-                                <div>
-                                    <div class="font-semibold text-white">Cetak / PDF</div>
-                                    <div class="text-[10px] text-slate-400">Simpan ke PDF via Print Dialog</div>
-                                </div>
-                            </button>
+                        <div class="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-white/10 mb-1">
+                            Ekspor Lembar Kerja
                         </div>
+
+                        <button
+                            @click="exportWithSave('dxf')"
+                            :disabled="isExporting"
+                            class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left w-full cursor-pointer group disabled:opacity-50"
+                            title="Download file AutoCAD .DXF standar"
+                        >
+                            <div class="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center border border-amber-500/25 shrink-0 group-hover:bg-amber-500/25">
+                                <FileCode class="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                                <div class="font-semibold text-white">AutoCAD (.DXF)</div>
+                                <div class="text-[10px] text-slate-400">Kompatibel AutoCAD / CAD 2D</div>
+                            </div>
+                        </button>
+
+                        <button
+                            @click="exportWithSave('svg')"
+                            :disabled="isExporting"
+                            class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left w-full cursor-pointer group disabled:opacity-50"
+                            title="Download format vektor .SVG"
+                        >
+                            <div class="w-7 h-7 rounded-lg bg-sky-500/15 text-sky-400 flex items-center justify-center border border-sky-500/25 shrink-0 group-hover:bg-sky-500/25">
+                                <Download class="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                                <div class="font-semibold text-white">Vektor (.SVG)</div>
+                                <div class="text-[10px] text-slate-400">Grafik vektor resolusi tajam</div>
+                            </div>
+                        </button>
+
+                        <button
+                            @click="exportPng(false)"
+                            class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left w-full cursor-pointer group"
+                            title="Download sebagai gambar PNG resolusi tinggi"
+                        >
+                            <div class="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center border border-emerald-500/25 shrink-0 group-hover:bg-emerald-500/25">
+                                <Sparkles class="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                                <div class="font-semibold text-white">Gambar (.PNG)</div>
+                                <div class="text-[10px] text-slate-400">Snapshot resolusi tinggi 2×</div>
+                            </div>
+                        </button>
+
+                        <button
+                            @click="exportPdfOrPrint"
+                            class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left w-full cursor-pointer group"
+                            title="Cetak atau Simpan sebagai PDF"
+                        >
+                            <div class="w-7 h-7 rounded-lg bg-indigo-500/15 text-indigo-400 flex items-center justify-center border border-indigo-500/25 shrink-0 group-hover:bg-indigo-500/25">
+                                <Printer class="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                                <div class="font-semibold text-white">Cetak / PDF</div>
+                                <div class="text-[10px] text-slate-400">Simpan ke PDF via Print Dialog</div>
+                            </div>
+                        </button>
+
+                        <div class="h-px bg-white/10 my-1"></div>
+
+                        <button
+                            @click="showExportMenu = false; showExportModal = true"
+                            class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 hover:text-white transition-colors text-center w-full cursor-pointer font-medium text-[11px]"
+                        >
+                            <Sliders class="w-3.5 h-3.5" />
+                            <span>Dialog Ekspor Lengkap...</span>
+                        </button>
                     </div>
                 </div>
-            </header>
-        </div>
+            </div>
+        </header>
 
         <!-- WORKSPACE BODY (TOOLBAR + CANVAS + INSPECTOR + LAYER PANEL) -->
         <div class="flex-1 flex relative overflow-hidden">
@@ -4631,5 +4721,183 @@ onUnmounted(() => {
                 </form>
             </div>
         </div>
+
+        <!-- EXPORT MODAL DIALOG (LENGKAP DENGAN PREVIEW METADATA & SEMUA FORMAT) -->
+        <div v-if="showExportModal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-sm">
+            <div class="bg-slate-950 w-full max-w-xl rounded-3xl border border-white/10 shadow-2xl flex flex-col text-xs text-slate-300 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <!-- Header -->
+                <div class="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-slate-950">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30 shrink-0">
+                            <Download class="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-white">Ekspor Lembar Kerja CAD</h3>
+                            <p class="text-[11px] text-slate-400">{{ sheet.title }} • {{ project.title }}</p>
+                        </div>
+                    </div>
+                    <button
+                        @click="showExportModal = false"
+                        type="button"
+                        class="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer text-base leading-none"
+                        title="Tutup (Esc)"
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                <!-- Body -->
+                <div class="p-5 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto custom-scroll">
+                    <!-- Sheet Metadata Summary -->
+                    <div class="p-3.5 rounded-2xl bg-white/5 border border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div>
+                            <span class="text-slate-400">Skala:</span>
+                            <span class="text-white font-semibold ml-1">{{ sheet.scale }}</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400">Ukuran Kertas:</span>
+                            <span class="text-white font-semibold ml-1">{{ paperSize }} ({{ orientation }})</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400">Dimensi:</span>
+                            <span class="text-white font-semibold ml-1">{{ paperWidth }} × {{ paperHeight }} px</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400">Objek:</span>
+                            <span class="text-white font-semibold ml-1">{{ elementList.length }} Elemen</span>
+                        </div>
+                    </div>
+
+                    <!-- Export Options Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <!-- 1. DXF Option -->
+                        <div class="p-4 rounded-2xl bg-slate-900 border border-white/10 hover:border-amber-500/40 transition-all flex flex-col justify-between gap-3 group">
+                            <div class="space-y-1.5">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center border border-amber-500/25">
+                                        <FileCode class="w-3.5 h-3.5" />
+                                    </div>
+                                    <span class="font-bold text-white text-xs">AutoCAD (.DXF)</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 leading-relaxed">
+                                    Format CAD R12 ASCII standar layer arsitektur (WALLS, DOORS, WINDOWS, STRUCTURE, DIMENSIONS).
+                                </p>
+                            </div>
+                            <button
+                                @click="exportWithSave('dxf')"
+                                :disabled="isExporting"
+                                class="w-full py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-white font-semibold border border-amber-500/30 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            >
+                                <Loader2 v-if="isExporting" class="w-3.5 h-3.5 animate-spin" />
+                                <Download v-else class="w-3.5 h-3.5" />
+                                <span>Unduh DXF</span>
+                            </button>
+                        </div>
+
+                        <!-- 2. SVG Option -->
+                        <div class="p-4 rounded-2xl bg-slate-900 border border-white/10 hover:border-sky-500/40 transition-all flex flex-col justify-between gap-3 group">
+                            <div class="space-y-1.5">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 rounded-lg bg-sky-500/15 text-sky-400 flex items-center justify-center border border-sky-500/25">
+                                        <Download class="w-3.5 h-3.5" />
+                                    </div>
+                                    <span class="font-bold text-white text-xs">Vektor (.SVG)</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 leading-relaxed">
+                                    Grafik vektor tajam resolusi tak terhingga. Kompatibel Illustrator, Corel, Figma, atau dokumen web.
+                                </p>
+                            </div>
+                            <button
+                                @click="exportWithSave('svg')"
+                                :disabled="isExporting"
+                                class="w-full py-2 px-3 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 hover:text-white font-semibold border border-sky-500/30 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            >
+                                <Loader2 v-if="isExporting" class="w-3.5 h-3.5 animate-spin" />
+                                <Download v-else class="w-3.5 h-3.5" />
+                                <span>Unduh SVG</span>
+                            </button>
+                        </div>
+
+                        <!-- 3. PNG Option -->
+                        <div class="p-4 rounded-2xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 transition-all flex flex-col justify-between gap-3 group">
+                            <div class="space-y-1.5">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center border border-emerald-500/25">
+                                        <Sparkles class="w-3.5 h-3.5" />
+                                    </div>
+                                    <span class="font-bold text-white text-xs">Gambar HD (.PNG)</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 leading-relaxed">
+                                    Gambar resolusi tajam 2× (retina). Pilih area kertas saja atau seluruh tampilan kanvas saat ini.
+                                </p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button
+                                    @click="exportPng(true)"
+                                    class="flex-1 py-2 px-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 hover:text-white font-semibold border border-emerald-500/30 transition-all flex items-center justify-center gap-1 cursor-pointer text-[11px]"
+                                    title="Unduh area frame kertas saja"
+                                >
+                                    <Sparkles class="w-3.5 h-3.5" />
+                                    <span>Kertas Saja</span>
+                                </button>
+                                <button
+                                    @click="exportPng(false)"
+                                    class="flex-1 py-2 px-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-semibold border border-white/10 transition-all flex items-center justify-center gap-1 cursor-pointer text-[11px]"
+                                    title="Unduh seluruh kanvas saat ini"
+                                >
+                                    <span>Seluruh Kanvas</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 4. Print / PDF Option -->
+                        <div class="p-4 rounded-2xl bg-slate-900 border border-white/10 hover:border-indigo-500/40 transition-all flex flex-col justify-between gap-3 group">
+                            <div class="space-y-1.5">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 rounded-lg bg-indigo-500/15 text-indigo-400 flex items-center justify-center border border-indigo-500/25">
+                                        <Printer class="w-3.5 h-3.5" />
+                                    </div>
+                                    <span class="font-bold text-white text-xs">Cetak & PDF</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 leading-relaxed">
+                                    Buka dialog cetak browser untuk langsung mencetak lembar kerja ke printer atau simpan sebagai file PDF.
+                                </p>
+                            </div>
+                            <button
+                                @click="exportPdfOrPrint"
+                                class="w-full py-2 px-3 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 hover:text-white font-semibold border border-indigo-500/30 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                                <Printer class="w-3.5 h-3.5" />
+                                <span>Cetak / Simpan PDF</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="px-5 py-3 border-t border-white/10 flex items-center justify-between bg-slate-950 shrink-0">
+                    <span class="text-[11px] text-slate-500">Tekan Esc atau klik tombol untuk menutup</span>
+                    <button
+                        @click="showExportModal = false"
+                        type="button"
+                        class="px-5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-medium text-xs transition-colors cursor-pointer"
+                    >
+                        Tutup
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
+
+<style>
+@media print {
+    header, footer, .cad-toolbar, .inspector-panel, .layer-panel, .konva-overlay {
+        display: none !important;
+    }
+    body, html {
+        background: #ffffff !important;
+        color: #000000 !important;
+    }
+}
+</style>
