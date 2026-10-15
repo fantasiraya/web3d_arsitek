@@ -133,6 +133,7 @@ const containerRef = ref<HTMLDivElement | null>(null);
 let stage: Konva.Stage | null = null;
 let gridLayer: Konva.Layer | null = null;
 let paperLayer: Konva.Layer | null = null;
+let paperBgLayer: Konva.Layer | null = null;
 let mainLayer: Konva.Layer | null = null;
 let tempLayer: Konva.Layer | null = null;
 let tr: Konva.Transformer | null = null;
@@ -145,6 +146,7 @@ const canScrollRight = ref(false);
 const showExportMenu = ref(false);
 const showExportModal = ref(false);
 const isExporting = ref(false);
+let headerResizeObserver: ResizeObserver | null = null;
 
 // ── CANVAS & PAPER DIMENSION STATE (FIGMA FRAME & AUTOCAD MODEL SPACE) ──────
 type CanvasMode = 'sheet' | 'infinite';
@@ -173,6 +175,102 @@ const paperY = ref<number>(60);
 const paperWidth = ref<number>(defaultInitialW);
 const paperHeight = ref<number>(defaultInitialH);
 const isResizingSheet = ref(false);
+
+// ── LOCALSTORAGE PAPER SIZES PERSISTENCE ────────────────────────────────────
+const STORAGE_KEY_PAPERS = `cad_paper_sizes_${props.sheet.id}`;
+
+interface StoredPaperSizes {
+    main: {
+        width: number;
+        height: number;
+        size: string;
+        orientation: 'landscape' | 'portrait';
+    };
+    frames?: Record<string, {
+        width: number;
+        height: number;
+        size?: string;
+        orientation?: 'landscape' | 'portrait';
+        x?: number;
+        y?: number;
+    }>;
+    updatedAt: number;
+}
+
+function savePaperSizesToStorage() {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
+    try {
+        const framesData: Record<string, any> = {};
+        elementList.value
+            .filter((el) => el.type === 'paper_frame')
+            .forEach((el) => {
+                const d = el.data || {};
+                framesData[el.id] = {
+                    width: d.width,
+                    height: d.height,
+                    size: d.size,
+                    orientation: d.orientation,
+                    x: d.x,
+                    y: d.y,
+                };
+            });
+
+        const payload: StoredPaperSizes = {
+            main: {
+                width: paperWidth.value,
+                height: paperHeight.value,
+                size: paperSize.value,
+                orientation: orientation.value,
+            },
+            frames: framesData,
+            updatedAt: Date.now(),
+        };
+
+        localStorage.setItem(STORAGE_KEY_PAPERS, JSON.stringify(payload));
+    } catch (e) {
+        console.warn('Failed to save paper sizes to localStorage:', e);
+    }
+}
+
+function loadPaperSizesFromStorage() {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY_PAPERS);
+        if (!raw) return;
+        const parsed: StoredPaperSizes = JSON.parse(raw);
+        if (parsed?.main) {
+            if (typeof parsed.main.width === 'number' && parsed.main.width >= 300) {
+                paperWidth.value = parsed.main.width;
+            }
+            if (typeof parsed.main.height === 'number' && parsed.main.height >= 300) {
+                paperHeight.value = parsed.main.height;
+            }
+            if (parsed.main.size) {
+                paperSize.value = parsed.main.size;
+            }
+            if (parsed.main.orientation === 'landscape' || parsed.main.orientation === 'portrait') {
+                orientation.value = parsed.main.orientation;
+            }
+        }
+        if (parsed?.frames && typeof parsed.frames === 'object') {
+            elementList.value.forEach((el) => {
+                if (el.type === 'paper_frame' && parsed.frames![el.id]) {
+                    const saved = parsed.frames![el.id];
+                    if (typeof saved.width === 'number' && saved.width >= 300) el.data.width = saved.width;
+                    if (typeof saved.height === 'number' && saved.height >= 300) el.data.height = saved.height;
+                    if (saved.size) el.data.size = saved.size;
+                    if (saved.orientation) el.data.orientation = saved.orientation;
+                    if (typeof saved.x === 'number') el.data.x = saved.x;
+                    if (typeof saved.y === 'number') el.data.y = saved.y;
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('Failed to load paper sizes from localStorage:', e);
+    }
+}
+
+loadPaperSizesFromStorage();
 
 // Multi-Paper Frames on the same canvas (Figma / CAD Multi-Layout)
 export interface PaperFrameData {
@@ -257,6 +355,7 @@ function addPaperFrameToCanvas(customTitle?: string) {
 
     elementList.value.push(newFrameElement);
     drawPaperBoundary();
+    savePaperSizesToStorage();
     focusOnFrame({
         id: newFrameElement.id,
         title,
@@ -319,6 +418,7 @@ function removePaperFrame(frameId: string) {
             activeExportFrameId.value = 'main_frame';
         }
         drawPaperBoundary();
+        savePaperSizesToStorage();
         zoomToFit();
         triggerAutoSaveDebounced();
         toast.success('Lembar kertas tambahan berhasil dihapus dari kanvas.');
@@ -651,6 +751,7 @@ function setCanvasMode(mode: CanvasMode) {
     drawPaperBoundary();
     restoreFromState(elementList.value, true);
     zoomToFit();
+    nextTick(() => checkHeaderScroll());
     if (mode === 'infinite') {
         toast.info('Mode AutoCAD Model Space (∞) aktif. Seluruh denah dan frame kertas tampak di kanvas tak terbatas.');
     } else {
@@ -678,6 +779,7 @@ function applyPaperPreset(preset: string) {
         }
     }
     drawPaperBoundary();
+    savePaperSizesToStorage();
     triggerAutoSaveDebounced();
 }
 
@@ -687,6 +789,7 @@ function toggleOrientation() {
     paperWidth.value = paperHeight.value;
     paperHeight.value = temp;
     drawPaperBoundary();
+    savePaperSizesToStorage();
     triggerAutoSaveDebounced();
 }
 
@@ -695,6 +798,7 @@ function onWidthInput(newVal: number) {
         paperWidth.value = Math.round(newVal);
         paperSize.value = 'Custom';
         drawPaperBoundary();
+        savePaperSizesToStorage();
         triggerAutoSaveDebounced();
     }
 }
@@ -704,6 +808,7 @@ function onHeightInput(newVal: number) {
         paperHeight.value = Math.round(newVal);
         paperSize.value = 'Custom';
         drawPaperBoundary();
+        savePaperSizesToStorage();
         triggerAutoSaveDebounced();
     }
 }
@@ -1028,6 +1133,7 @@ function autoFitSheetToDrawing() {
         width: newW,
         height: newH,
     });
+    savePaperSizesToStorage();
     triggerAutoSaveDebounced();
     toast.success(`Ukuran "${targetFrame.title}" berhasil dirapatkan presisi (${newW}×${newH} px).`);
 }
@@ -1068,6 +1174,7 @@ function resetPaperToDefault() {
         width: w,
         height: h,
     });
+    savePaperSizesToStorage();
     triggerAutoSaveDebounced();
     toast.success(`Ukuran "${targetFrame.title}" dikembalikan ke standar ISO ${preset} (${w}×${h} px).`);
 }
@@ -1133,6 +1240,7 @@ function zoomToFit() {
 // ── DRAW PAPER BOUNDARY & ARCHITECTURAL TITLE BLOCK (FIGMA FRAME / CAD) ─────
 function drawPaperBoundary() {
     if (!paperLayer) return;
+    paperBgLayer?.destroyChildren();
     paperLayer.destroyChildren();
 
     const frames = getPaperFrames();
@@ -1374,6 +1482,13 @@ function drawPaperBoundary() {
             listening: false,
         });
 
+        // Add paperRect to paperBgLayer (placed below gridLayer)
+        if (paperBgLayer) {
+            paperBgLayer.add(paperRect);
+        } else {
+            paperLayer.add(paperRect);
+        }
+
         // 3. Border Frame (Garis Tepi Arsitektur Standar ISO)
         const margin = 20;
         const frameRect = new Konva.Rect({
@@ -1387,8 +1502,68 @@ function drawPaperBoundary() {
         });
 
         // 4. Kop Gambar (Title Block) Profesional Dinamis (Menempel di Sudut Kanan Bawah)
-        const kopW = Math.min(340, Math.max(200, fw - margin * 2 - 20));
-        const kopH = Math.min(110, Math.max(80, fh - margin * 2 - 20));
+        const kopW = Math.min(360, Math.max(220, fw - margin * 2 - 20));
+        const innerW = kopW - 28;
+
+        const companyTitle = props.architect?.company_name
+            ? `${props.architect?.company_type ? props.architect.company_type + ' ' : ''}${props.architect.company_name}`.toUpperCase()
+            : 'STUDIO ARSITEKTUR';
+
+        const kopStudio = new Konva.Text({
+            text: companyTitle,
+            fontSize: 11,
+            fontStyle: 'bold',
+            fontFamily: 'sans-serif',
+            fill: '#4338ca',
+            width: innerW,
+            wrap: 'word',
+            listening: false,
+        });
+
+        const kopTitle = new Konva.Text({
+            text: frame.title || 'Lembar Kerja CAD',
+            fontSize: 12.5,
+            fontStyle: 'bold',
+            fontFamily: 'sans-serif',
+            fill: '#0f172a',
+            width: innerW,
+            wrap: 'word',
+            lineHeight: 1.25,
+            listening: false,
+        });
+
+        const kopProject = new Konva.Text({
+            text: `PROYEK: ${props.project.title}`,
+            fontSize: 10.5,
+            fontFamily: 'sans-serif',
+            fill: '#475569',
+            width: innerW,
+            wrap: 'word',
+            lineHeight: 1.2,
+            listening: false,
+        });
+
+        const todayDate = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+        const kopMeta = new Konva.Text({
+            text: `SKALA: ${props.sheet.scale}   |   KERTAS: ${frame.size} (${Math.round(fw)}×${Math.round(fh)}px)\nTGL: ${todayDate}   |   KOTA: ${props.architect?.city_name || 'Indonesia'}`,
+            fontSize: 9.5,
+            fontFamily: 'monospace',
+            fill: '#64748b',
+            width: innerW,
+            wrap: 'word',
+            lineHeight: 1.3,
+            listening: false,
+        });
+
+        // Dynamic vertical layout based on wrapped text heights
+        const offsetStudio = 10;
+        const offsetTitle = offsetStudio + kopStudio.height() + 4;
+        const offsetProject = offsetTitle + kopTitle.height() + 4;
+        const offsetDivider = offsetProject + kopProject.height() + 6;
+        const offsetMeta = offsetDivider + 6;
+        const totalContentH = offsetMeta + kopMeta.height() + 10;
+
+        const kopH = Math.min(Math.max(115, totalContentH), Math.max(90, fh - margin * 2 - 20));
         const kopX = fx + fw - margin - kopW;
         const kopY = fy + fh - margin - kopH;
 
@@ -1399,75 +1574,80 @@ function drawPaperBoundary() {
             height: kopH,
             stroke: '#0f172a',
             strokeWidth: 1.5,
-            fill: '#f8fafc',
+            fill: '#ffffff',
+            cornerRadius: 2,
             listening: false,
         });
 
-        const companyTitle = props.architect?.company_name
-            ? `${props.architect?.company_type ? props.architect.company_type + ' ' : ''}${props.architect.company_name}`.toUpperCase()
-            : 'STUDIO ARSITEKTUR';
+        kopStudio.position({ x: kopX + 14, y: kopY + offsetStudio });
+        kopTitle.position({ x: kopX + 14, y: kopY + offsetTitle });
+        kopProject.position({ x: kopX + 14, y: kopY + offsetProject });
 
-        const kopStudio = new Konva.Text({
-            x: kopX + 12,
-            y: kopY + 12,
-            text: companyTitle,
-            fontSize: 12,
-            fontStyle: 'bold',
-            fontFamily: 'sans-serif',
-            fill: '#4338ca',
+        const kopDivider = new Konva.Line({
+            points: [kopX + 14, kopY + offsetDivider, kopX + kopW - 14, kopY + offsetDivider],
+            stroke: '#cbd5e1',
+            strokeWidth: 1,
             listening: false,
         });
 
-        const kopTitle = new Konva.Text({
-            x: kopX + 12,
-            y: kopY + 30,
-            text: frame.title,
-            fontSize: 13,
-            fontStyle: 'bold',
-            fontFamily: 'sans-serif',
-            fill: '#0f172a',
-            listening: false,
-        });
+        kopMeta.position({ x: kopX + 14, y: kopY + offsetMeta });
 
-        const kopProject = new Konva.Text({
-            x: kopX + 12,
-            y: kopY + 50,
-            text: `PROYEK: ${props.project.title}`,
-            fontSize: 11,
-            fontFamily: 'sans-serif',
-            fill: '#475569',
-            listening: false,
-        });
-
-        const todayDate = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-        const kopMeta = new Konva.Text({
-            x: kopX + 12,
-            y: kopY + 70,
-            text: `SKALA: ${props.sheet.scale}   |   KERTAS: ${frame.size} (${fw}×${fh}px)\nTGL: ${todayDate}   |   KOTA: ${props.architect?.city_name || 'Indonesia'}`,
-            fontSize: 10,
-            fontFamily: 'monospace',
-            fill: '#64748b',
-            listening: false,
-        });
-
-        paperLayer.add(paperRect);
         paperLayer.add(frameRect);
         paperLayer.add(kopRect);
         paperLayer.add(kopStudio);
         paperLayer.add(kopTitle);
         paperLayer.add(kopProject);
+        paperLayer.add(kopDivider);
         paperLayer.add(kopMeta);
 
-        // Figma resize handle for main frame
-        if (frame.isMain && props.canEdit) {
+        // Helper to update Kop live during resize drag
+        const updateKopLive = (newW: number, newH: number) => {
+            const curKopW = Math.min(360, Math.max(220, newW - margin * 2 - 20));
+            const curInnerW = curKopW - 28;
+            const curKopX = fx + newW - margin - curKopW;
+            const curKopY = fy + newH - margin - kopH;
+
+            kopRect.position({ x: curKopX, y: curKopY });
+            kopRect.size({ width: curKopW, height: kopH });
+
+            kopStudio.position({ x: curKopX + 14, y: curKopY + offsetStudio });
+            kopStudio.width(curInnerW);
+            kopTitle.position({ x: curKopX + 14, y: curKopY + offsetTitle });
+            kopTitle.width(curInnerW);
+            kopProject.position({ x: curKopX + 14, y: curKopY + offsetProject });
+            kopProject.width(curInnerW);
+            kopDivider.points([curKopX + 14, curKopY + offsetDivider, curKopX + curKopW - 14, curKopY + offsetDivider]);
+            kopMeta.position({ x: curKopX + 14, y: curKopY + offsetMeta });
+            kopMeta.width(curInnerW);
+        };
+
+        // Figma-style resize handles for editable frames (Main or Secondary)
+        if (props.canEdit) {
+            // 1. Handle Sudut Kanan-Bawah (Corner Handle)
             const cornerGroup = new Konva.Group({
                 x: fx + fw,
                 y: fy + fh,
                 draggable: true,
+                dragBoundFunc: (pos) => {
+                    if (!stage) return pos;
+                    const minAbsX = stage.x() + (fx + 300) * stage.scaleX();
+                    const minAbsY = stage.y() + (fy + 300) * stage.scaleY();
+                    return {
+                        x: Math.max(minAbsX, pos.x),
+                        y: Math.max(minAbsY, pos.y),
+                    };
+                },
             });
 
+            // Invisible wide hit area (radius 20)
             cornerGroup.add(new Konva.Circle({
-                radius: 8,
+                radius: 20,
+                fill: 'transparent',
+            }));
+
+            // Visible styled circle with glow
+            cornerGroup.add(new Konva.Circle({
+                radius: 9,
                 fill: '#6366f1',
                 stroke: '#ffffff',
                 strokeWidth: 2.5,
@@ -1476,91 +1656,254 @@ function drawPaperBoundary() {
                 shadowOpacity: 0.6,
             }));
 
+            cornerGroup.add(new Konva.Circle({
+                radius: 3,
+                fill: '#ffffff',
+                listening: false,
+            }));
+
             cornerGroup.on('mouseenter', () => { if (stage && !isSpacePressed.value) stage.container().style.cursor = 'nwse-resize'; });
             cornerGroup.on('mouseleave', () => { if (stage && !isResizingSheet.value && !isSpacePressed.value) stage.container().style.cursor = 'default'; });
             cornerGroup.on('dragstart', () => { isResizingSheet.value = true; });
             cornerGroup.on('dragmove', () => {
-                paperWidth.value = Math.max(400, Math.round(cornerGroup.x() - paperX.value));
-                paperHeight.value = Math.max(300, Math.round(cornerGroup.y() - paperY.value));
-                paperSize.value = 'Custom';
-                drawPaperBoundary();
+                if (!stage) return;
+                const absX = cornerGroup.getAbsolutePosition().x;
+                const absY = cornerGroup.getAbsolutePosition().y;
+                const localX = (absX - stage.x()) / stage.scaleX();
+                const localY = (absY - stage.y()) / stage.scaleY();
+                const newW = Math.max(300, Math.round(localX - fx));
+                const newH = Math.max(300, Math.round(localY - fy));
+
+                if (frame.isMain) {
+                    paperWidth.value = newW;
+                    paperHeight.value = newH;
+                    paperSize.value = 'Custom';
+                } else {
+                    const targetEl = elementList.value.find((el) => el.id === frame.id);
+                    if (targetEl) {
+                        targetEl.data.width = newW;
+                        targetEl.data.height = newH;
+                    }
+                }
+
+                // Update visual shapes live
+                paperRect.width(newW);
+                paperRect.height(newH);
+                frameRect.width(Math.max(100, newW - margin * 2));
+                frameRect.height(Math.max(100, newH - margin * 2));
+
+                updateKopLive(newW, newH);
+
+                rightEdgeGroup.position({ x: fx + newW, y: fy + newH / 2 });
+                bottomEdgeGroup.position({ x: fx + newW / 2, y: fy + newH });
+
+                paperBgLayer?.batchDraw();
+                paperLayer?.batchDraw();
             });
             cornerGroup.on('dragend', () => {
                 isResizingSheet.value = false;
                 drawPaperBoundary();
+                savePaperSizesToStorage();
                 triggerAutoSaveDebounced();
             });
 
             paperLayer.add(cornerGroup);
 
-            // Tepi Kanan
+            // 2. Handle Tepi Kanan (Right Edge Handle)
             const rightEdgeGroup = new Konva.Group({
                 x: fx + fw,
                 y: fy + fh / 2,
                 draggable: true,
-                dragBoundFunc: (pos) => ({
-                    x: pos.x,
-                    y: stage!.y() + (fy + fh / 2) * stage!.scaleY(),
-                }),
+                dragBoundFunc: (pos) => {
+                    if (!stage) return pos;
+                    const curH = frame.isMain ? paperHeight.value : (elementList.value.find((el) => el.id === frame.id)?.data.height || fh);
+                    const targetAbsY = stage.y() + (fy + curH / 2) * stage.scaleY();
+                    const minAbsX = stage.x() + (fx + 300) * stage.scaleX();
+                    return {
+                        x: Math.max(minAbsX, pos.x),
+                        y: targetAbsY,
+                    };
+                },
             });
+
+            // Invisible wide grab box (width 32px, height 60px)
             rightEdgeGroup.add(new Konva.Rect({
-                x: -3,
-                y: -15,
-                width: 6,
-                height: 30,
-                cornerRadius: 3,
-                fill: '#818cf8',
+                x: -16,
+                y: -30,
+                width: 32,
+                height: 60,
+                fill: 'transparent',
+            }));
+
+            // Sleek visible pill handle
+            rightEdgeGroup.add(new Konva.Rect({
+                x: -5,
+                y: -22,
+                width: 10,
+                height: 44,
+                cornerRadius: 5,
+                fill: '#6366f1',
+                stroke: '#ffffff',
+                strokeWidth: 2,
+                shadowColor: '#000000',
+                shadowBlur: 8,
+                shadowOpacity: 0.4,
+            }));
+
+            // Dual grip marks
+            rightEdgeGroup.add(new Konva.Line({
+                points: [-1.5, -8, -1.5, 8],
                 stroke: '#ffffff',
                 strokeWidth: 1.5,
+                strokeCap: 'round',
+                listening: false,
             }));
+            rightEdgeGroup.add(new Konva.Line({
+                points: [1.5, -8, 1.5, 8],
+                stroke: '#ffffff',
+                strokeWidth: 1.5,
+                strokeCap: 'round',
+                listening: false,
+            }));
+
             rightEdgeGroup.on('mouseenter', () => { if (stage && !isSpacePressed.value) stage.container().style.cursor = 'ew-resize'; });
             rightEdgeGroup.on('mouseleave', () => { if (stage && !isResizingSheet.value && !isSpacePressed.value) stage.container().style.cursor = 'default'; });
+            rightEdgeGroup.on('dragstart', () => { isResizingSheet.value = true; });
             rightEdgeGroup.on('dragmove', () => {
-                paperWidth.value = Math.max(400, Math.round(rightEdgeGroup.x() - paperX.value));
-                paperSize.value = 'Custom';
-                drawPaperBoundary();
+                if (!stage) return;
+                const absX = rightEdgeGroup.getAbsolutePosition().x;
+                const localX = (absX - stage.x()) / stage.scaleX();
+                const newW = Math.max(300, Math.round(localX - fx));
+
+                if (frame.isMain) {
+                    paperWidth.value = newW;
+                    paperSize.value = 'Custom';
+                } else {
+                    const targetEl = elementList.value.find((el) => el.id === frame.id);
+                    if (targetEl) targetEl.data.width = newW;
+                }
+
+                const curH = frame.isMain ? paperHeight.value : (elementList.value.find((el) => el.id === frame.id)?.data.height || fh);
+
+                paperRect.width(newW);
+                frameRect.width(Math.max(100, newW - margin * 2));
+
+                updateKopLive(newW, curH);
+
+                cornerGroup.x(fx + newW);
+                bottomEdgeGroup.x(fx + newW / 2);
+
+                paperBgLayer?.batchDraw();
+                paperLayer?.batchDraw();
             });
             rightEdgeGroup.on('dragend', () => {
+                isResizingSheet.value = false;
                 drawPaperBoundary();
+                savePaperSizesToStorage();
                 triggerAutoSaveDebounced();
             });
+
             paperLayer.add(rightEdgeGroup);
 
-            // Tepi Bawah
+            // 3. Handle Tepi Bawah (Bottom Edge Handle)
             const bottomEdgeGroup = new Konva.Group({
                 x: fx + fw / 2,
                 y: fy + fh,
                 draggable: true,
-                dragBoundFunc: (pos) => ({
-                    x: stage!.x() + (fx + fw / 2) * stage!.scaleX(),
-                    y: pos.y,
-                }),
+                dragBoundFunc: (pos) => {
+                    if (!stage) return pos;
+                    const curW = frame.isMain ? paperWidth.value : (elementList.value.find((el) => el.id === frame.id)?.data.width || fw);
+                    const targetAbsX = stage.x() + (fx + curW / 2) * stage.scaleX();
+                    const minAbsY = stage.y() + (fy + 300) * stage.scaleY();
+                    return {
+                        x: targetAbsX,
+                        y: Math.max(minAbsY, pos.y),
+                    };
+                },
             });
+
+            // Invisible wide grab box (width 60px, height 32px)
             bottomEdgeGroup.add(new Konva.Rect({
-                x: -15,
-                y: -3,
-                width: 30,
-                height: 6,
-                cornerRadius: 3,
-                fill: '#818cf8',
+                x: -30,
+                y: -16,
+                width: 60,
+                height: 32,
+                fill: 'transparent',
+            }));
+
+            // Sleek visible pill handle
+            bottomEdgeGroup.add(new Konva.Rect({
+                x: -22,
+                y: -5,
+                width: 44,
+                height: 10,
+                cornerRadius: 5,
+                fill: '#6366f1',
+                stroke: '#ffffff',
+                strokeWidth: 2,
+                shadowColor: '#000000',
+                shadowBlur: 8,
+                shadowOpacity: 0.4,
+            }));
+
+            // Dual grip marks
+            bottomEdgeGroup.add(new Konva.Line({
+                points: [-8, -1.5, 8, -1.5],
                 stroke: '#ffffff',
                 strokeWidth: 1.5,
+                strokeCap: 'round',
+                listening: false,
             }));
+            bottomEdgeGroup.add(new Konva.Line({
+                points: [-8, 1.5, 8, 1.5],
+                stroke: '#ffffff',
+                strokeWidth: 1.5,
+                strokeCap: 'round',
+                listening: false,
+            }));
+
             bottomEdgeGroup.on('mouseenter', () => { if (stage && !isSpacePressed.value) stage.container().style.cursor = 'ns-resize'; });
             bottomEdgeGroup.on('mouseleave', () => { if (stage && !isResizingSheet.value && !isSpacePressed.value) stage.container().style.cursor = 'default'; });
+            bottomEdgeGroup.on('dragstart', () => { isResizingSheet.value = true; });
             bottomEdgeGroup.on('dragmove', () => {
-                paperHeight.value = Math.max(300, Math.round(bottomEdgeGroup.y() - paperY.value));
-                paperSize.value = 'Custom';
-                drawPaperBoundary();
+                if (!stage) return;
+                const absY = bottomEdgeGroup.getAbsolutePosition().y;
+                const localY = (absY - stage.y()) / stage.scaleY();
+                const newH = Math.max(300, Math.round(localY - fy));
+
+                if (frame.isMain) {
+                    paperHeight.value = newH;
+                    paperSize.value = 'Custom';
+                } else {
+                    const targetEl = elementList.value.find((el) => el.id === frame.id);
+                    if (targetEl) targetEl.data.height = newH;
+                }
+
+                const curW = frame.isMain ? paperWidth.value : (elementList.value.find((el) => el.id === frame.id)?.data.width || fw);
+
+                paperRect.height(newH);
+                frameRect.height(Math.max(100, newH - margin * 2));
+
+                updateKopLive(curW, newH);
+
+                cornerGroup.y(fy + newH);
+                rightEdgeGroup.y(fy + newH / 2);
+
+                paperBgLayer?.batchDraw();
+                paperLayer?.batchDraw();
             });
             bottomEdgeGroup.on('dragend', () => {
+                isResizingSheet.value = false;
                 drawPaperBoundary();
+                savePaperSizesToStorage();
                 triggerAutoSaveDebounced();
             });
+
             paperLayer.add(bottomEdgeGroup);
         }
     });
 
+    paperBgLayer?.batchDraw();
     paperLayer.batchDraw();
 }
 
@@ -2128,8 +2471,9 @@ function initCanvas() {
         height,
     });
 
-    paperLayer = new Konva.Layer();
+    paperBgLayer = new Konva.Layer();
     gridLayer = new Konva.Layer();
+    paperLayer = new Konva.Layer();
     mainLayer = new Konva.Layer();
     tempLayer = new Konva.Layer();
 
@@ -2289,8 +2633,9 @@ function initCanvas() {
         updateSelectionOverlay();
     });
 
-    stage.add(paperLayer);
+    stage.add(paperBgLayer);
     stage.add(gridLayer);
+    stage.add(paperLayer);
     stage.add(mainLayer);
     stage.add(tempLayer);
 
@@ -2498,7 +2843,7 @@ function setupDrawingInteractions() {
 
     stage.on('mousedown touchstart', (e) => {
         if (!props.canEdit || isSpacePressed.value) return;
-        if (e.target.getLayer() === paperLayer || isResizingSheet.value) return;
+        if (e.target.getLayer() === paperLayer || e.target.getLayer() === paperBgLayer || isResizingSheet.value) return;
 
         // Middle mouse click OR Pan Tool = start pan
         if (e.evt.button === 1 || activeTool.value === 'pan') {
@@ -3109,6 +3454,7 @@ watch(activeTool, (tool) => {
 async function saveElements(isAuto = false) {
     if (!props.canEdit || isSaving.value) return;
 
+    savePaperSizesToStorage();
     if (!isAuto) isSaving.value = true;
     saveSuccess.value = false;
 
@@ -3599,8 +3945,8 @@ function navigateToSheet(targetId: string) {
 function checkHeaderScroll() {
     if (!headerContainerRef.value) return;
     const el = headerContainerRef.value;
-    canScrollLeft.value = el.scrollLeft > 15;
-    canScrollRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 15;
+    canScrollLeft.value = el.scrollLeft > 8;
+    canScrollRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 8;
 }
 
 function scrollHeader(direction: 'left' | 'right') {
@@ -3627,6 +3973,7 @@ const handleGlobalMouseUp = (e: MouseEvent | TouchEvent) => {
 };
 
 onMounted(() => {
+    loadPaperSizesFromStorage();
     nextTick(() => {
         initCanvas();
         checkHeaderScroll();
@@ -3635,6 +3982,13 @@ onMounted(() => {
             checkHeaderScroll();
         }, 150);
     });
+
+    if (headerContainerRef.value && typeof ResizeObserver !== 'undefined') {
+        headerResizeObserver = new ResizeObserver(() => {
+            checkHeaderScroll();
+        });
+        headerResizeObserver.observe(headerContainerRef.value);
+    }
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
@@ -3654,6 +4008,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    headerResizeObserver?.disconnect();
+    headerResizeObserver = null;
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
     window.removeEventListener('click', handleDocumentClick);
@@ -3920,162 +4276,198 @@ onUnmounted(() => {
             </div>
 
             <!-- BARIS 2: TOOLBAR PITA CAD / LEMBAR KERJA (QUICK ACTIONS, 1-CLICK) -->
-            <div class="h-9 px-3 sm:px-4 flex items-center justify-between gap-2 bg-slate-900/90 text-xs overflow-x-auto scrollbar-none">
-                <div class="flex items-center gap-2 shrink-0">
-                    <!-- Mode Kanvas: Frame Lembar Kerja vs AutoCAD Model Space -->
-                    <div class="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10 shrink-0">
+            <div class="relative bg-slate-900/90 border-t border-white/5">
+                <!-- Petunjuk Gulir Kiri -->
+                <button
+                    v-if="canScrollLeft"
+                    @click="scrollHeader('left')"
+                    type="button"
+                    class="absolute left-0 top-0 bottom-0 z-20 flex items-center pl-2 pr-4 bg-gradient-to-r from-slate-950 via-slate-900/95 to-transparent text-slate-300 hover:text-white transition-all cursor-pointer group"
+                    title="Geser pita tools ke kiri"
+                >
+                    <div class="w-6 h-6 rounded-full bg-slate-800/90 border border-white/20 flex items-center justify-center shadow-lg group-hover:bg-violet-600 transition-colors">
+                        <ChevronLeft class="w-4 h-4 text-white" />
+                    </div>
+                </button>
+
+                <!-- Scrollable Toolbar Items Container -->
+                <div
+                    ref="headerContainerRef"
+                    @scroll="checkHeaderScroll"
+                    class="h-9 px-3 sm:px-4 flex items-center justify-between gap-4 text-xs overflow-x-auto scrollbar-none scroll-smooth"
+                >
+                    <div class="flex items-center gap-2 shrink-0">
+                        <!-- Mode Kanvas: Frame Lembar Kerja vs AutoCAD Model Space -->
+                        <div class="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10 shrink-0">
+                            <button
+                                @click="setCanvasMode('sheet')"
+                                type="button"
+                                :class="[
+                                    'flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-medium transition-all cursor-pointer',
+                                    canvasMode === 'sheet'
+                                        ? 'bg-violet-600 text-white shadow-sm font-semibold'
+                                        : 'text-slate-400 hover:text-white'
+                                ]"
+                                title="Mode Frame Lembar Kerja Dinamis (Paper Space)"
+                            >
+                                <LayoutTemplate class="w-3.5 h-3.5" />
+                                <span>Frame Kertas</span>
+                            </button>
+                            <button
+                                @click="setCanvasMode('infinite')"
+                                type="button"
+                                :class="[
+                                    'flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-medium transition-all cursor-pointer',
+                                    canvasMode === 'infinite'
+                                        ? 'bg-violet-600 text-white shadow-sm font-semibold'
+                                        : 'text-slate-400 hover:text-white'
+                                ]"
+                                title="Mode Kanvas Tak Terbatas (AutoCAD Model Space ∞)"
+                            >
+                                <InfinityIcon class="w-3.5 h-3.5" />
+                                <span>Model Space (∞)</span>
+                            </button>
+                        </div>
+
+                        <div class="h-4 w-px bg-white/10 shrink-0"></div>
+
+                        <!-- Kontrol Kertas (Aktif saat mode Frame Kertas) -->
+                        <template v-if="canvasMode === 'sheet'">
+                            <!-- Preset Kertas ISO -->
+                            <select
+                                :value="paperSize"
+                                @change="applyPaperPreset(($event.target as HTMLSelectElement).value)"
+                                class="bg-white/5 border border-white/10 rounded-lg px-2 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer shrink-0"
+                                title="Preset Ukuran Kertas Standar ISO"
+                            >
+                                <option value="A0" class="bg-slate-900 text-white">A0 (3564 × 2520)</option>
+                                <option value="A1" class="bg-slate-900 text-white">A1 (2520 × 1782)</option>
+                                <option value="A2" class="bg-slate-900 text-white">A2 (1782 × 1260)</option>
+                                <option value="A3" class="bg-slate-900 text-white">A3 (1260 × 891)</option>
+                                <option value="A4" class="bg-slate-900 text-white">A4 (891 × 630)</option>
+                                <option value="Custom" class="bg-slate-900 text-white">Custom (Dinamis)</option>
+                            </select>
+
+                            <!-- Numeric Input Width & Height -->
+                            <div class="flex items-center gap-1 text-xs font-mono shrink-0">
+                                <span class="text-slate-400 text-[10px]">W:</span>
+                                <input
+                                    type="number"
+                                    :value="paperWidth"
+                                    @change="onWidthInput(Number(($event.target as HTMLInputElement).value))"
+                                    class="w-14 bg-white/5 border border-white/10 rounded-lg px-1.5 py-0.5 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
+                                    min="400"
+                                    max="20000"
+                                    step="50"
+                                    title="Lebar Kertas Dinamis (px)"
+                                />
+                                <span class="text-slate-500 text-[10px]">×</span>
+                                <span class="text-slate-400 text-[10px]">H:</span>
+                                <input
+                                    type="number"
+                                    :value="paperHeight"
+                                    @change="onHeightInput(Number(($event.target as HTMLInputElement).value))"
+                                    class="w-14 bg-white/5 border border-white/10 rounded-lg px-1.5 py-0.5 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
+                                    min="300"
+                                    max="20000"
+                                    step="50"
+                                    title="Tinggi Kertas Dinamis (px)"
+                                />
+                            </div>
+
+                            <!-- Putar Orientasi -->
+                            <button
+                                @click="toggleOrientation"
+                                type="button"
+                                class="flex items-center gap-1 px-2 py-0.5 rounded-lg text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors cursor-pointer shrink-0"
+                                :title="`Putar Orientasi (${orientation === 'landscape' ? 'Landscape ke Portrait' : 'Portrait ke Landscape'})`"
+                            >
+                                <RotateCw class="w-3.5 h-3.5" />
+                                <span class="capitalize">{{ orientation }}</span>
+                            </button>
+                        </template>
+
+                        <div class="h-4 w-px bg-white/10 shrink-0"></div>
+
+                        <!-- Tombol Cepat: Rapatkan, Reset ISO, Pusatkan -->
                         <button
-                            @click="setCanvasMode('sheet')"
+                            @click="autoFitSheetToDrawing"
                             type="button"
-                            :class="[
-                                'flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-medium transition-all cursor-pointer',
-                                canvasMode === 'sheet'
-                                    ? 'bg-violet-600 text-white shadow-sm font-semibold'
-                                    : 'text-slate-400 hover:text-white'
-                            ]"
-                            title="Mode Frame Lembar Kerja Dinamis (Paper Space)"
+                            class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
+                            title="Rapatkan Lembar Kerja ke Gambar (Hilangkan Semua Jarak Kosong)"
                         >
-                            <LayoutTemplate class="w-3.5 h-3.5" />
-                            <span>Frame Kertas</span>
+                            <Sparkles class="w-3.5 h-3.5 text-indigo-400" />
+                            <span>Rapatkan</span>
                         </button>
+
                         <button
-                            @click="setCanvasMode('infinite')"
+                            @click="resetPaperToDefault"
                             type="button"
-                            :class="[
-                                'flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-medium transition-all cursor-pointer',
-                                canvasMode === 'infinite'
-                                    ? 'bg-violet-600 text-white shadow-sm font-semibold'
-                                    : 'text-slate-400 hover:text-white'
-                            ]"
-                            title="Mode Kanvas Tak Terbatas (AutoCAD Model Space ∞)"
+                            class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 hover:text-white border border-amber-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
+                            title="Kembalikan ukuran kertas ke standar ISO awal"
                         >
-                            <InfinityIcon class="w-3.5 h-3.5" />
-                            <span>Model Space (∞)</span>
+                            <RotateCcw class="w-3.5 h-3.5 text-amber-400" />
+                            <span>Reset ISO</span>
+                        </button>
+
+                        <button
+                            @click="zoomToFit"
+                            type="button"
+                            class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-sky-500/15 hover:bg-sky-500/30 text-sky-300 hover:text-white border border-sky-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
+                            title="Pusatkan Seluruh Gambar & Kertas ke Layar (Zoom Extents)"
+                        >
+                            <Focus class="w-3.5 h-3.5 text-sky-400" />
+                            <span>Pusatkan</span>
+                        </button>
+
+                        <!-- + Tambah Kertas ke Kanvas -->
+                        <button
+                            v-if="canEdit"
+                            @click="addPaperFrameToCanvas()"
+                            type="button"
+                            class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-500/40 transition-all cursor-pointer shadow-sm shrink-0"
+                            title="Tambah Area Kertas Baru ke Kanvas Ini"
+                        >
+                            <Plus class="w-3.5 h-3.5" />
+                            <span>+ Kertas ke Kanvas</span>
                         </button>
                     </div>
 
-                    <div class="h-4 w-px bg-white/10 shrink-0"></div>
-
-                    <!-- Kontrol Kertas (Aktif saat mode Frame Kertas) -->
-                    <template v-if="canvasMode === 'sheet'">
-                        <!-- Preset Kertas ISO -->
-                        <select
-                            :value="paperSize"
-                            @change="applyPaperPreset(($event.target as HTMLSelectElement).value)"
-                            class="bg-white/5 border border-white/10 rounded-lg px-2 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer shrink-0"
-                            title="Preset Ukuran Kertas Standar ISO"
-                        >
-                            <option value="A0" class="bg-slate-900 text-white">A0 (3564 × 2520)</option>
-                            <option value="A1" class="bg-slate-900 text-white">A1 (2520 × 1782)</option>
-                            <option value="A2" class="bg-slate-900 text-white">A2 (1782 × 1260)</option>
-                            <option value="A3" class="bg-slate-900 text-white">A3 (1260 × 891)</option>
-                            <option value="A4" class="bg-slate-900 text-white">A4 (891 × 630)</option>
-                            <option value="Custom" class="bg-slate-900 text-white">Custom (Dinamis)</option>
-                        </select>
-
-                        <!-- Numeric Input Width & Height -->
-                        <div class="flex items-center gap-1 text-xs font-mono shrink-0">
-                            <span class="text-slate-400 text-[10px]">W:</span>
-                            <input
-                                type="number"
-                                :value="paperWidth"
-                                @change="onWidthInput(Number(($event.target as HTMLInputElement).value))"
-                                class="w-14 bg-white/5 border border-white/10 rounded-lg px-1.5 py-0.5 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
-                                min="400"
-                                max="20000"
-                                step="50"
-                                title="Lebar Kertas Dinamis (px)"
-                            />
-                            <span class="text-slate-500 text-[10px]">×</span>
-                            <span class="text-slate-400 text-[10px]">H:</span>
-                            <input
-                                type="number"
-                                :value="paperHeight"
-                                @change="onHeightInput(Number(($event.target as HTMLInputElement).value))"
-                                class="w-14 bg-white/5 border border-white/10 rounded-lg px-1.5 py-0.5 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
-                                min="300"
-                                max="20000"
-                                step="50"
-                                title="Tinggi Kertas Dinamis (px)"
-                            />
-                        </div>
-
-                        <!-- Putar Orientasi -->
+                    <div class="flex items-center gap-2 shrink-0">
+                        <!-- Layers Panel Button -->
                         <button
-                            @click="toggleOrientation"
-                            type="button"
-                            class="flex items-center gap-1 px-2 py-0.5 rounded-lg text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors cursor-pointer shrink-0"
-                            :title="`Putar Orientasi (${orientation === 'landscape' ? 'Landscape ke Portrait' : 'Portrait ke Landscape'})`"
+                            @click="showLayerPanel = !showLayerPanel"
+                            :class="[
+                                'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer shrink-0',
+                                showLayerPanel
+                                    ? 'bg-violet-600/20 text-violet-300 border-violet-500/40'
+                                    : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                            ]"
+                            title="Buka / Tutup Panel Layer Arsitektur"
                         >
-                            <RotateCw class="w-3.5 h-3.5" />
-                            <span class="capitalize">{{ orientation }}</span>
+                            <Layers class="w-3.5 h-3.5" />
+                            <span>Layer</span>
                         </button>
-                    </template>
-
-                    <div class="h-4 w-px bg-white/10 shrink-0"></div>
-
-                    <!-- Tombol Cepat: Rapatkan, Reset ISO, Pusatkan -->
-                    <button
-                        @click="autoFitSheetToDrawing"
-                        type="button"
-                        class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
-                        title="Rapatkan Lembar Kerja ke Gambar (Hilangkan Semua Jarak Kosong)"
-                    >
-                        <Sparkles class="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Rapatkan</span>
-                    </button>
-
-                    <button
-                        @click="resetPaperToDefault"
-                        type="button"
-                        class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 hover:text-white border border-amber-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
-                        title="Kembalikan ukuran kertas ke standar ISO awal"
-                    >
-                        <RotateCcw class="w-3.5 h-3.5 text-amber-400" />
-                        <span>Reset ISO</span>
-                    </button>
-
-                    <button
-                        @click="zoomToFit"
-                        type="button"
-                        class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-sky-500/15 hover:bg-sky-500/30 text-sky-300 hover:text-white border border-sky-500/30 transition-all cursor-pointer shrink-0 shadow-sm"
-                        title="Pusatkan Seluruh Gambar & Kertas ke Layar (Zoom Extents)"
-                    >
-                        <Focus class="w-3.5 h-3.5 text-sky-400" />
-                        <span>Pusatkan</span>
-                    </button>
-
-                    <!-- + Tambah Kertas ke Kanvas -->
-                    <button
-                        v-if="canEdit"
-                        @click="addPaperFrameToCanvas()"
-                        type="button"
-                        class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 hover:text-white border border-emerald-500/40 transition-all cursor-pointer shadow-sm shrink-0"
-                        title="Tambah Area Kertas Baru ke Kanvas Ini"
-                    >
-                        <Plus class="w-3.5 h-3.5" />
-                        <span>+ Kertas ke Kanvas</span>
-                    </button>
+                        <span class="text-[11px] font-mono text-slate-400 pl-2">
+                            Skala <strong class="text-slate-200">{{ sheet.scale }}</strong> • Unit <strong class="text-slate-200">{{ sheet.unit }}</strong>
+                        </span>
+                    </div>
                 </div>
 
-                <div class="flex items-center gap-2 shrink-0">
-                    <!-- Layers Panel Button -->
+                <!-- Petunjuk Gulir Kanan: Notifikasi visual bila layar kurang lebar -->
+                <div
+                    v-if="canScrollRight"
+                    class="absolute right-0 top-0 bottom-0 z-20 flex items-center pr-2 pl-6 bg-gradient-to-l from-slate-950 via-slate-900/95 to-transparent pointer-events-none"
+                >
                     <button
-                        @click="showLayerPanel = !showLayerPanel"
-                        :class="[
-                            'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer shrink-0',
-                            showLayerPanel
-                                ? 'bg-violet-600/20 text-violet-300 border-violet-500/40'
-                                : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
-                        ]"
-                        title="Buka / Tutup Panel Layer Arsitektur"
+                        @click="scrollHeader('right')"
+                        type="button"
+                        class="pointer-events-auto inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-violet-600/90 hover:bg-violet-500 text-white shadow-lg shadow-violet-600/30 border border-violet-400/40 transition-all cursor-pointer animate-pulse hover:animate-none"
+                        title="Masih ada tools lainnya di kanan, klik untuk menggeser"
                     >
-                        <Layers class="w-3.5 h-3.5" />
-                        <span>Layer</span>
+                        <span>Menu Lainnya</span>
+                        <ChevronRight class="w-3.5 h-3.5" />
                     </button>
-                    <span class="text-[11px] font-mono text-slate-400 pl-2">
-                        Skala <strong class="text-slate-200">{{ sheet.scale }}</strong> • Unit <strong class="text-slate-200">{{ sheet.unit }}</strong>
-                    </span>
                 </div>
             </div>
         </header>
