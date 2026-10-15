@@ -44,6 +44,7 @@ import {
     Copy,
     Clipboard,
     Files,
+    Plus,
 } from '@lucide/vue';
 
 interface SheetData {
@@ -226,22 +227,48 @@ function redo() {
     }
 }
 
-function restoreFromState(state: Array<{ id: string; type: string; data: Record<string, any>; sort_order: number }>) {
+function restoreFromState(
+    state: Array<{ id: string; type: string; data: Record<string, any>; sort_order: number }>,
+    preserveSelection = false
+) {
+    const selectedIdsToKeep = preserveSelection && tr ? tr.nodes().map((n) => n.id()) : [];
+
     elementList.value = state;
     if (!mainLayer) return;
 
     // Clear existing nodes except transformer
     const nodes = mainLayer.getChildren((node) => node !== tr);
     nodes.forEach((n) => n.destroy());
-    tr?.nodes([]);
-    selectedNodeId.value = null;
-    selectedElementData.value = null;
 
+    const reSelectedNodes: Konva.Group[] = [];
     elementList.value.forEach((item) => {
         const node = createShapeFromElement(item);
         applyLayerVisibilityToNode(node, item.type);
         mainLayer!.add(node);
+        if (selectedIdsToKeep.includes(item.id)) {
+            reSelectedNodes.push(node);
+        }
     });
+
+    if (reSelectedNodes.length > 0 && tr) {
+        tr.nodes(reSelectedNodes);
+        tr.moveToTop();
+        if (reSelectedNodes.length === 1) {
+            selectedNodeId.value = reSelectedNodes[0].id();
+            const found = elementList.value.find((x) => x.id === reSelectedNodes[0].id());
+            selectedElementData.value = found ? { ...found.data, type: found.type } : null;
+        } else {
+            selectedNodeId.value = 'multi';
+            selectedElementData.value = {
+                type: `${reSelectedNodes.length} Objek Terpilih`,
+                count: reSelectedNodes.length,
+            };
+        }
+    } else {
+        tr?.nodes([]);
+        selectedNodeId.value = null;
+        selectedElementData.value = null;
+    }
 
     mainLayer.batchDraw();
 }
@@ -310,7 +337,9 @@ function toggleLayer(category: keyof typeof layersVisibility.value) {
 // ── CANVAS MODE & DYNAMIC SHEET SIZING HELPERS ─────────────────────────────
 function setCanvasMode(mode: CanvasMode) {
     canvasMode.value = mode;
+    drawGrid();
     drawPaperBoundary();
+    restoreFromState(elementList.value, true);
     if (mode === 'infinite') {
         zoomToFit();
     }
@@ -482,7 +511,9 @@ function pasteClipboard() {
 
     if (tr && newNodes.length > 0) {
         activeTool.value = 'select';
+        newNodes.forEach((n) => n.draggable(props.canEdit));
         tr.nodes(newNodes);
+        tr.moveToTop();
         if (newNodes.length === 1) {
             selectedNodeId.value = newNodes[0].id();
             const found = elementList.value.find((x) => x.id === newNodes[0].id());
@@ -490,7 +521,7 @@ function pasteClipboard() {
         } else {
             selectedNodeId.value = 'multi';
             selectedElementData.value = {
-                type: `${newNodes.length} Objek Ditempel`,
+                type: `${newNodes.length} Objek Ditempel (Terblok)`,
                 count: newNodes.length,
             };
         }
@@ -499,7 +530,7 @@ function pasteClipboard() {
     mainLayer.batchDraw();
     pushHistory();
     triggerAutoSaveDebounced();
-    toast.success(`${newElements.length} objek berhasil ditempel ke kanvas.`);
+    toast.success(`${newElements.length} objek berhasil ditempel & siap digeser.`);
 }
 
 function duplicateSelected() {
@@ -556,7 +587,9 @@ function duplicateSelected() {
 
     if (tr && newNodes.length > 0) {
         activeTool.value = 'select';
+        newNodes.forEach((n) => n.draggable(props.canEdit));
         tr.nodes(newNodes);
+        tr.moveToTop();
         if (newNodes.length === 1) {
             selectedNodeId.value = newNodes[0].id();
             const found = elementList.value.find((x) => x.id === newNodes[0].id());
@@ -564,7 +597,7 @@ function duplicateSelected() {
         } else {
             selectedNodeId.value = 'multi';
             selectedElementData.value = {
-                type: `${newNodes.length} Objek Diduplikat`,
+                type: `${newNodes.length} Objek Diduplikat (Terblok)`,
                 count: newNodes.length,
             };
         }
@@ -1092,17 +1125,21 @@ function drawGrid() {
     if (!gridLayer || !stage) return;
     gridLayer.destroyChildren();
 
+    const isCad = canvasMode.value === 'infinite';
     // Kanvas Arsitektur Luas (12000px × 10000px) untuk fleksibilitas CAD tak terbatas
     const w = 12000;
     const h = 10000;
     const step = gridSpacing.value;
+
+    const majorStroke = isCad ? 'rgba(71, 85, 105, 0.45)' : '#cbd5e1';
+    const minorStroke = isCad ? 'rgba(51, 65, 85, 0.22)' : '#f1f5f9';
 
     for (let x = 0; x <= w; x += step) {
         const isMajor = x % (step * 5) === 0;
         gridLayer.add(
             new Konva.Line({
                 points: [x, 0, x, h],
-                stroke: isMajor ? '#cbd5e1' : '#f1f5f9',
+                stroke: isMajor ? majorStroke : minorStroke,
                 strokeWidth: isMajor ? 1 : 0.5,
                 listening: false,
             })
@@ -1114,7 +1151,7 @@ function drawGrid() {
         gridLayer.add(
             new Konva.Line({
                 points: [0, y, w, y],
-                stroke: isMajor ? '#cbd5e1' : '#f1f5f9',
+                stroke: isMajor ? majorStroke : minorStroke,
                 strokeWidth: isMajor ? 1 : 0.5,
                 listening: false,
             })
@@ -1133,9 +1170,11 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
         draggable: props.canEdit && activeTool.value === 'select',
     });
 
+    const isCad = canvasMode.value === 'infinite';
+
     switch (el.type) {
         case 'wall': {
-            // Architectural wall: Double parallel line with dark infill
+            // Architectural wall: Double parallel line with dark or bright CAD infill
             const x1 = data.x1 ?? 0;
             const y1 = data.y1 ?? 0;
             const x2 = data.x2 ?? 100;
@@ -1144,13 +1183,13 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
 
             const wallLine = new Konva.Line({
                 points: [x1, y1, x2, y2],
-                stroke: '#1e293b',
+                stroke: isCad ? '#f8fafc' : '#1e293b',
                 strokeWidth: thickness,
                 lineCap: 'square',
             });
             const centerLine = new Konva.Line({
                 points: [x1, y1, x2, y2],
-                stroke: '#e2e8f0',
+                stroke: isCad ? '#38bdf8' : '#e2e8f0',
                 strokeWidth: 1.5,
                 dash: [4, 4],
             });
@@ -1170,18 +1209,18 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 y,
                 width: size,
                 height: size,
-                stroke: '#0f172a',
+                stroke: isCad ? '#ffffff' : '#0f172a',
                 strokeWidth: 2,
-                fill: '#334155',
+                fill: isCad ? '#f43f5e' : '#334155',
             });
             const h1 = new Konva.Line({
                 points: [x, y, x + size, y + size],
-                stroke: '#94a3b8',
+                stroke: isCad ? '#ffffff' : '#94a3b8',
                 strokeWidth: 1.5,
             });
             const h2 = new Konva.Line({
                 points: [x, y + size, x + size, y],
-                stroke: '#94a3b8',
+                stroke: isCad ? '#ffffff' : '#94a3b8',
                 strokeWidth: 1.5,
             });
             group.add(box);
@@ -1198,7 +1237,7 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
 
             const frame = new Konva.Line({
                 points: [x, y, x, y + size],
-                stroke: '#16a34a',
+                stroke: isCad ? '#4ade80' : '#16a34a',
                 strokeWidth: 3,
             });
             const swingArc = new Konva.Arc({
@@ -1208,7 +1247,7 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 outerRadius: size,
                 angle: 90,
                 rotation: -90,
-                stroke: '#16a34a',
+                stroke: isCad ? '#4ade80' : '#16a34a',
                 strokeWidth: 1.5,
                 dash: [4, 3],
             });
@@ -1229,13 +1268,13 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 y,
                 width: w,
                 height: h,
-                stroke: '#0284c7',
+                stroke: isCad ? '#38bdf8' : '#0284c7',
                 strokeWidth: 2,
-                fill: '#f0f9ff',
+                fill: isCad ? 'rgba(56, 189, 248, 0.2)' : '#f0f9ff',
             });
             const glass = new Konva.Line({
                 points: [x, y + h / 2, x + w, y + h / 2],
-                stroke: '#0284c7',
+                stroke: isCad ? '#7dd3fc' : '#0284c7',
                 strokeWidth: 2,
             });
             group.add(outer);
@@ -1257,9 +1296,9 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 y,
                 width: w,
                 height: h,
-                stroke: '#475569',
+                stroke: isCad ? '#e2e8f0' : '#475569',
                 strokeWidth: 2,
-                fill: '#f8fafc',
+                fill: isCad ? 'rgba(30, 41, 59, 0.75)' : '#f8fafc',
             });
             group.add(outerBox);
 
@@ -1267,7 +1306,7 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 group.add(
                     new Konva.Line({
                         points: [x, y + i * stepH, x + w, y + i * stepH],
-                        stroke: '#94a3b8',
+                        stroke: isCad ? '#cbd5e1' : '#94a3b8',
                         strokeWidth: 1.5,
                     })
                 );
@@ -1278,8 +1317,8 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 points: [x + w / 2, y + h - 15, x + w / 2, y + 20],
                 pointerLength: 8,
                 pointerWidth: 8,
-                fill: '#4338ca',
-                stroke: '#4338ca',
+                fill: isCad ? '#c084fc' : '#4338ca',
+                stroke: isCad ? '#c084fc' : '#4338ca',
                 strokeWidth: 2,
             });
             const textUp = new Konva.Text({
@@ -1289,7 +1328,7 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 fontSize: 10,
                 fontFamily: 'monospace',
                 fontStyle: 'bold',
-                fill: '#4338ca',
+                fill: isCad ? '#c084fc' : '#4338ca',
             });
             group.add(arrow);
             group.add(textUp);
@@ -1305,9 +1344,9 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 y,
                 width: 50,
                 height: 20,
-                stroke: '#0369a1',
+                stroke: isCad ? '#38bdf8' : '#0369a1',
                 strokeWidth: 2,
-                fill: '#f0f9ff',
+                fill: isCad ? 'rgba(56, 189, 248, 0.25)' : '#f0f9ff',
                 cornerRadius: 3,
             });
             const bowl = new Konva.Arc({
@@ -1317,9 +1356,9 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 outerRadius: 22,
                 angle: 180,
                 rotation: 0,
-                stroke: '#0369a1',
+                stroke: isCad ? '#38bdf8' : '#0369a1',
                 strokeWidth: 2,
-                fill: '#e0f2fe',
+                fill: isCad ? 'rgba(56, 189, 248, 0.35)' : '#e0f2fe',
             });
             group.add(tank);
             group.add(bowl);
@@ -1338,9 +1377,9 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 y,
                 width: w,
                 height: h,
-                stroke: '#854d0e',
+                stroke: isCad ? '#fbbf24' : '#854d0e',
                 strokeWidth: 2,
-                fill: '#fefce8',
+                fill: isCad ? 'rgba(251, 191, 36, 0.15)' : '#fefce8',
                 cornerRadius: 4,
             });
             const pillow1 = new Konva.Rect({
@@ -1348,9 +1387,9 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 y: y + 10,
                 width: 45,
                 height: 30,
-                stroke: '#a16207',
+                stroke: isCad ? '#fde047' : '#a16207',
                 strokeWidth: 1.5,
-                fill: '#ffffff',
+                fill: isCad ? '#1e293b' : '#ffffff',
                 cornerRadius: 4,
             });
             const pillow2 = new Konva.Rect({
@@ -1358,14 +1397,14 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 y: y + 10,
                 width: 45,
                 height: 30,
-                stroke: '#a16207',
+                stroke: isCad ? '#fde047' : '#a16207',
                 strokeWidth: 1.5,
-                fill: '#ffffff',
+                fill: isCad ? '#1e293b' : '#ffffff',
                 cornerRadius: 4,
             });
             const blanket = new Konva.Line({
                 points: [x, y + 55, x + w, y + 55],
-                stroke: '#a16207',
+                stroke: isCad ? '#fde047' : '#a16207',
                 strokeWidth: 1.5,
                 dash: [4, 4],
             });
@@ -1388,16 +1427,16 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 y,
                 width: w,
                 height: h,
-                stroke: '#3f3f46',
+                stroke: isCad ? '#e2e8f0' : '#3f3f46',
                 strokeWidth: 2,
-                fill: '#f4f4f5',
+                fill: isCad ? 'rgba(148, 163, 184, 0.2)' : '#f4f4f5',
                 cornerRadius: 4,
             });
-            // 4 chairs
-            const c1 = new Konva.Rect({ x: x + 15, y: y - 10, width: 30, height: 8, stroke: '#71717a', strokeWidth: 1.5 });
-            const c2 = new Konva.Rect({ x: x + 55, y: y - 10, width: 30, height: 8, stroke: '#71717a', strokeWidth: 1.5 });
-            const c3 = new Konva.Rect({ x: x + 15, y: y + h + 2, width: 30, height: 8, stroke: '#71717a', strokeWidth: 1.5 });
-            const c4 = new Konva.Rect({ x: x + 55, y: y + h + 2, width: 30, height: 8, stroke: '#71717a', strokeWidth: 1.5 });
+            const chairStroke = isCad ? '#cbd5e1' : '#71717a';
+            const c1 = new Konva.Rect({ x: x + 15, y: y - 10, width: 30, height: 8, stroke: chairStroke, strokeWidth: 1.5 });
+            const c2 = new Konva.Rect({ x: x + 55, y: y - 10, width: 30, height: 8, stroke: chairStroke, strokeWidth: 1.5 });
+            const c3 = new Konva.Rect({ x: x + 15, y: y + h + 2, width: 30, height: 8, stroke: chairStroke, strokeWidth: 1.5 });
+            const c4 = new Konva.Rect({ x: x + 55, y: y + h + 2, width: 30, height: 8, stroke: chairStroke, strokeWidth: 1.5 });
             group.add(table);
             group.add(c1);
             group.add(c2);
@@ -1412,9 +1451,9 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 y: data.y ?? 0,
                 width: data.width ?? 120,
                 height: data.height ?? 100,
-                stroke: '#1e293b',
+                stroke: isCad ? '#38bdf8' : '#1e293b',
                 strokeWidth: 3,
-                fill: data.fill ?? 'rgba(241, 245, 249, 0.5)',
+                fill: isCad ? 'rgba(56, 189, 248, 0.15)' : (data.fill ?? 'rgba(241, 245, 249, 0.5)'),
             });
             group.add(rect);
             break;
@@ -1428,19 +1467,20 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
             const distPx = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
             const distMeters = ((distPx / gridSpacing.value) * 0.5).toFixed(2);
 
+            const dimColor = isCad ? '#facc15' : '#d97706';
             const line = new Konva.Line({
                 points: [x1, y1, x2, y2],
-                stroke: '#d97706',
+                stroke: dimColor,
                 strokeWidth: 1.5,
             });
             const tick1 = new Konva.Line({
                 points: [x1 - 5, y1 - 5, x1 + 5, y1 + 5],
-                stroke: '#d97706',
+                stroke: dimColor,
                 strokeWidth: 2,
             });
             const tick2 = new Konva.Line({
                 points: [x2 - 5, y2 - 5, x2 + 5, y2 + 5],
-                stroke: '#d97706',
+                stroke: dimColor,
                 strokeWidth: 2,
             });
             const text = new Konva.Text({
@@ -1449,7 +1489,7 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 text: `${distMeters} m`,
                 fontSize: 11,
                 fontFamily: 'monospace',
-                fill: '#b45309',
+                fill: isCad ? '#fef08a' : '#b45309',
                 fontStyle: 'bold',
             });
             group.add(line);
@@ -1469,9 +1509,9 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 y: y - 18,
                 width: 90,
                 height: 36,
-                fill: 'rgba(255, 255, 255, 0.9)',
-                stroke: '#94a3b8',
-                strokeWidth: 1,
+                fill: isCad ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.9)',
+                stroke: isCad ? '#38bdf8' : '#94a3b8',
+                strokeWidth: 1.5,
                 cornerRadius: 4,
             });
             const text = new Konva.Text({
@@ -1481,7 +1521,7 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 fontSize: 11,
                 fontFamily: 'sans-serif',
                 align: 'center',
-                fill: '#0f172a',
+                fill: isCad ? '#f8fafc' : '#0f172a',
                 fontStyle: 'bold',
             });
             group.add(bg);
@@ -1493,7 +1533,7 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
         default: {
             const line = new Konva.Line({
                 points: [data.x1 ?? 0, data.y1 ?? 0, data.x2 ?? 100, data.y2 ?? 0],
-                stroke: data.stroke ?? '#475569',
+                stroke: data.stroke ?? (isCad ? '#f8fafc' : '#475569'),
                 strokeWidth: data.strokeWidth ?? 2,
             });
             group.add(line);
@@ -1541,7 +1581,7 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
             if (found) applyOffsetToElement(found, totalDx, totalDy);
         }
 
-        restoreFromState(elementList.value);
+        restoreFromState(elementList.value, true);
         pushHistory();
         triggerAutoSaveDebounced();
     });
@@ -1569,6 +1609,7 @@ function initCanvas() {
 
     tr = new Konva.Transformer({
         rotateEnabled: true,
+        shouldOverdrawWholeArea: true,
         borderStroke: '#8b5cf6',
         borderStrokeWidth: 1.5,
         anchorStroke: '#8b5cf6',
@@ -1686,7 +1727,7 @@ function setupDrawingInteractions() {
 
         // Selection Tool (AutoCAD Click Selection + AutoCAD Box Drag Selection)
         if (activeTool.value === 'select') {
-            const clickedOnTransformer = e.target.getParent()?.className === 'Transformer';
+            const clickedOnTransformer = e.target.getParent()?.className === 'Transformer' || e.target.className === 'Transformer';
             if (clickedOnTransformer) return;
 
             const clickedShape = e.target;
@@ -1702,6 +1743,7 @@ function setupDrawingInteractions() {
                         currentNodes.push(parentGroup);
                     }
                     tr?.nodes(currentNodes);
+                    tr?.moveToTop();
                     if (currentNodes.length === 1) {
                         selectedNodeId.value = currentNodes[0].id();
                         const found = elementList.value.find((x) => x.id === currentNodes[0].id());
@@ -1720,9 +1762,11 @@ function setupDrawingInteractions() {
                     const currentNodes = tr?.nodes() || [];
                     if (currentNodes.length > 1 && currentNodes.includes(parentGroup)) {
                         // Pertahankan multi-seleksi agar user bisa men-drag semua objek bersamaan
+                        return;
                     } else {
                         selectedNodeId.value = parentGroup.id();
                         tr?.nodes([parentGroup]);
+                        tr?.moveToTop();
                         const found = elementList.value.find((x) => x.id === parentGroup.id());
                         selectedElementData.value = found ? { ...found.data, type: found.type } : null;
                     }
@@ -1731,7 +1775,22 @@ function setupDrawingInteractions() {
                 return;
             }
 
-            // Klik di area kosong: Mulai seleksi kotak Marquee khas AutoCAD
+            // Jika objek sedang terblok dan user mengklik di dalam area bounding box seleksi,
+            // pertahankan blok seleksi agar tidak hilang dan dapat langsung di-drag!
+            const clickPos = stage.getPointerPosition();
+            if (clickPos && tr && tr.nodes().length > 0 && !e.evt.shiftKey && !e.evt.ctrlKey) {
+                const trRect = tr.getClientRect();
+                if (
+                    clickPos.x >= trRect.x &&
+                    clickPos.x <= trRect.x + trRect.width &&
+                    clickPos.y >= trRect.y &&
+                    clickPos.y <= trRect.y + trRect.height
+                ) {
+                    return;
+                }
+            }
+
+            // Klik di area luar: Mulai seleksi kotak Marquee khas AutoCAD
             if (!e.evt.shiftKey && !e.evt.ctrlKey) {
                 selectedNodeId.value = null;
                 selectedElementData.value = null;
@@ -1789,10 +1848,17 @@ function setupDrawingInteractions() {
         startY = snap(pt.y);
         isDrawing = true;
 
+        const isCad = canvasMode.value === 'infinite';
         if (activeTool.value === 'wall' || activeTool.value === 'line' || activeTool.value === 'dimension') {
+            const previewStroke = activeTool.value === 'wall'
+                ? (isCad ? '#f8fafc' : '#1e293b')
+                : activeTool.value === 'dimension'
+                    ? (isCad ? '#facc15' : '#d97706')
+                    : (isCad ? '#f8fafc' : '#64748b');
+
             previewShape = new Konva.Line({
                 points: [startX, startY, startX, startY],
-                stroke: activeTool.value === 'wall' ? '#1e293b' : activeTool.value === 'dimension' ? '#d97706' : '#64748b',
+                stroke: previewStroke,
                 strokeWidth: activeTool.value === 'wall' ? 12 : 2,
                 dash: [4, 4],
             });
@@ -1803,7 +1869,7 @@ function setupDrawingInteractions() {
                 y: startY,
                 width: 0,
                 height: 0,
-                stroke: '#1e293b',
+                stroke: isCad ? '#38bdf8' : '#1e293b',
                 strokeWidth: 2,
                 dash: [4, 4],
             });
@@ -2018,6 +2084,24 @@ function setupZoomAndPanEvents() {
 
     stage.on('wheel', (e) => {
         e.evt.preventDefault();
+
+        // 1. Tekan Ctrl + Scroll Mouse => Scroll Y (Geser Layar Atas ke Bawah)
+        if (e.evt.ctrlKey || e.evt.metaKey) {
+            const dy = e.evt.deltaY;
+            stage!.y(stage!.y() - dy);
+            stage!.batchDraw();
+            return;
+        }
+
+        // 2. Tekan Shift + Scroll Mouse => Scroll X (Geser Layar Samping Kiri dan Kanan)
+        if (e.evt.shiftKey) {
+            const dx = e.evt.deltaY || e.evt.deltaX;
+            stage!.x(stage!.x() - dx);
+            stage!.batchDraw();
+            return;
+        }
+
+        // 3. Normal Scroll Mouse => Zoom Presisi Kursor (AutoCAD / Figma Zoom)
         const oldScale = stage!.scaleX();
         const pointer = stage!.getPointerPosition();
         if (!pointer) return;
@@ -2027,11 +2111,7 @@ function setupZoomAndPanEvents() {
             y: (pointer.y - stage!.y()) / oldScale,
         };
 
-        let direction = e.evt.deltaY > 0 ? -1 : 1;
-        if (e.evt.ctrlKey) {
-            direction = -direction;
-        }
-
+        const direction = e.evt.deltaY > 0 ? -1 : 1;
         const scaleBy = 1.1;
         const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
         const clampedScale = Math.max(0.2, Math.min(5, newScale));
@@ -2280,10 +2360,69 @@ function zoom(direction: 'in' | 'out' | 'reset') {
     stage.batchDraw();
 }
 
+// ── NEW DRAWING SHEET (BUAT KERTAS BARU LANGSUNG DI EDITOR) ────────────────
+const showNewSheetModal = ref(false);
+const isCreatingSheet = ref(false);
+const newSheetForm = ref({
+    title: '',
+    type: 'plan' as 'plan' | 'elevation' | 'section',
+    scale: '1:100',
+    paper_size: 'A3',
+    orientation: 'landscape' as 'landscape' | 'portrait',
+});
+
+function openNewSheetModal() {
+    newSheetForm.value = {
+        title: '',
+        type: 'plan',
+        scale: '1:100',
+        paper_size: 'A3',
+        orientation: 'landscape',
+    };
+    showNewSheetModal.value = true;
+}
+
+function submitNewSheet() {
+    if (!newSheetForm.value.title.trim()) {
+        toast.error('Silakan isi judul lembar kerja baru.');
+        return;
+    }
+
+    isCreatingSheet.value = true;
+    router.post(
+        '/drawings',
+        {
+            project_id: props.project.id,
+            title: newSheetForm.value.title.trim(),
+            type: newSheetForm.value.type,
+            scale: newSheetForm.value.scale,
+            paper_size: newSheetForm.value.paper_size,
+            orientation: newSheetForm.value.orientation,
+        },
+        {
+            onSuccess: () => {
+                showNewSheetModal.value = false;
+                toast.success('Lembar kerja baru berhasil dibuat!');
+            },
+            onError: () => {
+                toast.error('Gagal membuat lembar kerja baru. Periksa data kembali.');
+            },
+            onFinish: () => {
+                isCreatingSheet.value = false;
+            },
+        }
+    );
+}
+
 function switchSheet(e: Event) {
     const target = e.target as HTMLSelectElement;
+    if (target.value === '__NEW_SHEET__') {
+        target.value = props.sheet.id;
+        openNewSheetModal();
+        return;
+    }
     if (target.value && target.value !== props.sheet.id) {
-        router.visit(`/drawings/editor/${target.value}`);
+        router.visit(`/drawings/${target.value}`);
     }
 }
 
@@ -2321,34 +2460,34 @@ onUnmounted(() => {
 
     <div class="h-screen w-screen flex flex-col bg-slate-900 text-slate-100 overflow-hidden select-none">
         <!-- TOP CAD HEADER BAR -->
-        <header class="h-14 bg-slate-950 border-b border-white/10 px-4 flex items-center justify-between z-30 shrink-0">
-            <div class="flex items-center gap-3">
+        <header class="h-14 bg-slate-950 border-b border-white/10 px-3 sm:px-4 flex items-center justify-between z-30 shrink-0 gap-2 overflow-x-auto scrollbar-none">
+            <div class="flex items-center gap-2 sm:gap-3 shrink-0">
                 <Link
                     href="/drawings"
-                    class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+                    class="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors shrink-0"
                     title="Kembali ke Daftar Lembar Kerja"
                 >
                     <ArrowLeft class="w-5 h-5" />
                 </Link>
 
-                <div class="flex items-center gap-2.5">
-                    <div class="w-8 h-8 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30">
+                <div class="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                    <div class="w-8 h-8 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30 shrink-0">
                         <DraftingCompass class="w-4 h-4" />
                     </div>
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h2 class="text-sm font-bold text-white tracking-tight">{{ sheet.title }}</h2>
-                            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5 sm:gap-2">
+                            <h2 class="text-xs sm:text-sm font-bold text-white tracking-tight truncate max-w-[110px] sm:max-w-[160px] md:max-w-xs">{{ sheet.title }}</h2>
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30 shrink-0">
                                 {{ sheet.type.toUpperCase() }}
                             </span>
 
-                            <!-- Sheet Switcher Dropdown (7 Lembar Kerja / Ruangan) -->
-                            <div v-if="projectSheets && projectSheets.length > 1" class="relative inline-block ml-1">
+                            <!-- Sheet Switcher Dropdown (Pilih Lembar Kerja / Ruangan) -->
+                            <div v-if="projectSheets && projectSheets.length > 0" class="relative inline-block ml-0.5 shrink-0">
                                 <select
                                     :value="sheet.id"
                                     @change="switchSheet"
-                                    class="bg-slate-900 border border-violet-500/40 text-violet-300 hover:text-white hover:border-violet-400 text-[11px] rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-400 font-medium cursor-pointer transition-colors shadow-sm"
-                                    title="Pilih Lembar Kerja Proyek Lainnya"
+                                    class="bg-slate-900 border border-violet-500/40 text-violet-300 hover:text-white hover:border-violet-400 text-[11px] rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-400 font-medium cursor-pointer transition-colors shadow-sm max-w-[130px] sm:max-w-[180px] truncate"
+                                    title="Pilih Lembar Kerja Lainnya atau Buat Kertas Baru"
                                 >
                                     <option
                                         v-for="(s, idx) in projectSheets"
@@ -2358,10 +2497,25 @@ onUnmounted(() => {
                                     >
                                         📄 Lembar {{ idx + 1 }}: {{ s.title }} ({{ s.scale }})
                                     </option>
+                                    <option v-if="canEdit" value="__NEW_SHEET__" class="bg-violet-950 text-violet-300 font-bold py-1">
+                                        ➕ + Buat Kertas Baru...
+                                    </option>
                                 </select>
                             </div>
+
+                            <!-- Tombol Tambah Lembar / Kertas Baru Langsung -->
+                            <button
+                                v-if="canEdit"
+                                @click="openNewSheetModal"
+                                type="button"
+                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-violet-600/30 hover:bg-violet-600 text-violet-200 hover:text-white border border-violet-500/40 transition-all cursor-pointer shadow-sm shrink-0"
+                                title="Buat Lembar Kerja / Kertas Baru di Proyek Ini"
+                            >
+                                <Plus class="w-3 h-3" />
+                                <span class="hidden sm:inline">Kertas Baru</span>
+                            </button>
                         </div>
-                        <p class="text-[11px] text-slate-400 -mt-0.5">
+                        <p class="text-[10px] sm:text-[11px] text-slate-400 -mt-0.5 hidden md:block truncate max-w-[200px] lg:max-w-sm">
                             {{ project.title }} • Skala {{ sheet.scale }} • Kertas {{ paperSize }} ({{ orientation }})
                         </p>
                     </div>
@@ -2369,13 +2523,13 @@ onUnmounted(() => {
             </div>
 
             <!-- DYNAMIC FRAME & CANVAS CONTROLS (FIGMA RESIZABLE SHEET & AUTOCAD MODEL SPACE) -->
-            <div class="hidden lg:flex items-center gap-2.5 bg-slate-900 border border-white/10 rounded-2xl px-3 py-1">
+            <div class="hidden lg:flex items-center gap-1.5 xl:gap-2.5 bg-slate-900 border border-white/10 rounded-2xl px-2.5 py-1 shrink-0">
                 <!-- Mode Switch: Frame Lembar Kerja vs AutoCAD Model Space -->
-                <div class="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10">
+                <div class="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10 shrink-0">
                     <button
                         @click="setCanvasMode('sheet')"
                         :class="[
-                            'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer',
+                            'flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer',
                             canvasMode === 'sheet'
                                 ? 'bg-violet-600 text-white shadow-sm font-semibold'
                                 : 'text-slate-400 hover:text-white'
@@ -2383,12 +2537,12 @@ onUnmounted(() => {
                         title="Mode Frame Lembar Kerja Dinamis (Figma & Paper Space)"
                     >
                         <LayoutTemplate class="w-3.5 h-3.5" />
-                        <span>Frame Kertas</span>
+                        <span><span class="hidden xl:inline">Frame </span>Kertas</span>
                     </button>
                     <button
                         @click="setCanvasMode('infinite')"
                         :class="[
-                            'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer',
+                            'flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer',
                             canvasMode === 'infinite'
                                 ? 'bg-violet-600 text-white shadow-sm font-semibold'
                                 : 'text-slate-400 hover:text-white'
@@ -2396,19 +2550,19 @@ onUnmounted(() => {
                         title="Mode Kanvas Tak Terbatas (AutoCAD Model Space ∞)"
                     >
                         <InfinityIcon class="w-3.5 h-3.5" />
-                        <span>AutoCAD Model (∞)</span>
+                        <span><span class="hidden xl:inline">AutoCAD </span>Model<span class="hidden xl:inline"> (∞)</span></span>
                     </button>
                 </div>
 
                 <!-- Paper Frame Controls (Aktif saat mode Frame Kertas) -->
                 <template v-if="canvasMode === 'sheet'">
-                    <div class="h-4 w-px bg-white/10"></div>
+                    <div class="h-4 w-px bg-white/10 shrink-0"></div>
 
                     <!-- Preset Ukuran Kertas ISO -->
                     <select
                         :value="paperSize"
                         @change="applyPaperPreset(($event.target as HTMLSelectElement).value)"
-                        class="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer"
+                        class="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer shrink-0"
                         title="Preset Ukuran Kertas Standar ISO"
                     >
                         <option value="A0" class="bg-slate-900 text-white">A0 (3564 × 2520)</option>
@@ -2420,7 +2574,7 @@ onUnmounted(() => {
                     </select>
 
                     <!-- Numeric Input Width (W) & Height (H) ala Figma -->
-                    <div class="flex items-center gap-1.5 text-xs font-mono">
+                    <div class="hidden 2xl:flex items-center gap-1.5 text-xs font-mono shrink-0">
                         <span class="text-slate-400 text-[10px]">W:</span>
                         <input
                             type="number"
@@ -2449,40 +2603,40 @@ onUnmounted(() => {
                     <!-- Putar Orientasi (Landscape / Portrait) -->
                     <button
                         @click="toggleOrientation"
-                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
                         :title="`Putar Orientasi (${orientation === 'landscape' ? 'Landscape ke Portrait' : 'Portrait ke Landscape'})`"
                     >
                         <RotateCw class="w-3.5 h-3.5" />
                     </button>
 
-                    <div class="h-4 w-px bg-white/10"></div>
+                    <div class="h-4 w-px bg-white/10 shrink-0"></div>
 
                     <!-- Rapatkan Lembar ke Gambar (Hilangkan Jarak Kosong) -->
                     <button
                         @click="autoFitSheetToDrawing"
-                        class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 transition-colors cursor-pointer"
+                        class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 transition-colors cursor-pointer shrink-0"
                         title="Rapatkan Lembar Kerja ke Gambar (Hilangkan Jarak Kosong)"
                     >
                         <Sparkles class="w-3.5 h-3.5 text-indigo-400" />
-                        <span class="hidden xl:inline">Rapatkan Kertas</span>
+                        <span class="hidden 2xl:inline">Rapatkan Kertas</span>
                     </button>
 
                     <!-- Pusatkan Tampilan (AutoCAD Zoom Extents) -->
                     <button
                         @click="zoomToFit"
-                        class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-colors cursor-pointer"
+                        class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-colors cursor-pointer shrink-0"
                         title="Pusatkan Gambar ke Layar (AutoCAD Zoom Extents / Z)"
                     >
                         <Focus class="w-3.5 h-3.5 text-sky-400" />
-                        <span class="hidden xl:inline">Pusatkan</span>
+                        <span class="hidden 2xl:inline">Pusatkan</span>
                     </button>
                 </template>
             </div>
 
             <!-- Header Actions -->
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <!-- Undo / Redo Buttons -->
-                <div class="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5">
+                <div class="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5 shrink-0">
                     <button
                         @click="undo"
                         :disabled="historyIndex <= 0"
@@ -2502,7 +2656,7 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Copy / Paste / Duplicate Button Group -->
-                <div v-if="canEdit" class="hidden md:flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5">
+                <div v-if="canEdit" class="hidden md:flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5 shrink-0">
                     <button
                         @click="copySelected"
                         class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
@@ -2530,7 +2684,7 @@ onUnmounted(() => {
                 <button
                     @click="showLayerPanel = !showLayerPanel"
                     :class="[
-                        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer',
+                        'inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer shrink-0',
                         showLayerPanel
                             ? 'bg-violet-600/20 text-violet-300 border-violet-500/40'
                             : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
@@ -2538,13 +2692,13 @@ onUnmounted(() => {
                     title="Buka Panel Layer Arsitektur"
                 >
                     <Layers class="w-3.5 h-3.5" />
-                    <span>Layer</span>
+                    <span class="hidden sm:inline">Layer</span>
                 </button>
 
                 <!-- Help Button -->
                 <button
                     @click="showHelpModal = true"
-                    class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                    class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
                     title="Petunjuk Hotkeys CAD"
                 >
                     <HelpCircle class="w-4 h-4" />
@@ -2556,7 +2710,7 @@ onUnmounted(() => {
                     @click="saveElements(false)"
                     :disabled="isSaving"
                     :class="[
-                        'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm',
+                        'inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm shrink-0',
                         saveSuccess
                             ? 'bg-emerald-600 text-white'
                             : isAutoSaving
@@ -2573,27 +2727,27 @@ onUnmounted(() => {
                 <!-- Export DXF (AutoCAD) -->
                 <a
                     :href="`/drawings/${sheet.id}/export-dxf`"
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors"
+                    class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors shrink-0"
                     title="Export file AutoCAD .DXF"
                 >
                     <FileCode class="w-3.5 h-3.5 text-amber-400" />
-                    <span>AutoCAD DXF</span>
+                    <span class="hidden sm:inline">DXF</span>
                 </a>
 
                 <!-- Export SVG -->
                 <a
                     :href="`/drawings/${sheet.id}/export-svg`"
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors"
+                    class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors shrink-0"
                     title="Export format Vektor .SVG"
                 >
                     <Download class="w-3.5 h-3.5 text-sky-400" />
-                    <span>SVG</span>
+                    <span class="hidden sm:inline">SVG</span>
                 </a>
 
                 <!-- Export PNG Image -->
                 <button
                     @click="exportPng"
-                    class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                    class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
                     title="Simpan sebagai Gambar PNG"
                 >
                     <Download class="w-4 h-4" />
@@ -3104,6 +3258,14 @@ onUnmounted(() => {
                         <span class="text-emerald-400 font-bold">H atau Spasi + Drag</span>
                     </div>
                     <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-2">
+                        <span class="text-slate-400">Scroll Layar Y (Atas / Bawah)</span>
+                        <span class="text-violet-400 font-bold">Ctrl + Scroll Mouse</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-2">
+                        <span class="text-slate-400">Scroll Layar X (Kiri / Kanan)</span>
+                        <span class="text-violet-400 font-bold">Shift + Scroll Mouse</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-2">
                         <span class="text-slate-400">Zoom Presisi Kursor</span>
                         <span class="text-violet-400 font-bold">Roda Mouse (Scroll)</span>
                     </div>
@@ -3117,6 +3279,153 @@ onUnmounted(() => {
                         Tutup Panduan
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <!-- MODAL BUAT LEMBAR KERJA / KERTAS BARU LANGSUNG DARI EDITOR -->
+        <div v-if="showNewSheetModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div class="bg-slate-950 w-full max-w-md rounded-3xl border border-white/10 p-6 shadow-2xl space-y-4 text-slate-100">
+                <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30">
+                            <Plus class="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-white">Buat Lembar Kerja / Kertas Baru</h3>
+                            <p class="text-[11px] text-slate-400">Proyek: {{ project.title }}</p>
+                        </div>
+                    </div>
+                    <button @click="showNewSheetModal = false" class="text-slate-400 hover:text-white p-1">✕</button>
+                </div>
+
+                <form @submit.prevent="submitNewSheet" class="space-y-3.5">
+                    <!-- Judul Lembar Kerja -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">
+                            Judul / Nama Ruangan
+                        </label>
+                        <input
+                            v-model="newSheetForm.title"
+                            type="text"
+                            required
+                            placeholder="Contoh: Denah Lantai 2, Kamar Utama, R. Santai"
+                            class="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                            autofocus
+                        />
+                    </div>
+
+                    <!-- Tipe Gambar -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">
+                            Tipe Gambar
+                        </label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button
+                                type="button"
+                                v-for="t in [
+                                    { key: 'plan', label: 'Denah' },
+                                    { key: 'elevation', label: 'Tampak' },
+                                    { key: 'section', label: 'Potongan' },
+                                ]"
+                                :key="t.key"
+                                @click="newSheetForm.type = t.key as any"
+                                :class="[
+                                    'py-1.5 px-2 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer',
+                                    newSheetForm.type === t.key
+                                        ? 'bg-violet-600/30 text-violet-300 border-violet-500 font-semibold'
+                                        : 'bg-white/5 text-slate-400 border-white/10 hover:text-white',
+                                ]"
+                            >
+                                {{ t.label }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Skala & Ukuran Kertas -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">
+                                Skala
+                            </label>
+                            <select
+                                v-model="newSheetForm.scale"
+                                class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-400 cursor-pointer"
+                            >
+                                <option value="1:50">1:50 (Detail)</option>
+                                <option value="1:100">1:100 (Standar)</option>
+                                <option value="1:200">1:200 (Site)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">
+                                Ukuran Kertas
+                            </label>
+                            <select
+                                v-model="newSheetForm.paper_size"
+                                class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-400 cursor-pointer"
+                            >
+                                <option value="A0">A0</option>
+                                <option value="A1">A1</option>
+                                <option value="A2">A2</option>
+                                <option value="A3">A3</option>
+                                <option value="A4">A4</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Orientasi Kertas -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">
+                            Orientasi Kertas
+                        </label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                @click="newSheetForm.orientation = 'landscape'"
+                                :class="[
+                                    'py-1.5 px-3 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer',
+                                    newSheetForm.orientation === 'landscape'
+                                        ? 'bg-violet-600/30 text-violet-300 border-violet-500 font-semibold'
+                                        : 'bg-white/5 text-slate-400 border-white/10 hover:text-white',
+                                ]"
+                            >
+                                Landscape (Mendatar)
+                            </button>
+                            <button
+                                type="button"
+                                @click="newSheetForm.orientation = 'portrait'"
+                                :class="[
+                                    'py-1.5 px-3 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer',
+                                    newSheetForm.orientation === 'portrait'
+                                        ? 'bg-violet-600/30 text-violet-300 border-violet-500 font-semibold'
+                                        : 'bg-white/5 text-slate-400 border-white/10 hover:text-white',
+                                ]"
+                            >
+                                Portrait (Tegak)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                        <button
+                            type="button"
+                            @click="showNewSheetModal = false"
+                            class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            type="submit"
+                            :disabled="isCreatingSheet"
+                            class="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white transition-all cursor-pointer disabled:opacity-50 shadow-md shadow-violet-600/30"
+                        >
+                            <Loader2 v-if="isCreatingSheet" class="w-3.5 h-3.5 animate-spin" />
+                            <Plus v-else class="w-3.5 h-3.5" />
+                            <span>{{ isCreatingSheet ? 'Membuat...' : 'Buat & Buka Kertas' }}</span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
