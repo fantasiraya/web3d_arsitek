@@ -178,10 +178,14 @@ test('enterprise user can export drawing sheet to DXF and SVG', function () {
     $dxfResponse->assertOk();
     $dxfResponse->assertHeader('Content-Type', 'application/dxf');
 
-    // 2. Export SVG
-    $svgResponse = $this->actingAs($enterpriseUser)->post(route('drawings.export-svg', $sheet->id));
-    $svgResponse->assertOk();
-    $svgResponse->assertHeader('Content-Type', 'image/svg+xml');
+    // 2. Export SVG (Supports both GET download link and POST)
+    $svgGetResponse = $this->actingAs($enterpriseUser)->get(route('drawings.export-svg', $sheet->id));
+    $svgGetResponse->assertOk();
+    $svgGetResponse->assertHeader('Content-Type', 'image/svg+xml');
+
+    $svgPostResponse = $this->actingAs($enterpriseUser)->post(route('drawings.export-svg', $sheet->id));
+    $svgPostResponse->assertOk();
+    $svgPostResponse->assertHeader('Content-Type', 'image/svg+xml');
 });
 
 test('owner can delete drawing sheet and non-owner cannot delete it', function () {

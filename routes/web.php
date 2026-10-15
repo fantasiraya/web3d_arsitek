@@ -175,7 +175,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/drawings/{sheet}', [DrawingSheetController::class, 'destroy'])->name('drawings.destroy');
     Route::post('/drawings/{sheet}/sync', [DrawingElementController::class, 'sync'])->name('drawings.sync');
     Route::get('/drawings/{sheet}/export-dxf', [DrawingSheetController::class, 'exportDxf'])->name('drawings.export-dxf');
-    Route::post('/drawings/{sheet}/export-svg', [DrawingSheetController::class, 'exportSvg'])->name('drawings.export-svg');
+    Route::match(['get', 'post'], '/drawings/{sheet}/export-svg', [DrawingSheetController::class, 'exportSvg'])->name('drawings.export-svg');
 });
 
 // ── Chat realtime routes ──

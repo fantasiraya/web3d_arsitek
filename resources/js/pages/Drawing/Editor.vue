@@ -50,6 +50,8 @@ import {
     ChevronRight,
     ChevronLeft,
     RotateCcw,
+    Printer,
+    FileText,
 } from '@lucide/vue';
 
 interface SheetData {
@@ -319,8 +321,10 @@ const isAutoSaving = ref(false);
 const selectedNodeId = ref<string | null>(null);
 const selectedElementData = ref<Record<string, any> | null>(null);
 
-// Pan state with spacebar
+// Pan state with spacebar & modifier keys for multi-select and clone-drag
 const isSpacePressed = ref(false);
+const isCtrlHeld = ref(false);
+const isAltHeld = ref(false);
 
 // Layer visibility manager
 const layersVisibility = ref({
@@ -1884,8 +1888,10 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
 
     let groupStartPositions = new Map<Konva.Node, { x: number; y: number }>();
     let isMultiDragging = false;
+    let isGroupCloneDrag = false;
 
-    group.on('dragstart', () => {
+    group.on('dragstart', (e) => {
+        isGroupCloneDrag = Boolean(isCtrlHeld.value || isAltHeld.value || e.evt?.ctrlKey || e.evt?.altKey || e.evt?.metaKey);
         groupStartPositions.clear();
         isMultiDragging = Boolean(tr && tr.nodes().length > 1 && tr.nodes().includes(group));
         if (isMultiDragging && tr) {
@@ -1893,9 +1899,16 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 groupStartPositions.set(n, { x: n.x(), y: n.y() });
             });
         }
+        if (isGroupCloneDrag && stage) {
+            stage.container().style.cursor = 'copy';
+        }
     });
 
-    group.on('dragmove', () => {
+    group.on('dragmove', (e) => {
+        if (isCtrlHeld.value || isAltHeld.value || e.evt?.ctrlKey || e.evt?.altKey || e.evt?.metaKey) {
+            isGroupCloneDrag = true;
+            if (stage) stage.container().style.cursor = 'copy';
+        }
         if (isMultiDragging && tr) {
             const dx = group.x();
             const dy = group.y();
@@ -1912,25 +1925,82 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
         }
     });
 
-    group.on('dragend', () => {
+    group.on('dragend', (e) => {
         const totalDx = group.x();
         const totalDy = group.y();
+        const isClone = isGroupCloneDrag || isCtrlHeld.value || isAltHeld.value || e.evt?.ctrlKey || e.evt?.altKey || e.evt?.metaKey;
         if (totalDx === 0 && totalDy === 0) return;
 
-        // Terapkan akumulasi pergeseran ke seluruh elemen yang terpilih
-        if (isMultiDragging && tr) {
-            tr.nodes().forEach((n) => {
-                const f = elementList.value.find((x) => x.id === n.id());
-                if (f) applyOffsetToElement(f, totalDx, totalDy);
+        if (isClone) {
+            // Ctrl + Drag: Buat objek salinan di posisi baru, pertahankan posisi objek asli!
+            let itemsToClone: Array<{ id: string; type: string; data: Record<string, any> }> = [];
+            if (isMultiDragging && tr) {
+                const ids = new Set(tr.nodes().map((n) => n.id()));
+                itemsToClone = elementList.value.filter((x) => ids.has(x.id));
+            } else {
+                const found = elementList.value.find((x) => x.id === el.id);
+                if (found) itemsToClone = [found];
+            }
+
+            const newElements: Array<{ id: string; type: string; data: Record<string, any>; sort_order: number }> = [];
+            itemsToClone.forEach((item) => {
+                const newId = 'el_' + Math.random().toString(36).substring(2, 9);
+                const clonedData = JSON.parse(JSON.stringify(item.data));
+                const newItem = {
+                    id: newId,
+                    type: item.type,
+                    data: clonedData,
+                    sort_order: elementList.value.length + newElements.length,
+                };
+                applyOffsetToElement(newItem, totalDx, totalDy);
+                newElements.push(newItem);
+                elementList.value.push(newItem);
             });
+
+            restoreFromState(elementList.value, true);
+
+            if (tr && newElements.length > 0) {
+                const newIds = new Set(newElements.map((x) => x.id));
+                const newNodes = mainLayer!.getChildren((node) => newIds.has(node.id())) as Konva.Group[];
+                tr.nodes(newNodes);
+                tr.moveToTop();
+                if (newNodes.length === 1) {
+                    selectedNodeId.value = newNodes[0].id();
+                    const found = elementList.value.find((x) => x.id === newNodes[0].id());
+                    selectedElementData.value = found ? { ...found.data, type: found.type } : null;
+                } else {
+                    selectedNodeId.value = 'multi';
+                    selectedElementData.value = {
+                        type: `${newNodes.length} Objek Disalin (Ctrl+Drag)`,
+                        count: newNodes.length,
+                    };
+                }
+                updateSelectionOverlay();
+            }
+
+            pushHistory();
+            triggerAutoSaveDebounced();
+            toast.success(`${newElements.length} objek berhasil disalin & digeser (Ctrl+Drag)!`);
         } else {
-            const found = elementList.value.find((x) => x.id === el.id);
-            if (found) applyOffsetToElement(found, totalDx, totalDy);
+            if (isMultiDragging && tr) {
+                tr.nodes().forEach((n) => {
+                    const f = elementList.value.find((x) => x.id === n.id());
+                    if (f) applyOffsetToElement(f, totalDx, totalDy);
+                });
+            } else {
+                const found = elementList.value.find((x) => x.id === el.id);
+                if (found) applyOffsetToElement(found, totalDx, totalDy);
+            }
+
+            restoreFromState(elementList.value, true);
+            pushHistory();
+            triggerAutoSaveDebounced();
         }
 
-        restoreFromState(elementList.value, true);
-        pushHistory();
-        triggerAutoSaveDebounced();
+        isGroupCloneDrag = false;
+        if (stage && containerRef.value) {
+            containerRef.value.style.cursor = activeTool.value === 'select' ? 'default' : 'crosshair';
+        }
     });
 
     return group;
@@ -1991,7 +2061,10 @@ function initCanvas() {
         }
     });
 
-    selectionOverlay.on('dragstart', () => {
+    let isOverlayCloneDrag = false;
+
+    selectionOverlay.on('dragstart', (e) => {
+        isOverlayCloneDrag = Boolean(isCtrlHeld.value || isAltHeld.value || e.evt?.ctrlKey || e.evt?.altKey || e.evt?.metaKey);
         prevOverlayPos = { x: selectionOverlay!.x(), y: selectionOverlay!.y() };
         totalOverlayDx = 0;
         totalOverlayDy = 0;
@@ -2001,9 +2074,16 @@ function initCanvas() {
                 overlayStartNodePositions.set(n, { x: n.x(), y: n.y() });
             });
         }
+        if (isOverlayCloneDrag && stage) {
+            stage.container().style.cursor = 'copy';
+        }
     });
 
-    selectionOverlay.on('dragmove', () => {
+    selectionOverlay.on('dragmove', (e) => {
+        if (isCtrlHeld.value || isAltHeld.value || e.evt?.ctrlKey || e.evt?.altKey || e.evt?.metaKey) {
+            isOverlayCloneDrag = true;
+            if (stage) stage.container().style.cursor = 'copy';
+        }
         const curX = selectionOverlay!.x();
         const curY = selectionOverlay!.y();
         const dx = curX - prevOverlayPos.x;
@@ -2025,19 +2105,70 @@ function initCanvas() {
         }
     });
 
-    selectionOverlay.on('dragend', () => {
+    selectionOverlay.on('dragend', (e) => {
+        const isClone = isOverlayCloneDrag || isCtrlHeld.value || isAltHeld.value || e.evt?.ctrlKey || e.evt?.altKey || e.evt?.metaKey;
         if (totalOverlayDx !== 0 || totalOverlayDy !== 0) {
-            if (tr && tr.nodes().length > 0) {
-                tr.nodes().forEach((n) => {
-                    const f = elementList.value.find((x) => x.id === n.id());
-                    if (f) applyOffsetToElement(f, totalOverlayDx, totalOverlayDy);
+            if (isClone && tr && tr.nodes().length > 0) {
+                // Ctrl + Drag: Salin dan tempel objek baru di posisi baru, pertahankan objek lama!
+                const selectedIds = new Set(tr.nodes().map((n) => n.id()));
+                const itemsToClone = elementList.value.filter((el) => selectedIds.has(el.id));
+                const newElements: Array<{ id: string; type: string; data: Record<string, any>; sort_order: number }> = [];
+
+                itemsToClone.forEach((item) => {
+                    const newId = 'el_' + Math.random().toString(36).substring(2, 9);
+                    const clonedData = JSON.parse(JSON.stringify(item.data));
+                    const newItem = {
+                        id: newId,
+                        type: item.type,
+                        data: clonedData,
+                        sort_order: elementList.value.length + newElements.length,
+                    };
+                    applyOffsetToElement(newItem, totalOverlayDx, totalOverlayDy);
+                    newElements.push(newItem);
+                    elementList.value.push(newItem);
                 });
+
+                restoreFromState(elementList.value, true);
+
+                if (tr && newElements.length > 0) {
+                    const newIds = new Set(newElements.map((x) => x.id));
+                    const newNodes = mainLayer!.getChildren((node) => newIds.has(node.id())) as Konva.Group[];
+                    tr.nodes(newNodes);
+                    tr.moveToTop();
+                    if (newNodes.length === 1) {
+                        selectedNodeId.value = newNodes[0].id();
+                        const found = elementList.value.find((x) => x.id === newNodes[0].id());
+                        selectedElementData.value = found ? { ...found.data, type: found.type } : null;
+                    } else {
+                        selectedNodeId.value = 'multi';
+                        selectedElementData.value = {
+                            type: `${newNodes.length} Objek Disalin (Ctrl+Drag)`,
+                            count: newNodes.length,
+                        };
+                    }
+                    updateSelectionOverlay();
+                }
+
+                pushHistory();
+                triggerAutoSaveDebounced();
+                toast.success(`${newElements.length} objek berhasil disalin & digeser (Ctrl+Drag)!`);
+            } else {
+                if (tr && tr.nodes().length > 0) {
+                    tr.nodes().forEach((n) => {
+                        const f = elementList.value.find((x) => x.id === n.id());
+                        if (f) applyOffsetToElement(f, totalOverlayDx, totalOverlayDy);
+                    });
+                }
+                restoreFromState(elementList.value, true);
+                pushHistory();
+                triggerAutoSaveDebounced();
             }
-            restoreFromState(elementList.value, true);
-            pushHistory();
-            triggerAutoSaveDebounced();
         } else {
             updateSelectionOverlay();
+        }
+        isOverlayCloneDrag = false;
+        if (stage && containerRef.value) {
+            containerRef.value.style.cursor = activeTool.value === 'select' ? 'default' : 'crosshair';
         }
     });
 
@@ -2226,6 +2357,20 @@ let startX = 0;
 let startY = 0;
 let previewShape: Konva.Line | Konva.Rect | null = null;
 
+function getElementGroupFromTarget(target: Konva.Node | null): Konva.Group | null {
+    if (!target || target === stage || target === selectionOverlay || target === tr) return null;
+    if (target.getLayer() !== mainLayer) return null;
+
+    let curr: Konva.Node | null = target;
+    while (curr && curr.parent && curr.parent !== mainLayer) {
+        curr = curr.parent;
+    }
+    if (curr && curr instanceof Konva.Group && curr !== (tr as any) && curr !== selectionOverlay) {
+        return curr;
+    }
+    return null;
+}
+
 function setupDrawingInteractions() {
     if (!stage || !tempLayer || !mainLayer) return;
 
@@ -2247,11 +2392,11 @@ function setupDrawingInteractions() {
             const clickedOnTransformer = e.target.getParent()?.className === 'Transformer' || e.target.className === 'Transformer';
             if (clickedOnTransformer) return;
 
-            const clickedShape = e.target;
-            const parentGroup = (clickedShape.findAncestor('.Group') || clickedShape) as Konva.Group;
+            const parentGroup = getElementGroupFromTarget(e.target);
+            const isMultiKey = Boolean(e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey || isCtrlHeld.value);
 
-            if (parentGroup && parentGroup !== stage && parentGroup.getLayer() === mainLayer && parentGroup !== (tr as any)) {
-                if (e.evt.shiftKey || e.evt.ctrlKey) {
+            if (parentGroup) {
+                if (isMultiKey) {
                     const currentNodes = [...(tr?.nodes() || [])];
                     const idx = currentNodes.indexOf(parentGroup);
                     if (idx >= 0) {
@@ -2259,6 +2404,7 @@ function setupDrawingInteractions() {
                     } else {
                         currentNodes.push(parentGroup);
                     }
+                    currentNodes.forEach((n) => n.draggable(props.canEdit));
                     tr?.nodes(currentNodes);
                     tr?.moveToTop();
                     if (currentNodes.length === 1) {
@@ -2283,6 +2429,7 @@ function setupDrawingInteractions() {
                         return;
                     } else {
                         selectedNodeId.value = parentGroup.id();
+                        parentGroup.draggable(props.canEdit);
                         tr?.nodes([parentGroup]);
                         tr?.moveToTop();
                         const found = elementList.value.find((x) => x.id === parentGroup.id());
@@ -2297,7 +2444,7 @@ function setupDrawingInteractions() {
             // Jika objek sedang terblok dan user mengklik di dalam area bounding box seleksi,
             // pertahankan blok seleksi agar tidak hilang dan dapat langsung di-drag!
             const clickPos = stage.getPointerPosition();
-            if (clickPos && tr && tr.nodes().length > 0 && !e.evt.shiftKey && !e.evt.ctrlKey) {
+            if (clickPos && tr && tr.nodes().length > 0 && !isMultiKey) {
                 const trRect = tr.getClientRect();
                 if (
                     clickPos.x >= trRect.x &&
@@ -2310,7 +2457,7 @@ function setupDrawingInteractions() {
             }
 
             // Klik di area luar: Mulai seleksi kotak Marquee khas AutoCAD
-            if (!e.evt.shiftKey && !e.evt.ctrlKey) {
+            if (!isMultiKey) {
                 selectedNodeId.value = null;
                 selectedElementData.value = null;
                 tr?.nodes([]);
@@ -2344,9 +2491,8 @@ function setupDrawingInteractions() {
 
         // Eraser Tool
         if (activeTool.value === 'eraser') {
-            const clickedShape = e.target;
-            const parentGroup = clickedShape.findAncestor('.Group') || clickedShape;
-            if (parentGroup && parentGroup !== stage && parentGroup.getLayer() === mainLayer) {
+            const parentGroup = getElementGroupFromTarget(e.target);
+            if (parentGroup) {
                 const id = parentGroup.id();
                 parentGroup.destroy();
                 tr?.nodes([]);
@@ -2587,6 +2733,13 @@ function setupZoomAndPanEvents() {
 
 // Keyboard shortcuts listener
 function handleKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Control' || e.ctrlKey || e.metaKey) {
+        isCtrlHeld.value = true;
+    }
+    if (e.key === 'Alt' || e.altKey) {
+        isAltHeld.value = true;
+    }
+
     // If typing in input/textarea, ignore shortcuts
     const activeEl = document.activeElement;
     if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
@@ -2646,21 +2799,21 @@ function handleKeyDown(e: KeyboardEvent) {
     }
 
     // Copy (Ctrl+C / Cmd+C) - Salin per objek atau banyak objek
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'c' || e.code === 'KeyC')) {
         e.preventDefault();
         copySelected();
         return;
     }
 
     // Paste (Ctrl+V / Cmd+V) - Tempel objek dari clipboard
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'v' || e.code === 'KeyV')) {
         e.preventDefault();
         pasteClipboard();
         return;
     }
 
     // Duplicate (Ctrl+D / Cmd+D) - Duplikat cepat objek
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'd' || e.code === 'KeyD')) {
         e.preventDefault();
         duplicateSelected();
         return;
@@ -2713,6 +2866,12 @@ function handleKeyUp(e: KeyboardEvent) {
             stage.draggable(false);
             containerRef.value.style.cursor = activeTool.value === 'pan' ? 'grab' : (activeTool.value === 'select' ? 'default' : 'crosshair');
         }
+    }
+    if (e.key === 'Control' || (!e.ctrlKey && !e.metaKey)) {
+        isCtrlHeld.value = false;
+    }
+    if (e.key === 'Alt' || !e.altKey) {
+        isAltHeld.value = false;
     }
 }
 
@@ -2830,16 +2989,64 @@ function deleteSelected() {
 
 function exportPng() {
     if (!stage) return;
+    showExportMenu.value = false;
+    const oldNodes = tr?.nodes() || [];
     tr?.nodes([]);
+    if (selectionOverlay) selectionOverlay.visible(false);
     stage.batchDraw();
 
-    const dataURL = stage.toDataURL({ pixelRatio: 2 });
+    try {
+        const dataURL = stage.toDataURL({ pixelRatio: 2 });
+        const link = document.createElement('a');
+        link.download = `${props.sheet.title || 'gambar_kerja'}.png`;
+        link.href = dataURL;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success('Gambar PNG resolusi tinggi berhasil diunduh!');
+    } catch (err) {
+        console.error('Export PNG failed:', err);
+        toast.error('Gagal mengunduh gambar PNG.');
+    } finally {
+        if (oldNodes.length > 0 && tr) {
+            tr.nodes(oldNodes);
+            updateSelectionOverlay();
+        }
+        stage.batchDraw();
+    }
+}
+
+async function exportWithSave(type: 'dxf' | 'svg') {
+    showExportMenu.value = false;
+    toast.info(`Mempersiapkan download file ${type.toUpperCase()}...`);
+    try {
+        await saveElements(true);
+    } catch {}
+    const url = type === 'dxf' ? `/drawings/${props.sheet.id}/export-dxf` : `/drawings/${props.sheet.id}/export-svg`;
     const link = document.createElement('a');
-    link.download = `${props.sheet.title}.png`;
-    link.href = dataURL;
+    link.href = url;
+    link.download = '';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    toast.success(`File ${type.toUpperCase()} berhasil diunduh!`);
+}
+
+function exportPdfOrPrint() {
+    showExportMenu.value = false;
+    const oldNodes = tr?.nodes() || [];
+    tr?.nodes([]);
+    if (selectionOverlay) selectionOverlay.visible(false);
+    stage?.batchDraw();
+
+    setTimeout(() => {
+        window.print();
+        if (oldNodes.length > 0 && tr) {
+            tr.nodes(oldNodes);
+            updateSelectionOverlay();
+        }
+        stage?.batchDraw();
+    }, 200);
 }
 
 function zoom(direction: 'in' | 'out' | 'reset') {
@@ -3351,22 +3558,23 @@ onUnmounted(() => {
 
                         <div
                             v-if="showExportMenu"
-                            class="absolute right-0 top-full mt-1.5 w-52 bg-slate-950 border border-white/15 rounded-2xl shadow-2xl p-1.5 z-50 flex flex-col gap-1 text-xs text-slate-200 backdrop-blur-xl"
+                            class="absolute right-0 top-full mt-1.5 w-56 bg-slate-950 border border-white/15 rounded-2xl shadow-2xl p-1.5 z-50 flex flex-col gap-1 text-xs text-slate-200 backdrop-blur-xl"
                         >
-                            <a
-                                :href="`/drawings/${sheet.id}/export-dxf`"
-                                class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors"
-                                title="Download file AutoCAD .DXF"
+                            <button
+                                @click="exportWithSave('dxf')"
+                                class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left w-full cursor-pointer"
+                                title="Download file AutoCAD .DXF standar"
                             >
                                 <FileCode class="w-4 h-4 text-amber-400 shrink-0" />
                                 <div>
                                     <div class="font-semibold text-white">AutoCAD (.DXF)</div>
                                     <div class="text-[10px] text-slate-400">Kompatibel AutoCAD / CAD 2D</div>
                                 </div>
-                            </a>
-                            <a
-                                :href="`/drawings/${sheet.id}/export-svg`"
-                                class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors"
+                            </button>
+
+                            <button
+                                @click="exportWithSave('svg')"
+                                class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left w-full cursor-pointer"
                                 title="Download format vektor .SVG"
                             >
                                 <Download class="w-4 h-4 text-sky-400 shrink-0" />
@@ -3374,16 +3582,31 @@ onUnmounted(() => {
                                     <div class="font-semibold text-white">Vektor (.SVG)</div>
                                     <div class="text-[10px] text-slate-400">Grafik vektor resolusi tajam</div>
                                 </div>
-                            </a>
+                            </button>
+
                             <button
-                                @click="exportPng(); showExportMenu = false"
+                                @click="exportPng"
                                 class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left w-full cursor-pointer"
-                                title="Download sebagai gambar PNG"
+                                title="Download sebagai gambar PNG resolusi tinggi"
                             >
                                 <Sparkles class="w-4 h-4 text-emerald-400 shrink-0" />
                                 <div>
                                     <div class="font-semibold text-white">Gambar (.PNG)</div>
-                                    <div class="text-[10px] text-slate-400">Snapshot gambar denah</div>
+                                    <div class="text-[10px] text-slate-400">Snapshot resolusi tinggi 2×</div>
+                                </div>
+                            </button>
+
+                            <div class="h-px bg-white/10 my-0.5"></div>
+
+                            <button
+                                @click="exportPdfOrPrint"
+                                class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left w-full cursor-pointer"
+                                title="Cetak atau Simpan sebagai PDF"
+                            >
+                                <Printer class="w-4 h-4 text-indigo-400 shrink-0" />
+                                <div>
+                                    <div class="font-semibold text-white">Cetak / PDF</div>
+                                    <div class="text-[10px] text-slate-400">Simpan ke PDF via Print Dialog</div>
                                 </div>
                             </button>
                         </div>
@@ -3970,9 +4193,18 @@ onUnmounted(() => {
                             <div class="text-[11px] text-slate-400 space-y-0.5 mt-1">
                                 <div>• <strong class="text-emerald-400">Kanan ke Kiri (Hijau Putus-putus):</strong> Memilih semua garis/objek yang tersentuh kotak (Crossing).</div>
                                 <div>• <strong class="text-sky-400">Kiri ke Kanan (Biru Solid):</strong> Memilih hanya garis/objek yang berada di dalam kotak (Window).</div>
-                                <div>• <strong class="text-violet-400">Shift + Klik:</strong> Menambah / mengurangi pilihan objek satu per satu.</div>
+                                <div>• <strong class="text-violet-400">Ctrl / Shift + Klik:</strong> Menambah / mengurangi pilihan multi-seleksi objek.</div>
+                                <div>• <strong class="text-emerald-400">Ctrl + Drag Objek:</strong> Salin dan gandakan objek langsung ke posisi baru (Copy & Drag).</div>
                                 <div>• <strong class="text-amber-400">Tarik Objek:</strong> Geser langsung di dalam area objek yang terpilih untuk memindahkan seluruhnya bersamaan.</div>
                             </div>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-1 sm:col-span-2 lg:col-span-3">
+                            <span class="text-slate-400">Salin & Gandakan Langsung (Clone Drag)</span>
+                            <span class="text-emerald-400 font-bold">Ctrl + Drag Objek</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-1 sm:col-span-2 lg:col-span-3">
+                            <span class="text-slate-400">Multi-Seleksi Tambah/Kurang</span>
+                            <span class="text-sky-400 font-bold">Ctrl + Klik Kiri</span>
                         </div>
                         <div class="p-2 rounded-xl bg-white/5 flex justify-between col-span-1 sm:col-span-2 lg:col-span-3">
                             <span class="text-slate-400">Scroll Layar Atas / Bawah</span>
