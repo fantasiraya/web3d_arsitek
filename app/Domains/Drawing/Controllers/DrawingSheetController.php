@@ -148,8 +148,9 @@ class DrawingSheetController extends Controller
     public function exportDxf(Request $request, DrawingSheet $sheet, ExportDxfAction $action): StreamedResponse
     {
         $user = $request->user();
+        $frameId = $request->query('frame_id');
 
-        return $action->execute($user, $sheet);
+        return $action->execute($user, $sheet, $frameId);
     }
 
     /**
@@ -159,8 +160,9 @@ class DrawingSheetController extends Controller
     {
         $user = $request->user();
         $rawSvg = $request->input('svg');
+        $frameId = $request->query('frame_id');
 
-        return $action->execute($user, $sheet, $rawSvg);
+        return $action->execute($user, $sheet, $rawSvg, $frameId);
     }
 }
 

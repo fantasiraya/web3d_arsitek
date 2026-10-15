@@ -16,14 +16,25 @@ class ExportDxfAction
     /**
      * Export DrawingSheet elements to standard AutoCAD DXF format (R12 ASCII).
      */
-    public function execute(User $user, DrawingSheet $sheet): StreamedResponse
+    public function execute(User $user, DrawingSheet $sheet, ?string $frameId = null): StreamedResponse
     {
         $this->accessService->authorizeView($user, $sheet->project, $sheet);
 
-        $elements = $sheet->elements()->get();
+        $elements = $sheet->elements()->orderBy('sort_order')->get();
 
-        $dxfContent = $this->buildDxfContent($sheet, $elements);
-        $filename = preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $sheet->title) . '.dxf';
+        $targetTitle = $sheet->title;
+        if ($frameId && $frameId !== 'main_frame') {
+            $frameEl = $elements->firstWhere('id', $frameId);
+            if ($frameEl && $frameEl->type === 'paper_frame') {
+                $fData = is_array($frameEl->data) ? $frameEl->data : json_decode($frameEl->data ?? '[]', true);
+                if (!empty($fData['title'])) {
+                    $targetTitle = $fData['title'];
+                }
+            }
+        }
+
+        $dxfContent = $this->buildDxfContent($sheet, $elements, $frameId);
+        $filename = preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $targetTitle) . '.dxf';
 
         return response()->streamDownload(function () use ($dxfContent) {
             echo $dxfContent;
@@ -36,7 +47,7 @@ class ExportDxfAction
     /**
      * Bangun string file DXF compliant AutoCAD R12 ASCII.
      */
-    protected function buildDxfContent(DrawingSheet $sheet, $elements): string
+    protected function buildDxfContent(DrawingSheet $sheet, $elements, ?string $frameId = null): string
     {
         $out = [];
 
@@ -54,17 +65,19 @@ class ExportDxfAction
         $out[] = "2\nTABLES";
         $out[] = "0\nTABLE";
         $out[] = "2\nLAYER";
-        $out[] = "70\n5";
+        $out[] = "70\n8";
 
         $layers = [
-            '0'          => 7, // White
-            'WALLS'      => 1, // Red
-            'DOORS'      => 3, // Green
-            'WINDOWS'    => 4, // Cyan
-            'STRUCTURE'  => 6, // Magenta
-            'DIMENSIONS' => 2, // Yellow
-            'TEXT'       => 7, // White
-            'FURNITURE'  => 5, // Blue
+            '0'           => 7, // White (Default)
+            'BORDER'      => 7, // White (Border Kertas)
+            'TITLE_BLOCK' => 7, // White (Kop Gambar)
+            'WALLS'       => 1, // Red (Dinding)
+            'DOORS'       => 3, // Green (Pintu)
+            'WINDOWS'     => 4, // Cyan (Jendela)
+            'STRUCTURE'   => 6, // Magenta (Kolom & Tangga)
+            'DIMENSIONS'  => 2, // Yellow (Dimensi Ukuran)
+            'TEXT'        => 7, // White (Teks & Label)
+            'FURNITURE'   => 5, // Blue (Furnitur)
         ];
 
         foreach ($layers as $layerName => $color) {
@@ -82,180 +95,243 @@ class ExportDxfAction
         $out[] = "0\nSECTION";
         $out[] = "2\nENTITIES";
 
+        $scaleFactor = 0.01; // Canvas pixels to meters
+        $paperX = 60;
+        $paperY = 60;
+        $rawWidth = $sheet->width ?: ($sheet->orientation === 'portrait' ? 891 : 1260);
+        $rawHeight = $sheet->height ?: ($sheet->orientation === 'portrait' ? 1260 : 891);
+        $sheetTitle = $sheet->title;
+
+        if ($frameId && $frameId !== 'main_frame') {
+            $frameEl = $elements->firstWhere('id', $frameId);
+            if ($frameEl && $frameEl->type === 'paper_frame') {
+                $fData = is_array($frameEl->data) ? $frameEl->data : json_decode($frameEl->data ?? '[]', true);
+                $paperX = (float) ($fData['x'] ?? 60);
+                $paperY = (float) ($fData['y'] ?? 60);
+                $rawWidth = (float) ($fData['width'] ?? $rawWidth);
+                $rawHeight = (float) ($fData['height'] ?? $rawHeight);
+                if (!empty($fData['title'])) {
+                    $sheetTitle = $fData['title'];
+                }
+            }
+        }
+
+        $width = $rawWidth * $scaleFactor;
+        $height = $rawHeight * $scaleFactor;
+
+        // 1. Gambar Border Kertas & Margin Frame
+        // Border Luar Kertas (0,0) ke (width, height)
+        $this->addDxfRect($out, 'BORDER', 0, 0, $width, -$height);
+
+        // Margin Frame (20px = 0.20m)
+        $margin = 20 * $scaleFactor;
+        $this->addDxfRect($out, 'BORDER', $margin, -$margin, $width - $margin * 2, -($height - $margin * 2));
+
+        // Kop Title Block di Pojok Kanan Bawah
+        $kopW = min(320 * $scaleFactor, $width - 0.6);
+        $kopH = 80 * $scaleFactor;
+        $kopX = $width - $kopW - $margin;
+        $kopY = -($height - $kopH - $margin);
+
+        $this->addDxfRect($out, 'TITLE_BLOCK', $kopX, $kopY + $kopH, $kopW, -$kopH);
+        $this->addDxfText($out, 'TITLE_BLOCK', $kopX + 0.1, $kopY + $kopH - 0.18, 0.12, 'STUDIO ARSITEKTUR & DESAIN');
+        $this->addDxfText($out, 'TITLE_BLOCK', $kopX + 0.1, $kopY + $kopH - 0.36, 0.15, $sheetTitle);
+        $this->addDxfText($out, 'TITLE_BLOCK', $kopX + 0.1, $kopY + $kopH - 0.54, 0.11, 'Proyek: ' . ($sheet->project->title ?? ''));
+        $this->addDxfText($out, 'TITLE_BLOCK', $kopX + 0.1, $kopY + $kopH - 0.70, 0.09, 'Skala: ' . $sheet->scale . ' | ' . ($sheet->paper_size ?? 'A3'));
+
+        // 2. Gambar Seluruh Elemen Gambar Kerja
         foreach ($elements as $el) {
+            if ($el->type === 'paper_frame') {
+                continue;
+            }
+
             $data = is_array($el->data) ? $el->data : json_decode($el->data ?? '[]', true);
             $type = $el->type;
 
-            // Invert Y coordinate because CAD origin (0,0) is bottom-left, while Canvas is top-left
-            $scaleFactor = 0.01; // Canvas pixels to meters
-
             switch ($type) {
-                case 'wall':
-                case 'line':
-                    $x1 = ($data['x1'] ?? $data['x'] ?? 0) * $scaleFactor;
-                    $y1 = -($data['y1'] ?? $data['y'] ?? 0) * $scaleFactor;
-                    $x2 = ($data['x2'] ?? ($data['x'] ?? 0) + ($data['width'] ?? 0)) * $scaleFactor;
-                    $y2 = -($data['y2'] ?? ($data['y'] ?? 0) + ($data['height'] ?? 0)) * $scaleFactor;
-                    $layer = $type === 'wall' ? 'WALLS' : '0';
+                case 'wall': {
+                    $x1 = (($data['x1'] ?? $data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y1 = -(($data['y1'] ?? $data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $x2 = ((($data['x2'] ?? ($data['x'] ?? 0) + ($data['width'] ?? 0))) - $paperX) * $scaleFactor;
+                    $y2 = -(($data['y2'] ?? ($data['y'] ?? 0) + ($data['height'] ?? 0)) - $paperY) * $scaleFactor;
+                    $thickness = (float) ($data['thickness'] ?? 12) * $scaleFactor;
 
-                    $out[] = "0\nLINE";
-                    $out[] = "8\n{$layer}";
-                    $out[] = "10\n{$x1}";
-                    $out[] = "20\n{$y1}";
-                    $out[] = "30\n0.0";
-                    $out[] = "11\n{$x2}";
-                    $out[] = "21\n{$y2}";
-                    $out[] = "31\n0.0";
+                    // Hitung vektor normal untuk dinding ganda sejajar
+                    $dx = $x2 - $x1;
+                    $dy = $y2 - $y1;
+                    $len = sqrt($dx * $dx + $dy * $dy);
+                    if ($len > 0.001) {
+                        $nx = (-$dy / $len) * ($thickness / 2);
+                        $ny = ($dx / $len) * ($thickness / 2);
+
+                        // Garis luar dinding kiri & kanan
+                        $this->addDxfLine($out, 'WALLS', $x1 + $nx, $y1 + $ny, $x2 + $nx, $y2 + $ny);
+                        $this->addDxfLine($out, 'WALLS', $x1 - $nx, $y1 - $ny, $x2 - $nx, $y2 - $ny);
+                        // Garis tutup ujung dinding
+                        $this->addDxfLine($out, 'WALLS', $x1 + $nx, $y1 + $ny, $x1 - $nx, $y1 - $ny);
+                        $this->addDxfLine($out, 'WALLS', $x2 + $nx, $y2 + $ny, $x2 - $nx, $y2 - $ny);
+                    }
+
+                    // Garis sumbu as tengah (Layer 0)
+                    $this->addDxfLine($out, '0', $x1, $y1, $x2, $y2);
                     break;
+                }
 
-                case 'column':
-                    $x = ($data['x'] ?? 0) * $scaleFactor;
-                    $y = -($data['y'] ?? 0) * $scaleFactor;
+                case 'line': {
+                    $x1 = (($data['x1'] ?? $data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y1 = -(($data['y1'] ?? $data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $x2 = ((($data['x2'] ?? ($data['x'] ?? 0) + ($data['width'] ?? 0))) - $paperX) * $scaleFactor;
+                    $y2 = -(($data['y2'] ?? ($data['y'] ?? 0) + ($data['height'] ?? 0)) - $paperY) * $scaleFactor;
+                    $this->addDxfLine($out, '0', $x1, $y1, $x2, $y2);
+                    break;
+                }
+
+                case 'column': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
                     $size = ($data['size'] ?? 30) * $scaleFactor;
 
-                    // Box + cross hatch lines
-                    $pts = [
-                        [$x, $y, $x + $size, $y],
-                        [$x + $size, $y, $x + $size, $y - $size],
-                        [$x + $size, $y - $size, $x, $y - $size],
-                        [$x, $y - $size, $x, $y],
-                        [$x, $y, $x + $size, $y - $size],
-                        [$x, $y - $size, $x + $size, $y],
-                    ];
-                    foreach ($pts as $pt) {
-                        $out[] = "0\nLINE";
-                        $out[] = "8\nSTRUCTURE";
-                        $out[] = "10\n{$pt[0]}";
-                        $out[] = "20\n{$pt[1]}";
-                        $out[] = "30\n0.0";
-                        $out[] = "11\n{$pt[2]}";
-                        $out[] = "21\n{$pt[3]}";
-                        $out[] = "31\n0.0";
+                    // Kotak kolom struktur
+                    $this->addDxfRect($out, 'STRUCTURE', $x, $y, $size, -$size);
+                    // Arsir silang beton
+                    $this->addDxfLine($out, 'STRUCTURE', $x, $y, $x + $size, $y - $size);
+                    $this->addDxfLine($out, 'STRUCTURE', $x, $y - $size, $x + $size, $y);
+                    break;
+                }
+
+                case 'door': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $size = ($data['size'] ?? 80) * $scaleFactor;
+
+                    // Kusen / daun pintu
+                    $this->addDxfLine($out, 'DOORS', $x, $y, $x, $y - $size);
+
+                    // Busur ayunan pintu (16-segmen polyline kurva)
+                    $steps = 16;
+                    for ($i = 0; $i < $steps; $i++) {
+                        $a1 = ($i / $steps) * (M_PI / 2);
+                        $a2 = (($i + 1) / $steps) * (M_PI / 2);
+
+                        $px1 = $x + $size * sin($a1);
+                        $py1 = ($y - $size) + $size * cos($a1);
+                        $px2 = $x + $size * sin($a2);
+                        $py2 = ($y - $size) + $size * cos($a2);
+
+                        $this->addDxfLine($out, 'DOORS', $px1, $py1, $px2, $py2);
                     }
                     break;
+                }
 
-                case 'stair':
-                    $x = ($data['x'] ?? 0) * $scaleFactor;
-                    $y = -($data['y'] ?? 0) * $scaleFactor;
+                case 'window': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $w = ($data['width'] ?? 100) * $scaleFactor;
+                    $h = ($data['height'] ?? 16) * $scaleFactor;
+
+                    // Kusen luar jendela
+                    $this->addDxfRect($out, 'WINDOWS', $x, $y, $w, -$h);
+                    // Garis kaca tengah
+                    $this->addDxfLine($out, 'WINDOWS', $x, $y - $h / 2, $x + $w, $y - $h / 2);
+                    break;
+                }
+
+                case 'stair': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
                     $w = ($data['width'] ?? 80) * $scaleFactor;
                     $h = ($data['height'] ?? 160) * $scaleFactor;
                     $steps = 8;
                     $stepH = $h / $steps;
 
-                    // Outline
-                    $out[] = "0\nLINE\n8\nSTRUCTURE\n10\n{$x}\n20\n{$y}\n30\n0.0\n11\n" . ($x + $w) . "\n21\n{$y}\n31\n0.0";
-                    $out[] = "0\nLINE\n8\nSTRUCTURE\n10\n" . ($x + $w) . "\n20\n{$y}\n30\n0.0\n11\n" . ($x + $w) . "\n21\n" . ($y - $h) . "\n31\n0.0";
-                    $out[] = "0\nLINE\n8\nSTRUCTURE\n10\n" . ($x + $w) . "\n20\n" . ($y - $h) . "\n30\n0.0\n11\n{$x}\n21\n" . ($y - $h) . "\n31\n0.0";
-                    $out[] = "0\nLINE\n8\nSTRUCTURE\n10\n{$x}\n20\n" . ($y - $h) . "\n30\n0.0\n11\n{$x}\n21\n{$y}\n31\n0.0";
-
-                    // Step lines
+                    // Outline tangga
+                    $this->addDxfRect($out, 'STRUCTURE', $x, $y, $w, -$h);
+                    // Anak tangga
                     for ($s = 1; $s < $steps; $s++) {
                         $sy = $y - ($s * $stepH);
-                        $out[] = "0\nLINE\n8\nSTRUCTURE\n10\n{$x}\n20\n{$sy}\n30\n0.0\n11\n" . ($x + $w) . "\n21\n{$sy}\n31\n0.0";
+                        $this->addDxfLine($out, 'STRUCTURE', $x, $sy, $x + $w, $sy);
                     }
+                    // Panah arah naik (UP)
+                    $arrowX = $x + $w / 2;
+                    $this->addDxfLine($out, 'STRUCTURE', $arrowX, $y - $h + 0.15, $arrowX, $y - 0.2);
+                    $this->addDxfLine($out, 'STRUCTURE', $arrowX, $y - 0.2, $arrowX - 0.05, $y - 0.3);
+                    $this->addDxfLine($out, 'STRUCTURE', $arrowX, $y - 0.2, $arrowX + 0.05, $y - 0.3);
+                    $this->addDxfText($out, 'TEXT', $arrowX - 0.08, $y - $h / 2, 0.1, 'UP');
                     break;
+                }
 
                 case 'toilet':
                 case 'bed':
-                case 'table':
-                    $x = ($data['x'] ?? 0) * $scaleFactor;
-                    $y = -($data['y'] ?? 0) * $scaleFactor;
+                case 'table': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
                     $w = ($data['width'] ?? 60) * $scaleFactor;
                     $h = ($data['height'] ?? 60) * $scaleFactor;
 
-                    $pts = [
-                        [$x, $y, $x + $w, $y],
-                        [$x + $w, $y, $x + $w, $y - $h],
-                        [$x + $w, $y - $h, $x, $y - $h],
-                        [$x, $y - $h, $x, $y],
-                    ];
-                    foreach ($pts as $pt) {
-                        $out[] = "0\nLINE";
-                        $out[] = "8\nFURNITURE";
-                        $out[] = "10\n{$pt[0]}";
-                        $out[] = "20\n{$pt[1]}";
-                        $out[] = "30\n0.0";
-                        $out[] = "11\n{$pt[2]}";
-                        $out[] = "21\n{$pt[3]}";
-                        $out[] = "31\n0.0";
+                    $this->addDxfRect($out, 'FURNITURE', $x, $y, $w, -$h);
+
+                    if ($type === 'bed') {
+                        // Bantal & lipatan selimut
+                        $this->addDxfLine($out, 'FURNITURE', $x, $y - 0.45, $x + $w, $y - 0.45);
+                    } elseif ($type === 'toilet') {
+                        // Tangki air
+                        $this->addDxfRect($out, 'FURNITURE', $x, $y, $w, -0.15);
                     }
                     break;
+                }
 
-                case 'rect':
-                    $x = ($data['x'] ?? 0) * $scaleFactor;
-                    $y = -($data['y'] ?? 0) * $scaleFactor;
+                case 'rect': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
                     $w = ($data['width'] ?? 100) * $scaleFactor;
                     $h = ($data['height'] ?? 100) * $scaleFactor;
+                    $this->addDxfRect($out, '0', $x, $y, $w, -$h);
+                    break;
+                }
 
-                    // 4 lines for rect
-                    $points = [
-                        [$x, $y, $x + $w, $y],
-                        [$x + $w, $y, $x + $w, $y - $h],
-                        [$x + $w, $y - $h, $x, $y - $h],
-                        [$x, $y - $h, $x, $y],
-                    ];
+                case 'dimension': {
+                    $x1 = (($data['x1'] ?? 0) - $paperX) * $scaleFactor;
+                    $y1 = -(($data['y1'] ?? 0) - $paperY) * $scaleFactor;
+                    $x2 = (($data['x2'] ?? 0) - $paperX) * $scaleFactor;
+                    $y2 = -(($data['y2'] ?? 0) - $paperY) * $scaleFactor;
 
-                    foreach ($points as $pt) {
-                        $out[] = "0\nLINE";
-                        $out[] = "8\n0";
-                        $out[] = "10\n{$pt[0]}";
-                        $out[] = "20\n{$pt[1]}";
-                        $out[] = "30\n0.0";
-                        $out[] = "11\n{$pt[2]}";
-                        $out[] = "21\n{$pt[3]}";
-                        $out[] = "31\n0.0";
+                    // Garis dimensi
+                    $this->addDxfLine($out, 'DIMENSIONS', $x1, $y1, $x2, $y2);
+
+                    // Garis centang arsitektur 45 derajat pada kedua ujung
+                    $tick = 0.04;
+                    $this->addDxfLine($out, 'DIMENSIONS', $x1 - $tick, $y1 - $tick, $x1 + $tick, $y1 + $tick);
+                    $this->addDxfLine($out, 'DIMENSIONS', $x2 - $tick, $y2 - $tick, $x2 + $tick, $y2 + $tick);
+
+                    // Teks ukuran (mm)
+                    $dx = ($x2 - $x1) / $scaleFactor;
+                    $dy = ($y2 - $y1) / $scaleFactor;
+                    $mm = round(sqrt($dx * $dx + $dy * $dy) * 10);
+                    $midX = ($x1 + $x2) / 2;
+                    $midY = (($y1 + $y2) / 2) + 0.05;
+                    $this->addDxfText($out, 'DIMENSIONS', $midX, $midY, 0.1, "{$mm} mm");
+                    break;
+                }
+
+                case 'room_label': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $rawText = $data['text'] ?? 'R. Tamu';
+                    $lines = explode("\n", $rawText);
+                    foreach ($lines as $i => $lineText) {
+                        $this->addDxfText($out, 'TEXT', $x, $y - ($i * 0.16), 0.12, $lineText);
                     }
                     break;
+                }
 
-                case 'door':
-                case 'window':
-                    $x = ($data['x'] ?? 0) * $scaleFactor;
-                    $y = -($data['y'] ?? 0) * $scaleFactor;
-                    $w = ($data['width'] ?? 80) * $scaleFactor;
-                    $h = ($data['height'] ?? 20) * $scaleFactor;
-                    $layer = $type === 'door' ? 'DOORS' : 'WINDOWS';
-
-                    $out[] = "0\nLINE";
-                    $out[] = "8\n{$layer}";
-                    $out[] = "10\n{$x}";
-                    $out[] = "20\n{$y}";
-                    $out[] = "30\n0.0";
-                    $out[] = "11\n" . ($x + $w);
-                    $out[] = "21\n" . ($y - $h);
-                    $out[] = "31\n0.0";
-                    break;
-
-                case 'text':
-                case 'room_label':
-                    $x = ($data['x'] ?? 0) * $scaleFactor;
-                    $y = -($data['y'] ?? 0) * $scaleFactor;
+                case 'text': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
                     $text = $data['text'] ?? 'Label';
                     $fontSize = (($data['fontSize'] ?? 14) * 0.5) * $scaleFactor;
-
-                    $out[] = "0\nTEXT";
-                    $out[] = "8\nTEXT";
-                    $out[] = "10\n{$x}";
-                    $out[] = "20\n{$y}";
-                    $out[] = "30\n0.0";
-                    $out[] = "40\n{$fontSize}";
-                    $out[] = "1\n{$text}";
+                    $this->addDxfText($out, 'TEXT', $x, $y, max(0.08, $fontSize), $text);
                     break;
-
-                case 'dimension':
-                    $x1 = ($data['x1'] ?? 0) * $scaleFactor;
-                    $y1 = -($data['y1'] ?? 0) * $scaleFactor;
-                    $x2 = ($data['x2'] ?? 0) * $scaleFactor;
-                    $y2 = -($data['y2'] ?? 0) * $scaleFactor;
-
-                    $out[] = "0\nLINE";
-                    $out[] = "8\nDIMENSIONS";
-                    $out[] = "10\n{$x1}";
-                    $out[] = "20\n{$y1}";
-                    $out[] = "30\n0.0";
-                    $out[] = "11\n{$x2}";
-                    $out[] = "21\n{$y2}";
-                    $out[] = "31\n0.0";
-                    break;
+                }
             }
         }
 
@@ -264,5 +340,38 @@ class ExportDxfAction
 
         return implode("\n", $out);
     }
-}
 
+    protected function addDxfLine(array &$out, string $layer, float $x1, float $y1, float $x2, float $y2): void
+    {
+        $out[] = "0\nLINE";
+        $out[] = "8\n{$layer}";
+        $out[] = "10\n" . sprintf('%.4f', $x1);
+        $out[] = "20\n" . sprintf('%.4f', $y1);
+        $out[] = "30\n0.0";
+        $out[] = "11\n" . sprintf('%.4f', $x2);
+        $out[] = "21\n" . sprintf('%.4f', $y2);
+        $out[] = "31\n0.0";
+    }
+
+    protected function addDxfRect(array &$out, string $layer, float $x, float $y, float $w, float $h): void
+    {
+        $this->addDxfLine($out, $layer, $x, $y, $x + $w, $y);
+        $this->addDxfLine($out, $layer, $x + $w, $y, $x + $w, $y + $h);
+        $this->addDxfLine($out, $layer, $x + $w, $y + $h, $x, $y + $h);
+        $this->addDxfLine($out, $layer, $x, $y + $h, $x, $y);
+    }
+
+    protected function addDxfText(array &$out, string $layer, float $x, float $y, float $size, string $text): void
+    {
+        $safeText = preg_replace('/[^a-zA-Z0-9_\-\.\:\s\(\)\+\=\,\/]/', '', $text);
+        if ($safeText === '') $safeText = 'TEXT';
+
+        $out[] = "0\nTEXT";
+        $out[] = "8\n{$layer}";
+        $out[] = "10\n" . sprintf('%.4f', $x);
+        $out[] = "20\n" . sprintf('%.4f', $y);
+        $out[] = "30\n0.0";
+        $out[] = "40\n" . sprintf('%.4f', $size);
+        $out[] = "1\n{$safeText}";
+    }
+}
