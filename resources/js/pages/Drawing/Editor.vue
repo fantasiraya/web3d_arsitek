@@ -48,6 +48,7 @@ import {
     Files,
     Plus,
     ChevronDown,
+    ChevronUp,
     ChevronRight,
     ChevronLeft,
     RotateCcw,
@@ -139,14 +140,23 @@ let tempLayer: Konva.Layer | null = null;
 let tr: Konva.Transformer | null = null;
 let selectionOverlay: Konva.Rect | null = null;
 
-// Header scroll indicators & export menu
+// Header, Toolbar & Bottom HUD scroll indicators & export menu
 const headerContainerRef = ref<HTMLElement | null>(null);
 const canScrollLeft = ref(false);
 const canScrollRight = ref(false);
+
+const leftToolbarRef = ref<HTMLElement | null>(null);
+const canScrollToolbarUp = ref(false);
+const canScrollToolbarDown = ref(false);
+
+const bottomHudRef = ref<HTMLElement | null>(null);
+const canScrollBottomHudLeft = ref(false);
+const canScrollBottomHudRight = ref(false);
+
 const showExportMenu = ref(false);
 const showExportModal = ref(false);
 const isExporting = ref(false);
-let headerResizeObserver: ResizeObserver | null = null;
+let uiResizeObserver: ResizeObserver | null = null;
 
 // ── CANVAS & PAPER DIMENSION STATE (FIGMA FRAME & AUTOCAD MODEL SPACE) ──────
 type CanvasMode = 'sheet' | 'infinite';
@@ -3959,6 +3969,40 @@ function scrollHeader(direction: 'left' | 'right') {
     setTimeout(checkHeaderScroll, 320);
 }
 
+function checkBottomHudScroll() {
+    if (!bottomHudRef.value) return;
+    const el = bottomHudRef.value;
+    canScrollBottomHudLeft.value = el.scrollLeft > 8;
+    canScrollBottomHudRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 8;
+}
+
+function scrollBottomHud(direction: 'left' | 'right') {
+    if (!bottomHudRef.value) return;
+    const step = 220;
+    bottomHudRef.value.scrollBy({
+        left: direction === 'right' ? step : -step,
+        behavior: 'smooth',
+    });
+    setTimeout(checkBottomHudScroll, 280);
+}
+
+function checkLeftToolbarScroll() {
+    if (!leftToolbarRef.value) return;
+    const el = leftToolbarRef.value;
+    canScrollToolbarUp.value = el.scrollTop > 8;
+    canScrollToolbarDown.value = el.scrollTop + el.clientHeight < el.scrollHeight - 8;
+}
+
+function scrollToolbar(direction: 'up' | 'down') {
+    if (!leftToolbarRef.value) return;
+    const step = 160;
+    leftToolbarRef.value.scrollBy({
+        top: direction === 'down' ? step : -step,
+        behavior: 'smooth',
+    });
+    setTimeout(checkLeftToolbarScroll, 280);
+}
+
 const handleDocumentClick = (e: MouseEvent) => {
     const target = e.target as HTMLElement;
     if (!target.closest('.export-menu-container')) {
@@ -3977,17 +4021,25 @@ onMounted(() => {
     nextTick(() => {
         initCanvas();
         checkHeaderScroll();
+        checkBottomHudScroll();
+        checkLeftToolbarScroll();
         setTimeout(() => {
             zoomToFit();
             checkHeaderScroll();
+            checkBottomHudScroll();
+            checkLeftToolbarScroll();
         }, 150);
     });
 
-    if (headerContainerRef.value && typeof ResizeObserver !== 'undefined') {
-        headerResizeObserver = new ResizeObserver(() => {
+    if (typeof ResizeObserver !== 'undefined') {
+        uiResizeObserver = new ResizeObserver(() => {
             checkHeaderScroll();
+            checkBottomHudScroll();
+            checkLeftToolbarScroll();
         });
-        headerResizeObserver.observe(headerContainerRef.value);
+        if (headerContainerRef.value) uiResizeObserver.observe(headerContainerRef.value);
+        if (bottomHudRef.value) uiResizeObserver.observe(bottomHudRef.value);
+        if (leftToolbarRef.value) uiResizeObserver.observe(leftToolbarRef.value);
     }
 
     window.addEventListener('keydown', handleKeyDown);
@@ -4002,14 +4054,16 @@ onMounted(() => {
         stage.height(containerRef.value.clientHeight);
         stage.batchDraw();
         checkHeaderScroll();
+        checkBottomHudScroll();
+        checkLeftToolbarScroll();
     };
 
     window.addEventListener('resize', handleResize);
 });
 
 onUnmounted(() => {
-    headerResizeObserver?.disconnect();
-    headerResizeObserver = null;
+    uiResizeObserver?.disconnect();
+    uiResizeObserver = null;
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
     window.removeEventListener('click', handleDocumentClick);
@@ -4474,11 +4528,29 @@ onUnmounted(() => {
 
         <!-- WORKSPACE BODY (TOOLBAR + CANVAS + INSPECTOR + LAYER PANEL) -->
         <div class="flex-1 flex relative overflow-hidden">
-            <!-- LEFT FLOATING CAD TOOLBAR -->
-            <div class="cad-toolbar absolute left-4 top-4 z-20 flex flex-col gap-1 p-2 rounded-2xl bg-slate-950/95 backdrop-blur-md border border-white/10 shadow-2xl max-h-[85vh] overflow-y-auto custom-scroll">
-                <!-- Select Tool -->
-                <button
-                    @click="activeTool = 'select'"
+            <!-- LEFT FLOATING CAD TOOLBAR (RESPONSIVE: DOES NOT COLLIDE WITH BOTTOM HUD) -->
+            <div class="absolute left-2 sm:left-4 top-3 sm:top-4 bottom-18 sm:bottom-20 z-30 flex flex-col pointer-events-none">
+                <div class="relative flex-1 flex flex-col min-h-0 pointer-events-auto">
+                    <!-- Top Scroll Indicator (if scrolled down) -->
+                    <button
+                        v-if="canScrollToolbarUp"
+                        @click="scrollToolbar('up')"
+                        type="button"
+                        class="absolute -top-2.5 left-1/2 -translate-x-1/2 z-40 flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 hover:bg-violet-500 text-white shadow-lg border border-white/20 transition-all cursor-pointer animate-pulse"
+                        title="Gulir menu tools ke atas"
+                    >
+                        <ChevronUp class="w-3.5 h-3.5" />
+                    </button>
+
+                    <!-- Scrollable Tool Buttons Column -->
+                    <div
+                        ref="leftToolbarRef"
+                        @scroll="checkLeftToolbarScroll"
+                        class="cad-toolbar flex-1 flex flex-col gap-1 p-1.5 sm:p-2 rounded-2xl bg-slate-950/95 backdrop-blur-md border border-white/10 shadow-2xl overflow-y-auto custom-scroll scroll-smooth max-h-full"
+                    >
+                        <!-- Select Tool -->
+                        <button
+                            @click="activeTool = 'select'"
                     :class="[
                         'p-2.5 rounded-xl transition-all cursor-pointer relative group',
                         activeTool === 'select' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -4693,11 +4765,24 @@ onUnmounted(() => {
                 </button>
             </div>
 
-            <!-- FLOATING LAYER VISIBILITY MANAGER -->
-            <div
-                v-if="showLayerPanel"
-                class="absolute left-20 top-4 z-20 w-60 p-4 rounded-2xl bg-slate-950/95 backdrop-blur-md border border-white/10 shadow-2xl space-y-3"
+            <!-- Bottom Scroll Indicator (if more tools below on small screen) -->
+            <button
+                v-if="canScrollToolbarDown"
+                @click="scrollToolbar('down')"
+                type="button"
+                class="absolute -bottom-2.5 left-1/2 -translate-x-1/2 z-40 flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 hover:bg-violet-500 text-white shadow-lg border border-white/20 transition-all cursor-pointer animate-bounce hover:animate-none"
+                title="Masih ada tools lainnya di bawah, klik untuk scroll"
             >
+                <ChevronDown class="w-3.5 h-3.5" />
+            </button>
+        </div>
+    </div>
+
+    <!-- FLOATING LAYER VISIBILITY MANAGER -->
+    <div
+        v-if="showLayerPanel"
+        class="absolute left-16 sm:left-20 top-3 sm:top-4 z-40 w-60 p-4 rounded-2xl bg-slate-950/95 backdrop-blur-md border border-white/10 shadow-2xl space-y-3"
+    >
                 <div class="flex items-center justify-between border-b border-white/10 pb-2">
                     <div class="flex items-center gap-2">
                         <Layers class="w-4 h-4 text-violet-400" />
@@ -4731,101 +4816,139 @@ onUnmounted(() => {
                 </div>
             </div>
 
-            <!-- BOTTOM CANVAS VIEWPORT CONTROLS -->
-            <div class="cad-bottom-hud absolute left-1/2 -translate-x-1/2 bottom-4 z-20 flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-950/90 backdrop-blur-md border border-white/10 shadow-2xl text-xs">
-                <!-- Snap to grid toggle -->
-                <button
-                    @click="isSnapToGrid = !isSnapToGrid"
-                    :class="[
-                        'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-medium transition-colors cursor-pointer',
-                        isSnapToGrid ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'text-slate-400 hover:text-white'
-                    ]"
-                    title="Snap to Grid"
-                >
-                    <Grid class="w-3.5 h-3.5" />
-                    <span>Snap Grid ({{ gridSpacing }}px)</span>
-                </button>
+            <!-- BOTTOM CANVAS VIEWPORT CONTROLS (RESPONSIVE WITH SCROLL CUES) -->
+            <div class="cad-bottom-hud absolute left-1/2 -translate-x-1/2 bottom-2 sm:bottom-4 z-20 max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-4rem)]">
+                <div class="relative bg-slate-950/90 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+                    <!-- Petunjuk Gulir Kiri -->
+                    <button
+                        v-if="canScrollBottomHudLeft"
+                        @click="scrollBottomHud('left')"
+                        type="button"
+                        class="absolute left-0 top-0 bottom-0 z-20 flex items-center pl-1.5 pr-3 bg-gradient-to-r from-slate-950 via-slate-950/95 to-transparent text-slate-300 hover:text-white transition-all cursor-pointer group"
+                        title="Geser tools ke kiri"
+                    >
+                        <div class="w-5 h-5 rounded-full bg-slate-800 border border-white/20 flex items-center justify-center shadow-lg group-hover:bg-violet-600 transition-colors">
+                            <ChevronLeft class="w-3.5 h-3.5 text-white" />
+                        </div>
+                    </button>
 
-                <div class="h-4 w-px bg-white/10"></div>
+                    <!-- Scrollable Inner Row -->
+                    <div
+                        ref="bottomHudRef"
+                        @scroll="checkBottomHudScroll"
+                        class="flex items-center gap-2 px-3 py-1.5 sm:py-2 text-xs overflow-x-auto scrollbar-none scroll-smooth whitespace-nowrap"
+                    >
+                        <!-- Snap to grid toggle -->
+                        <button
+                            @click="isSnapToGrid = !isSnapToGrid"
+                            :class="[
+                                'flex items-center gap-1.5 px-2.5 py-1 rounded-xl font-medium transition-colors cursor-pointer shrink-0',
+                                isSnapToGrid ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'text-slate-400 hover:text-white'
+                            ]"
+                            title="Snap to Grid"
+                        >
+                            <Grid class="w-3.5 h-3.5" />
+                            <span>Snap Grid ({{ gridSpacing }}px)</span>
+                        </button>
 
-                <!-- Zoom buttons -->
-                <button
-                    @click="zoom('out')"
-                    class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                    title="Zoom Out"
-                >
-                    <ZoomOut class="w-4 h-4" />
-                </button>
+                        <div class="h-4 w-px bg-white/10 shrink-0"></div>
 
-                <span class="font-mono text-slate-300 w-12 text-center text-[11px]">
-                    {{ Math.round(zoomLevel * 100) }}%
-                </span>
+                        <!-- Zoom buttons -->
+                        <button
+                            @click="zoom('out')"
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
+                            title="Zoom Out"
+                        >
+                            <ZoomOut class="w-4 h-4" />
+                        </button>
 
-                <button
-                    @click="zoom('in')"
-                    class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                    title="Zoom In"
-                >
-                    <ZoomIn class="w-4 h-4" />
-                </button>
+                        <span class="font-mono text-slate-300 w-10 sm:w-12 text-center text-[11px] shrink-0">
+                            {{ Math.round(zoomLevel * 100) }}%
+                        </span>
 
-                <button
-                    @click="zoom('reset')"
-                    class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                    title="Reset Zoom 100%"
-                >
-                    <Maximize class="w-4 h-4" />
-                </button>
+                        <button
+                            @click="zoom('in')"
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
+                            title="Zoom In"
+                        >
+                            <ZoomIn class="w-4 h-4" />
+                        </button>
 
-                <div class="h-4 w-px bg-white/10"></div>
+                        <button
+                            @click="zoom('reset')"
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
+                            title="Reset Zoom 100%"
+                        >
+                            <Maximize class="w-4 h-4" />
+                        </button>
 
-                <!-- 3 Tombol Utama di Bottom Bar -->
-                <button
-                    @click="autoFitSheetToDrawing"
-                    class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all cursor-pointer shadow-sm"
-                    title="Rapatkan Kertas ke Gambar (Hilangkan Jarak Kosong)"
-                >
-                    <Sparkles class="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Rapatkan</span>
-                </button>
+                        <div class="h-4 w-px bg-white/10 shrink-0"></div>
 
-                <button
-                    @click="resetPaperToDefault"
-                    class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 hover:text-white border border-amber-500/30 transition-all cursor-pointer shadow-sm"
-                    title="Reset Kertas ke Standar ISO (A3)"
-                >
-                    <RotateCcw class="w-3.5 h-3.5 text-amber-400" />
-                    <span>Reset ISO</span>
-                </button>
+                        <!-- 3 Tombol Utama di Bottom Bar -->
+                        <button
+                            @click="autoFitSheetToDrawing"
+                            class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all cursor-pointer shadow-sm shrink-0"
+                            title="Rapatkan Kertas ke Gambar (Hilangkan Jarak Kosong)"
+                        >
+                            <Sparkles class="w-3.5 h-3.5 text-indigo-400" />
+                            <span>Rapatkan</span>
+                        </button>
 
-                <button
-                    @click="zoomToFit"
-                    class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-sky-500/15 hover:bg-sky-500/30 text-sky-300 hover:text-white border border-sky-500/30 transition-all cursor-pointer shadow-sm"
-                    title="Pusatkan Gambar ke Layar / Zoom Extents (Z)"
-                >
-                    <Focus class="w-3.5 h-3.5 text-sky-400" />
-                    <span>Pusatkan</span>
-                </button>
+                        <button
+                            @click="resetPaperToDefault"
+                            class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 hover:text-white border border-amber-500/30 transition-all cursor-pointer shadow-sm shrink-0"
+                            title="Reset Kertas ke Standar ISO (A3)"
+                        >
+                            <RotateCcw class="w-3.5 h-3.5 text-amber-400" />
+                            <span>Reset ISO</span>
+                        </button>
 
-                <div class="h-4 w-px bg-white/10"></div>
+                        <button
+                            @click="zoomToFit"
+                            class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-sky-500/15 hover:bg-sky-500/30 text-sky-300 hover:text-white border border-sky-500/30 transition-all cursor-pointer shadow-sm shrink-0"
+                            title="Pusatkan Gambar ke Layar / Zoom Extents (Z)"
+                        >
+                            <Focus class="w-3.5 h-3.5 text-sky-400" />
+                            <span>Pusatkan</span>
+                        </button>
 
-                <!-- Dynamic Sheet Dimensions or Model Space Badge -->
-                <span v-if="canvasMode === 'sheet'" class="text-[10px] text-slate-400 flex items-center gap-1.5">
-                    <span class="px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 font-mono text-[9px] border border-violet-500/30">
-                        {{ paperSize }} • {{ paperWidth }}×{{ paperHeight }}px
-                    </span>
-                    <span class="hidden sm:inline text-slate-400">Tarik sudut lembar untuk ubah ukuran (Figma)</span>
-                </span>
-                <span v-else class="text-[10px] text-indigo-300 flex items-center gap-1 font-mono">
-                    <span class="px-1.5 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/30">AutoCAD Model Space (∞)</span>
-                </span>
+                        <div class="h-4 w-px bg-white/10 shrink-0"></div>
 
-                <div class="h-4 w-px bg-white/10"></div>
+                        <!-- Dynamic Sheet Dimensions or Model Space Badge -->
+                        <span v-if="canvasMode === 'sheet'" class="text-[10px] text-slate-400 flex items-center gap-1.5 shrink-0">
+                            <span class="px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 font-mono text-[9px] border border-violet-500/30">
+                                {{ paperSize }} • {{ paperWidth }}×{{ paperHeight }}px
+                            </span>
+                            <span class="hidden sm:inline text-slate-400">Tarik sudut lembar untuk ubah ukuran (Figma)</span>
+                        </span>
+                        <span v-else class="text-[10px] text-indigo-300 flex items-center gap-1 font-mono shrink-0">
+                            <span class="px-1.5 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/30">AutoCAD Model Space (∞)</span>
+                        </span>
 
-                <span class="text-[10px] text-slate-400 flex items-center gap-1">
-                    <span class="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[9px]">Spasi+Drag</span>
-                    <span>Geser Kanvas</span>
-                </span>
+                        <div class="h-4 w-px bg-white/10 shrink-0"></div>
+
+                        <span class="text-[10px] text-slate-400 flex items-center gap-1 shrink-0">
+                            <span class="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[9px]">Spasi+Drag</span>
+                            <span>Geser Kanvas</span>
+                        </span>
+                    </div>
+
+                    <!-- Petunjuk Gulir Kanan: Notifikasi bila ada tools lainnya (Layar Kecil / Mobile) -->
+                    <div
+                        v-if="canScrollBottomHudRight"
+                        class="absolute right-0 top-0 bottom-0 z-20 flex items-center pr-1.5 pl-6 bg-gradient-to-l from-slate-950 via-slate-950/95 to-transparent pointer-events-none"
+                    >
+                        <button
+                            @click="scrollBottomHud('right')"
+                            type="button"
+                            class="pointer-events-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-violet-600/90 hover:bg-violet-500 text-white shadow-lg shadow-violet-600/30 border border-violet-400/40 transition-all cursor-pointer animate-pulse hover:animate-none"
+                            title="Masih ada tools lainnya di kanan, klik untuk menggeser"
+                        >
+                            <span>Lainnya</span>
+                            <ChevronRight class="w-3 h-3" />
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <!-- RIGHT SELECTION PROPERTY INSPECTOR -->
