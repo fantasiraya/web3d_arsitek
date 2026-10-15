@@ -9,6 +9,7 @@ use App\Domains\Billing\Models\Transaction;
 use App\Domains\SystemConfig\Repositories\SystemSettingRepository;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -148,34 +149,36 @@ class CheckoutController extends Controller
     public function paymentCallback(Request $request): \Illuminate\Http\JsonResponse
     {
         $orderId = $request->input('order_id');
-        $status  = $request->input('status', 'settlement');
 
         if (!$orderId) return response()->json(['message' => 'Invalid payload'], 400);
 
-        $transaction = Transaction::where('order_id', $orderId)->first();
-        if (!$transaction) return response()->json(['message' => 'Transaction not found'], 404);
+        return DB::transaction(function () use ($orderId) {
+            $transaction = Transaction::where('order_id', $orderId)->lockForUpdate()->first();
+            if (!$transaction) return response()->json(['message' => 'Transaction not found'], 404);
 
-        if ($transaction->status === Transaction::STATUS_PENDING) {
-            $transaction->update(['status' => Transaction::STATUS_SETTLEMENT, 'paid_at' => now()]);
+            if ($transaction->status === Transaction::STATUS_PENDING) {
+                $transaction->update(['status' => Transaction::STATUS_SETTLEMENT, 'paid_at' => now()]);
 
-            if ($transaction->user_id) {
-                $snap     = $transaction->snap_response ?? [];
-                $planSlug = $snap['plan_slug'] ?? null;
-                if ($planSlug) {
-                    $plan = Plan::where('slug', $planSlug)->first();
-                    $user = \App\Domains\Auth\Models\User::find($transaction->user_id);
-                    if ($plan && $user) {
-                        app(\App\Domains\Billing\Actions\ChangeUserPlanAction::class)->execute(
-                            targetUser:  $user,
-                            newPlan:     $plan,
-                            billingType: $snap['billing_type'] ?? 'monthly',
-                            reason:      "Gateway onSuccess callback. Order: {$transaction->order_id}",
-                        );
+                if ($transaction->user_id) {
+                    $snap     = $transaction->snap_response ?? [];
+                    $planSlug = $snap['plan_slug'] ?? null;
+                    if ($planSlug) {
+                        $plan = Plan::where('slug', $planSlug)->first();
+                        $user = \App\Domains\Auth\Models\User::find($transaction->user_id);
+                        if ($plan && $user) {
+                            app(\App\Domains\Billing\Actions\ChangeUserPlanAction::class)->execute(
+                                targetUser:  $user,
+                                newPlan:     $plan,
+                                billingType: $snap['billing_type'] ?? 'monthly',
+                                reason:      "Gateway onSuccess callback. Order: {$transaction->order_id}",
+                            );
+                        }
                     }
                 }
             }
-        }
-        return response()->json(['message' => 'OK']);
+
+            return response()->json(['message' => 'OK']);
+        });
     }
 
     /**
@@ -212,43 +215,47 @@ class CheckoutController extends Controller
 
         if (!$orderId) return response()->json(['message' => 'Invalid payload'], 400);
 
-        $transaction = Transaction::where('order_id', $orderId)->first();
-        if (!$transaction) return response()->json(['message' => 'Transaction not found'], 404);
+        return DB::transaction(function () use ($orderId, $payload) {
+            $transaction = Transaction::where('order_id', $orderId)->lockForUpdate()->first();
+            if (!$transaction) return response()->json(['message' => 'Transaction not found'], 404);
 
-        // Gunakan driver yang sesuai dengan provider transaksi ini
-        $providerName = $transaction->payment_type ?? 'midtrans';
-        $driver       = $this->gateway->driverForWebhook($providerName);
+            // Gunakan driver yang sesuai dengan provider transaksi ini
+            $providerName = $transaction->payment_type ?? 'midtrans';
+            $driver       = $this->gateway->driverForWebhook($providerName);
 
-        if (!$driver) {
-            return response()->json(['message' => 'Unknown provider'], 400);
-        }
+            if (!$driver) {
+                return response()->json(['message' => 'Unknown provider'], 400);
+            }
 
-        $newStatus = $driver->parseWebhookStatus($payload);
+            $newStatus = $driver->parseWebhookStatus($payload);
+            $wasPending = $transaction->status === Transaction::STATUS_PENDING;
 
-        $transaction->update([
-            'status'        => $newStatus,
-            'paid_at'       => $newStatus === Transaction::STATUS_SETTLEMENT ? now() : $transaction->paid_at,
-            'snap_response' => array_merge($transaction->snap_response ?? [], $payload),
-        ]);
+            $transaction->update([
+                'status'        => $newStatus,
+                'paid_at'       => $newStatus === Transaction::STATUS_SETTLEMENT ? now() : $transaction->paid_at,
+                'snap_response' => array_merge($transaction->snap_response ?? [], $payload),
+            ]);
 
-        if ($newStatus === Transaction::STATUS_SETTLEMENT && $transaction->user_id) {
-            $snap     = $transaction->snap_response ?? [];
-            $planSlug = $snap['plan_slug'] ?? null;
-            if ($planSlug) {
-                $plan = Plan::where('slug', $planSlug)->first();
-                $user = \App\Domains\Auth\Models\User::find($transaction->user_id);
-                if ($plan && $user) {
-                    app(\App\Domains\Billing\Actions\ChangeUserPlanAction::class)->execute(
-                        targetUser:  $user,
-                        newPlan:     $plan,
-                        billingType: $snap['billing_type'] ?? 'monthly',
-                        reason:      "Webhook {$providerName}. Order: {$transaction->order_id}",
-                    );
+            // Only transition plan if it was previously PENDING to prevent duplicate activations
+            if ($newStatus === Transaction::STATUS_SETTLEMENT && $wasPending && $transaction->user_id) {
+                $snap     = $transaction->snap_response ?? [];
+                $planSlug = $snap['plan_slug'] ?? null;
+                if ($planSlug) {
+                    $plan = Plan::where('slug', $planSlug)->first();
+                    $user = \App\Domains\Auth\Models\User::find($transaction->user_id);
+                    if ($plan && $user) {
+                        app(\App\Domains\Billing\Actions\ChangeUserPlanAction::class)->execute(
+                            targetUser:  $user,
+                            newPlan:     $plan,
+                            billingType: $snap['billing_type'] ?? 'monthly',
+                            reason:      "Webhook {$providerName}. Order: {$transaction->order_id}",
+                        );
+                    }
                 }
             }
-        }
 
-        return response()->json(['message' => 'OK']);
+            return response()->json(['message' => 'OK']);
+        });
     }
 
     private function parsePrice(string $price): int

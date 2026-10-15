@@ -22,7 +22,7 @@ class ProjectController extends Controller
         $userFilter = $request->query('user_id');
         $sortOrder = $request->query('sort', 'latest');
 
-        $query = Project::with(['user.planOverride', 'invitedClients'])
+        $query = Project::with(['user.planOverride', 'user.activeSubscription.planModel', 'invitedClients'])
             ->withCount(['versions', 'comments']);
 
         if ($search) {

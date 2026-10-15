@@ -47,11 +47,6 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
 
-        // Eager load roles for all User queries to ensure Spatie Permission works
-        \App\Domains\Auth\Models\User::retrieved(function ($user) {
-            $user->loadMissing('roles');
-        });
-
         Event::listen(Login::class, function (Login $event) {
             app(MatchInvitedClientEmailAction::class)->execute($event->user); // @phpstan-ignore-line
         });

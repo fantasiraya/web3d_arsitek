@@ -125,7 +125,10 @@ class SubscriptionController extends Controller
         $planFilter = $request->query('plan');
         $statusFilter = $request->query('status');
 
-        $query = Subscription::with(['user', 'planModel']);
+        $query = Subscription::with([
+            'user' => fn ($q) => $q->withCount('projects')->with('planOverride'),
+            'planModel',
+        ]);
 
         if ($search) {
             $query->whereHas('user', function ($uq) use ($search) {
@@ -146,7 +149,7 @@ class SubscriptionController extends Controller
 
         $subscriptions->getCollection()->transform(function (Subscription $sub) {
             $user = $sub->user;
-            $projectCount = $user ? $user->projects()->count() : 0;
+            $projectCount = (int) ($user?->projects_count ?? 0);
             $effectiveLimit = $user ? $this->limitService->getEffectiveProjectLimit($user) : null;
             $hasOverride = $user ? $this->limitService->hasCustomLimitOverride($user) : false;
 
