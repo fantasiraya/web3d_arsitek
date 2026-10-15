@@ -346,23 +346,24 @@
                     ></span>
                 </button>
 
-                <div class="h-4 w-px bg-white/15 mx-0.5"></div>
-
-                <!-- Tombol Ambil Gambar -->
-                <button
-                    type="button"
-                    :disabled="isCapturingSnapshot"
-                    @click="openCaptureModal"
-                    class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all shadow-sm"
-                    :class="isCapturingSnapshot
-                        ? 'bg-rose-600/40 text-rose-200 border border-rose-400/60 cursor-wait animate-pulse'
-                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'"
-                    title="Ambil Gambar dari Sudut Kamera Saat Ini"
-                >
-                    <Loader2 v-if="isCapturingSnapshot" class="h-3.5 w-3.5 text-rose-300 animate-spin" />
-                    <Camera v-else class="h-3.5 w-3.5 text-rose-400" />
-                    <span>{{ isCapturingSnapshot ? 'Mengambil...' : 'Ambil Gambar' }}</span>
-                </button>
+                <!-- Tombol Ambil Gambar (Hanya Pemilik Proyek) -->
+                <template v-if="isOwner">
+                    <div class="h-4 w-px bg-white/15 mx-0.5"></div>
+                    <button
+                        type="button"
+                        :disabled="isCapturingSnapshot"
+                        @click="openCaptureModal"
+                        class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all shadow-sm"
+                        :class="isCapturingSnapshot
+                            ? 'bg-rose-600/40 text-rose-200 border border-rose-400/60 cursor-wait animate-pulse'
+                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'"
+                        title="Ambil Gambar dari Sudut Kamera Saat Ini"
+                    >
+                        <Loader2 v-if="isCapturingSnapshot" class="h-3.5 w-3.5 text-rose-300 animate-spin" />
+                        <Camera v-else class="h-3.5 w-3.5 text-rose-400" />
+                        <span>{{ isCapturingSnapshot ? 'Mengambil...' : 'Ambil Gambar' }}</span>
+                    </button>
+                </template>
             </div>
 
             <!-- ── TOOLBAR BOTTOM-CENTER ── -->
@@ -2213,7 +2214,12 @@
                         <div v-if="filteredCaptures.length === 0" class="flex flex-col items-center justify-center py-16 gap-3 text-center px-4">
                             <Camera class="h-10 w-10 text-neutral-700" />
                             <p class="text-xs text-neutral-400 leading-relaxed max-w-[220px]">
-                                Belum ada gambar tersimpan. Klik tombol <span class="text-rose-400 font-semibold">"Ambil Gambar"</span> di toolbar untuk menyimpan hasil render ruangan dan jam.
+                                <template v-if="isOwner">
+                                    Belum ada gambar tersimpan. Klik tombol <span class="text-rose-400 font-semibold">"Ambil Gambar"</span> di toolbar untuk menyimpan hasil render ruangan dan jam.
+                                </template>
+                                <template v-else>
+                                    Belum ada gambar render yang dibagikan untuk proyek ini.
+                                </template>
                             </p>
                         </div>
 
@@ -4001,6 +4007,7 @@ function refreshCaptureSnapshot() {
 }
 
 async function openCaptureModal() {
+    if (!isOwner.value) return;
     if (isCapturingSnapshot.value) return;
     isCapturingSnapshot.value = true;
     isShutterFlashing.value = true;

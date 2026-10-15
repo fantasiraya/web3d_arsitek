@@ -129,6 +129,11 @@ class ProjectCaptureController extends Controller
         \App\Domains\Project\Actions\GenerateVisionPromptAction $action
     ): JsonResponse {
         $project = Project::findOrFail($projectId);
+        $user = $request->user();
+
+        if (! $user || $project->user_id !== $user->id) {
+            abort(403, 'Hanya arsitek pemilik proyek yang dapat menggunakan fitur AI Prompt.');
+        }
 
         $validated = $request->validate([
             'image'            => ['nullable', 'string'],

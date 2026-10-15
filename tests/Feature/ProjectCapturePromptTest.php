@@ -62,6 +62,18 @@ test('unauthorized user cannot update capture prompt', function () {
     $response->assertForbidden();
 });
 
+test('unauthorized user cannot generate vision prompt', function () {
+    $owner = User::factory()->create();
+    $otherUser = User::factory()->create();
+    $project = Project::factory()->create(['user_id' => $owner->id]);
+
+    $response = $this->actingAs($otherUser)->postJson("/projects/{$project->id}/captures/generate-prompt", [
+        'prompt_type' => 'image',
+    ]);
+
+    $response->assertForbidden();
+});
+
 test('generate prompt returns fallback prompt when gemini api key is not set', function () {
     config(['services.gemini.api_key' => null]);
 
