@@ -33,6 +33,7 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
    - `Domains/Chat` (Real-time Messaging Arsitek ↔ Klien per Project)
    - `Domains/Billing` (Transaksi, Subscription & Midtrans)
    - `Domains/Rab` (RAB & Lembar Kerja: harga satuan, AHSP, template, import take-off, estimator `.glb`, mapping, export Excel)
+   - `Domains/VisionStudio` (AI Generative Studio: Image & Video prompts arsitektural, paid-only)
    - `Domains/Drawing` *(Rencana v2.7)* (Editor gambar teknik 2D: denah, tampak, potongan — hanya Enterprise)
 2. **Primary Key UUID:** Selalu gunakan UUID untuk ID tabel database. Gunakan `$table->uuid('id')->primary()` di migration.
 3. **Dynamic Quotas:** Selalu baca batasan kuota Free/Pro Tier dari `system_settings` via database query. **Jangan hardcode** angka kuota di controller atau action.
@@ -181,7 +182,26 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
 3. **Tipe sheet:** `plan` (denah), `elevation` (tampak), `section` (potongan) — wajib gunakan nilai enum ini.
 4. **Library:** `konva.js` (npm) untuk canvas editor 2D di frontend. `nzcreations/dxf` (composer) untuk export DXF. Jangan install library konva atau DXF alternatif lain.
 5. **Export:** DXF (kompatibel AutoCAD) dan SVG (via konva). Jangan export ke PDF dalam tahap ini.
-6. **Kepemilikan:** drawing sheet milik Arsitek pemilik project. Klien hanya bisa melihat jika switch visibilitas aktif.
+### P. AI Vision Studio Rule (`Domains/VisionStudio`)
+1. **Gating Berbayar (Strict):** Fitur AI Vision Studio hanya boleh diakses oleh pengguna paket **Pro**, **Enterprise**, atau role **Super Admin**. Gunakan `SubscriptionLimitService::canAccessVisionStudio($user)` dan middleware `CheckVisionStudioAccess` (`vision.access`). Free tier wajib di-redirect ke `/plans` atau menerima error 403.
+2. **Penyimpanan Terpisah Penuh:** Galeri kreasi AI menggunakan tabel `vision_creations`. Dilarang menggabungkan media AI studio dengan `project_captures`. Tidak ada fitur "tampilkan ke klien" di studio ini.
+3. **Pembersihan Storage Fisik:** Model `VisionCreation` wajib mempertahankan hook `booted()::deleted` untuk menghapus file fisik di `Storage::disk('public')` (`file_path` dan `end_file_path`) ketika entri dihapus.
+4. **Persistensi State Browser:** Form prompt, pilihan mode, dan riwayat kreasi wajib disimpan di browser `localStorage` agar tidak hilang saat pengguna melakukan refresh halaman.
+
+### Q. High Concurrency & Database Performance Rule (1 Juta Pengguna)
+1. **Dilarang Memasang Global Hooks Berat pada Model:** Dilarang keras menambahkan event listener seperti `User::retrieved(fn ($u) => $u->loadMissing('roles'))` di Service Provider. Hook model global yang berjalan setiap kali record di-hydrate akan melipatgandakan query SQL di seluruh request.
+2. **Eager Loading Eksplisit Wajib:** Setiap controller yang menampilkan daftar/pagination (terutama di area admin) WAJIB meng-eager-load relasi (`with(['user.activeSubscription.planModel', 'user.planOverride', 'invitedClients'])`) atau `withCount(...)` untuk mencegah N+1 queries.
+3. **Distributed Atomic Locking pada Mutasi Kuota:** Setiap aksi yang memverifikasi kuota dan membuat resource baru (`CreateProjectAction`, `SaveCaptureAction`, `PinCommentAction`) WAJIB dibungkus atomic lock Redis:
+   ```php
+   Cache::lock("user:{$user->id}:action_name", 15)->block(5, function () {
+       // logic verifikasi kuota & simpan
+   });
+   ```
+4. **Transaction & Row-Level Locking pada Pembayaran:** Penanganan callback dan webhook payment gateway di `CheckoutController` WAJIB dibungkus `DB::transaction` dengan `lockForUpdate()` pada order pending untuk mencegah race condition duplicate upgrade.
+5. **Multi-Database Redis Architecture:**
+   - Gunakan `CacheKeys.php` dengan safe tagging wrapper `CacheKeys::tags()`.
+   - Redis DB 1 dialokasikan khusus untuk cache (`REDIS_CACHE_DB=1`).
+   - Redis DB 2 dialokasikan khusus untuk session pengguna (`REDIS_SESSION_DB=2`) agar command `cache:clear` tidak mendrop session pengguna yang aktif.
 
 ---
 
@@ -189,7 +209,7 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
 1. Periksa `guide/PROGRESS_TRACKER.md` untuk melihat fitur mana yang perlu dikerjakan selanjutnya.
 2. Baca skema tabel terkait di `guide/DATABASE_SCHEMA.md`.
 3. Baca peta folder di `guide/FOLDER_STRUCTURE.md` untuk menentukan lokasi file yang benar.
-4. Tulis kode sesuai aturan DDD dan konvensi project (termasuk Section H/I/J/K/L/M/N/O jika menyentuh Auth, Project, Chat, Frontend, RAB, Profil Wilayah, atau Drawing 2D).
+4. Tulis kode sesuai aturan DDD dan konvensi project (termasuk Section H/I/J/K/L/M/N/O/P/Q jika menyentuh Auth, Project, Chat, Frontend, RAB, Profil Wilayah, Vision Studio, Caching, atau Concurrency).
 5. Update `guide/PROGRESS_TRACKER.md` begitu pekerjaan selesai.
 
 ---
@@ -203,7 +223,9 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
 | Auth | **Laravel Fortify** | ~~Laravel Sanctum~~ (token-based) |
 | Database | **MySQL** | ~~PostgreSQL~~ |
 | Storage | **local `public` disk** (`storage/app/public/`) | ~~Cloudflare R2~~, ~~S3~~ |
-| Queue | **database driver** | ~~Redis~~, ~~SQS~~ |
+| Cache Driver | **Redis** (DB 1 Cache, DB 2 Session) | Driver file untuk produksi 1M user |
+| Concurrency | **Redis Distributed Locks** (`Cache::lock()->block()`) | Check-then-act tanpa lock |
+| Queue | **database driver** | ~~SQS~~ |
 | OAuth Flow | **Redirect-based** (Socialite) | ~~id_token API endpoint~~ |
 | JSON type | **`json`** (MySQL) | ~~`jsonb`~~ (PostgreSQL only) |
 | Brand | **PitchArch** | ~~Aether 3D~~, ~~SaaS Web 3D~~ |

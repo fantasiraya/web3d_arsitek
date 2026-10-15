@@ -2,8 +2,10 @@
 **Project:** PitchArch — Platform Presentasi & Feedback Arsitektur 3D
 **Database Engine:** MySQL
 **Primary Key Standard:** UUID
-**Reference:** PRD v2.7, RTCF, RISE Framework
-**Revision:** v2.7 — ditambah kolom profil arsitek di `users`, kolom `is_pinned` di `comments`, tabel `rab_price_item_components` (AHSP), kolom `overhead_percent`/`has_components` di `rab_price_items`, tabel wilayah `laravolt/indonesia`, rancangan Drawing 2D
+**Reference:** PRD v2.9, RTCF, RISE Framework
+**Revision:** v2.9 — ditambah tabel `vision_creations` (AI Vision Studio), kolom `prompt` di `project_captures`, optimasi Redis cache multi-DB, distributed locking & eliminasi N+1
+**v2.8 Changelog:** Menambahkan tabel `project_captures`, kolom sun simulation di `projects` (`latitude`, `longitude`, `north_angle`, `solar_date`)
+**v2.7 Changelog:** Ditambah kolom profil arsitek di `users`, kolom `is_pinned` di `comments`, tabel `rab_price_item_components` (AHSP), kolom `overhead_percent`/`has_components` di `rab_price_items`, tabel wilayah `laravolt/indonesia`, rancangan Drawing 2D
 **v2.6 Changelog:** Menambahkan modul RAB (tabel `rab_*`, kolom `plans.can_use_rab`)
 **v2.5 Changelog:** Mengganti engine dari PostgreSQL ke **MySQL** (aktual). Menambahkan tabel `camera_presets`. Semua tipe `jsonb` → `json` (MySQL syntax). Menyesuaikan catatan storage dari Cloudflare R2 ke **local disk `public`**.
 
@@ -230,6 +232,7 @@ Menyimpan snapshot gambar 3D yang diambil dari WebGL Canvas Three.js per ruangan
 | `file_size_bytes` | `bigInteger` | `NOT NULL, DEFAULT(0)` | Ukuran file dalam bytes |
 | `width` | `integer` | `NOT NULL, DEFAULT(1920)` | Resolusi lebar gambar (piksel) |
 | `height` | `integer` | `NOT NULL, DEFAULT(1080)` | Resolusi tinggi gambar (piksel) |
+| `prompt` | `longText` | `NULLABLE` | Prompt AI arsitektural kontekstual (auto-save on blur) |
 | `is_visible_to_clients` | `boolean` | `NOT NULL, DEFAULT(false)` | Switch apakah gambar tampil di galeri Klien |
 | `created_at` | `timestamp` | `NULLABLE` | Waktu capture dibuat |
 | `updated_at` | `timestamp` | `NULLABLE` | Waktu capture diperbarui |
@@ -508,14 +511,41 @@ Tabel-tabel berikut disediakan dan di-seed oleh package `laravolt/indonesia`. Ti
 
 ---
 
+### K. AI Vision Studio Domain (`Domains/VisionStudio`)
+
+#### `vision_creations`
+Menyimpan hasil kreasi visual AI (gambar dan video) dari AI Vision Studio. Fitur ini bersifat eksklusif untuk pengguna berbayar (Pro, Enterprise, dan Super Admin). Galeri bersifat independen (terpisah penuh dari snapshot 3D, tanpa opsi tampil ke klien).
+
+| Field | Type | Modifiers | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `uuid` | `PRIMARY KEY` | Unique Identifier |
+| `user_id` | `uuid` | `FOREIGN KEY, NOT NULL, CASCADE` | Relasi ke `users.id` (Pemilik kreasi) |
+| `title` | `string` | `NULLABLE` | Judul opsional kreasi |
+| `room_name` | `string` | `NOT NULL, DEFAULT('Arsitektur')` | Kategori / ruangan arsitektur |
+| `prompt_type` | `string(20)` | `NOT NULL, DEFAULT('image')` | Tipe prompt kreasi: `'image'` atau `'video'` |
+| `file_path` | `string` | `NOT NULL` | Path file utama (gambar / video) di storage |
+| `end_file_path` | `string` | `NULLABLE` | Path file frame akhir (opsional untuk morphing video) |
+| `file_size_bytes` | `unsignedBigInteger` | `NOT NULL, DEFAULT(0)` | Ukuran file dalam bytes |
+| `width` | `unsignedInteger` | `NOT NULL, DEFAULT(1920)` | Resolusi lebar media (piksel) |
+| `height` | `unsignedInteger` | `NOT NULL, DEFAULT(1080)` | Resolusi tinggi media (piksel) |
+| `prompt` | `longText` | `NULLABLE` | Prompt teks positif yang digunakan saat generate |
+| `negative_prompt` | `text` | `NULLABLE` | Negative prompt untuk eliminasi artefak visual |
+| `metadata` | `json` | `NULLABLE` | Metadata teknis render (seed, aspect ratio, guidance scale, steps) |
+| `created_at` | `timestamp` | `NULLABLE` | Waktu kreasi dibuat |
+| `updated_at` | `timestamp` | `NULLABLE` | Waktu kreasi diperbarui |
+
+> **Catatan Lifecycle:** Model `VisionCreation` memiliki hook `booted()::deleted` otomatis yang menghapus file media fisik di `Storage::disk('public')` (`file_path` dan `end_file_path`) ketika record dihapus dari database.
+
+---
+
 ## 3. Indexing & Optimization Strategy
 
 1. **`users.google_id` & `users.email`:** Unique Index — lookup autentikasi OAuth & pencocokan email undangan.
 2. **`projects.share_token`:** Unique Index — query performa tinggi saat Klien membuka link undangan.
 3. **`comments.project_id`:** Index B-Tree — loading seluruh pin komentar pada satu model 3D.
-4. **`system_settings.key`:** Unique Index — query cepat konfigurasi kuota (pertimbangkan database/cache di masa depan).
+4. **`system_settings.key`:** Unique Index — query cepat konfigurasi kuota.
 5. **`project_versions.project_id`:** Index B-Tree — riwayat versi per project.
-6. **`subscriptions.user_id`:** Index B-Tree + `status` — query "apakah user ini Pro aktif saat ini".
+6. **`subscriptions.user_id`:** Index B-Tree + `status` — query status Pro aktif saat ini.
 7. **`project_clients.(project_id, email)`:** Composite Unique Index — kunci validasi akses Klien; dicek hampir setiap request Viewer/Comment/Chat.
 8. **`project_clients.user_id`:** Index B-Tree — query "semua project di mana saya jadi Klien" (dashboard dual-capacity).
 9. **`chat_messages.project_id`:** Index B-Tree (composite dengan `created_at DESC`) — pagination histori chat per project.
@@ -523,3 +553,15 @@ Tabel-tabel berikut disediakan dan di-seed oleh package `laravolt/indonesia`. Ti
 11. **`rab_price_items.(user_id, code)`:** Composite Unique Index — satu kode per user.
 12. **`rab_documents.project_id`:** Index B-Tree — daftar RAB per project.
 13. **`rab_items.rab_document_id`:** Index B-Tree — loading item RAB; `rab_mappings.(user_id, match_type, pattern)` Unique.
+14. **`vision_creations.(user_id, created_at)`:** Composite Index B-Tree — query pagination galeri studio per user diurutkan dari yang terbaru.
+15. **Redis Multi-DB Caching Strategy (Skala 1 Juta Pengguna):**
+    - Pemisahan koneksi Redis: Database 0 (default queue), Database 1 (cache aplikasi: query master plans `Plan::getActivePlansForDisplay()` dengan TTL 1 jam + safe tagging `CacheKeys::tags()`), Database 2 (session user agar `cache:clear` tidak mendrop session user aktif).
+16. **Distributed Atomic Locking & Idempotency (Mencegah Race Condition):**
+    - `Cache::lock("user:{$user->id}:create_project", 15)->block(5)` pada pembuatan proyek.
+    - `Cache::lock("user:{$user->id}:create_capture", 15)->block(5)` pada pembuatan snapshot 3D.
+    - `Cache::lock("project:{$project->id}:pin_comment", 15)->block(5)` pada penambahan pin komentar.
+    - `DB::transaction` + `lockForUpdate()` pada record order pending di Midtrans checkout callback & webhook.
+17. **Eliminasi N+1 Query Global:**
+    - Penghapusan event listener `User::retrieved` di `AppServiceProvider.php` yang sebelumnya memicu puluhan query lazy-load `roles` per request.
+    - Eager loading eksplisit (`with(['user.activeSubscription.planModel', 'user.planOverride', 'invitedClients'])` dan `withCount('projects')`) di controller backoffice.
+

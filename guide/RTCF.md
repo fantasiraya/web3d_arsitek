@@ -1,3 +1,5 @@
+> **v2.9 Note:** Ditambahkan alur O (AI Vision Studio, Paid-Only gating, local persistence) dan alur P (Redis Multi-DB Caching & High Concurrency Control). Update route structure: tambah `/vision-studio*`.
+>
 > **v2.8 Note:** Ditambahkan alur N (Pencahayaan Matahari Real-Time SunCalc & 3D Snapshot Captures). Update route structure: tambah `/projects/{project}/captures*` dan `/projects/{project}/sun-settings`.
 >
 > **v2.7 Note:** Ditambahkan alur L (Profil Arsitek & Wilayah Indonesia) dan alur M (Drawing 2D — Rencana). Update route structure: tambah `/region/*`, `/rab/mappings`, `/rab/price-items/{id}/components`, `/rab/price-items/{id}/overhead`.
@@ -10,7 +12,7 @@
 Bertindaklah sebagai Senior Full-Stack Developer & Software Architect spesialis Laravel 12 (DDD) dan Inertia.js + Vue 3.
 
 [TASK]
-Buatkan rancangan arsitektur teknis dan panduan integrasi sistem untuk platform SaaS Web 3D Arsitek **PitchArch** berdasarkan PRD v2.5.
+Buatkan rancangan arsitektur teknis dan panduan integrasi sistem untuk platform SaaS Web 3D Arsitek **PitchArch** berdasarkan PRD v2.9.
 
 [CONTEXT]
 1. Platform diperuntukkan bagi arsitek untuk mempresentasikan model 3D ke klien terundang (bukan publik), mengumpulkan pin komentar 3D, dan berkomunikasi via chat real-time.
@@ -22,14 +24,16 @@ Buatkan rancangan arsitektur teknis dan panduan integrasi sistem untuk platform 
    - Hanya `super_admin` yang merupakan role eksplisit (Spatie), di-assign manual/internal.
 
 3. **Backend Tech Stack (AKTUAL):**
-   - Framework: **Laravel 12** (arsitektur Domain-Driven Design / DDD, domain murni berbasis bounded context: `Auth`, `SystemConfig`, `Project`, `Comment`, `Chat`, `Billing` — bukan berbasis role).
+   - Framework: **Laravel 12** (arsitektur Domain-Driven Design / DDD, domain murni berbasis bounded context: `Auth`, `SystemConfig`, `Project`, `Comment`, `Chat`, `Billing`, `Rab`, `VisionStudio` — bukan berbasis role).
    - Auth: **Laravel Fortify** (features: registration, resetPasswords, emailVerification, twoFactor, passkeys) + **laravel/socialite** (Google OAuth redirect-based flow).
    - Email Verification: `User` model implements `MustVerifyEmail`. Google OAuth otomatis set `email_verified_at`.
    - Database: **MySQL** (bukan PostgreSQL).
+   - Cache Driver: **Redis** (`CACHE_STORE=redis`, DB 1 cache aplikasi via `CacheKeys.php` safe tagging, DB 2 session pengguna).
+   - Concurrency Control: **Redis Distributed Atomic Locks** (`Cache::lock()->block()`) & Database Transactions dengan `lockForUpdate()`.
    - Storage: **Laravel `public` disk lokal** (`storage/app/public/`) — bukan Cloudflare R2.
    - Queue: **database driver** (`QUEUE_CONNECTION=database`) — bukan Redis.
    - Real-time: **Laravel Reverb** (WebSocket server self-hosted) untuk broadcasting chat & event, private channel per project.
-   - Packages: `laravel/socialite`, `spatie/laravel-permission`, `midtrans/midtrans-php`, `laravel/reverb`.
+   - Packages: `laravel/socialite`, `spatie/laravel-permission`, `midtrans/midtrans-php`, `laravel/reverb`, `league/csv`, `phpoffice/phpspreadsheet`, `laravolt/indonesia`.
 
 4. **Frontend Tech Stack (AKTUAL):**
    - Framework: **Inertia.js + Vue 3** (monorepo Laravel, bukan Nuxt 3 terpisah).
@@ -145,8 +149,20 @@ Sajikan output secara terstruktur dalam format Markdown:
    - Quota limit dihitung per gambar (`SubscriptionLimitService::canCreateCapture`): Free tier 5 gambar, Pro tier 50 gambar.
    - Galeri: Drawer di `Viewer.vue` untuk filter per-ruangan & jam, unduh PNG, hapus (arsitek), dan toggle visibilitas ke klien (`is_visible_to_clients`).
 
+   **O. AI Vision Studio (`Domains/VisionStudio`)**
+   - Gating Berbayar: `SubscriptionLimitService::canAccessVisionStudio($user)` dipadukan dengan middleware `CheckVisionStudioAccess` (`vision.access`). Pengguna Free dilarang masuk dan diarahkan ke `/plans`.
+   - Arsitektur Terpisah: Media kreasi disimpan di tabel `vision_creations`, tidak pernah dicampur dengan capture 3D proyek dan tidak memiliki fitur publish ke klien.
+   - Persistensi LocalStorage: State studio dan history kreasi disimpan pada browser `localStorage` agar tidak hilang saat refresh halaman.
+   - Cleanup File: Model `VisionCreation` otomatis membersihkan file fisik di storage saat dihapus.
+
+   **P. Redis Multi-DB Caching & High Concurrency Control (1 Juta Pengguna)**
+   - Multi-Database Separation: Redis DB 1 dialokasikan untuk cache, Redis DB 2 dialokasikan untuk session pengguna.
+   - Safe Cache Tagging: `CacheKeys::tags(['plans'])` membungkus pemanggilan cache ber-tag agar portabel ke berbagai cache driver.
+   - Eliminasi N+1: Penghapusan global model event listener `User::retrieved` di `AppServiceProvider.php` dan penerapan eager loading di seluruh listing controller.
+   - Distributed Atomic Locking: Mutasi kuota kritis dilindungi dengan `Cache::lock()->block()`, dan webhook pembayaran Midtrans diisolasi dengan `lockForUpdate()`.
+
 2. **Struktur Folder (lihat `FOLDER_STRUCTURE.md` untuk detail lengkap)**
-   - Monorepo: `app/Domains/`, `app/Http/`, `resources/js/pages/`, `resources/js/components/`, `resources/js/layouts/`.
+   - Monorepo: `app/Domains/`, `app/Http/`, `app/Support/`, `resources/js/pages/`, `resources/js/components/`, `resources/js/layouts/`.
    - Routes: `routes/web.php`, `routes/admin.php`, `routes/settings.php`, `routes/channels.php`.
 
 3. **Route Structure Aktual**
@@ -188,6 +204,12 @@ Sajikan output secara terstruktur dalam format Markdown:
    DELETE   /projects/{project}/captures/{capture}→ ProjectCaptureController@destroy
    PATCH    /projects/{project}/captures/{capture}/visibility → ProjectCaptureController@toggleVisibility
    PATCH    /projects/{project}/sun-settings       → ProjectCaptureController@updateSunSettings
+
+   # AI Vision Studio (auth, vision.access — khusus berbayar)
+   GET    /vision-studio                          → VisionStudioController@index (VisionStudio/Index.vue)
+   POST   /vision-studio/generate                 → VisionStudioController@generate
+   GET    /vision-studio/load/{creation}          → VisionStudioController@loadStudio
+   DELETE /vision-studio/creations/{creation}     → VisionStudioController@destroy
 
    # Chat (Reverb)
    GET  /projects/{project}/chat   → ChatController@index

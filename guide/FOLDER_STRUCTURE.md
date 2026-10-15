@@ -2,6 +2,8 @@
 
 Dokumen ini adalah acuan resmi struktur folder untuk aplikasi **PitchArch**: monorepo Laravel 12 + Inertia.js + Vue 3 (bukan backend/frontend terpisah).
 
+> **v2.9 Changelog:** Menambahkan Domain AI Vision Studio: `app/Domains/VisionStudio/Models/VisionCreation.php`, `app/Domains/Project/Actions/GenerateVisionPromptAction.php`, `app/Http/Controllers/VisionStudioController.php`, `app/Http/Middleware/CheckVisionStudioAccess.php`, `resources/js/pages/VisionStudio/Index.vue`. Menambahkan `app/Support/CacheKeys.php` (safe cache tagging, Redis multi-DB cache/session separation, distributed locking).
+>
 > **v2.8 Changelog:** Menambahkan modul Simulasi Pencahayaan Matahari Real-Time (Three.js + SunCalc) & Snapshot Captures: `app/Domains/Project/Actions/SaveCaptureAction.php`, `DeleteCaptureAction.php`, `ToggleCaptureVisibilityAction.php`, `UpdateProjectSunSettingsAction.php`, `ProjectCaptureController.php`, `ProjectCapture.php`, `StoreCaptureRequest.php`, `UpdateProjectSunSettingsRequest.php`, `ProjectCaptureFactory.php`, composable `useSunSimulation.ts`, migrasi `sun_settings` dan `project_captures`.
 >
 > **v2.7 Changelog:** Menambahkan file-file baru modul AHSP (`RabPriceItemComponent.php`, `RecalculatePriceItemAction.php`, `RabPriceItemComponentController.php`), Fase B/C RAB (`ImportQuantityTakeoffAction.php`, `ApplyGlbQuantitiesAction.php`, `TakeoffParserService.php`, `RabMappingService.php`), Export (`ExportRabAction.php`), Mapping RAB (`RabMappingController.php`), profil arsitek (`IndonesiaRegionController.php`, `useIndonesiaRegion.ts`, `AddressInput.vue`), halaman baru Rab (`GlbEstimator.vue`, `Import.vue`, `Mappings.vue`, `PriceItemComponents.vue`, `TemplateShow.vue`), composable `useGlbQuantities.ts`. Tambah rencana folder `Domains/Drawing/` (belum dibuat). Update routes baru.
@@ -91,12 +93,12 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │       └── StoreCommentRequest.php
 │   │   │
 │   │   ├── Project/            # Manajemen Model 3D, Storage, Lighting & Captures
-│   │   │   ├── Actions/
-│   │   │   │   ├── CreateProjectAction.php          # Validasi kuota + buat project
+│   │   │   │   ├── CreateProjectAction.php          # Validasi kuota + buat project (distributed lock)
 │   │   │   │   ├── DeleteCaptureAction.php          # Hapus snapshot capture & storage file
+│   │   │   │   ├── GenerateVisionPromptAction.php   # Prompt generator cerdas untuk AI Vision Studio
 │   │   │   │   ├── InviteClientAction.php           # Assign email Klien ke project_clients
 │   │   │   │   ├── RevokeClientAccessAction.php     # Cabut akses Klien
-│   │   │   │   ├── SaveCaptureAction.php            # Simpan snapshot Three.js (PNG), kuota per-gambar & prompt AI
+│   │   │   │   ├── SaveCaptureAction.php            # Simpan snapshot Three.js (PNG), kuota per-gambar & prompt AI (distributed lock)
 │   │   │   │   ├── ToggleCaptureVisibilityAction.php # Switch visibilitas capture ke klien
 │   │   │   │   ├── UpdateCapturePromptAction.php    # Update prompt AI capture (auto-save on blur)
 │   │   │   │   ├── UpdateProjectSunSettingsAction.php # Simpan lat/long/arah utara/tanggal
@@ -154,6 +156,10 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │       ├── TakeoffParserService.php         # Parse CSV (auto-detect delimiter) + XLSX via phpspreadsheet
 │   │   │       └── RabMappingService.php            # Pencocokan exact/wildcard/material + saveMappings
 │   │   │
+│   │   ├── VisionStudio/       # AI Generative Studio (Paid-Only)
+│   │   │   └── Models/
+│   │   │       └── VisionCreation.php               # UUID, user_id, prompt_type, file_path, storage cleanup
+│   │   │
 │   │   └── SystemConfig/       # Konfigurasi Kuota Global & Backoffice Super Admin
 │   │       ├── Models/
 │   │       │   └── AuditLog.php
@@ -189,26 +195,32 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │   ├── Settings/
 │   │   │   │   └── ProfileController.php            # Update profile, avatar, badan usaha, alamat wilayah
 │   │   │   ├── BillingController.php
-│   │   │   ├── CheckoutController.php               # Inisiasi Midtrans Snap
+│   │   │   ├── CheckoutController.php               # Inisiasi Midtrans Snap (concurrency lockForUpdate)
 │   │   │   ├── DashboardController.php
 │   │   │   ├── IndonesiaRegionController.php        # API /region/* (provinces,cities,districts,villages) — tanpa auth
-│   │   │   ├── PlansController.php
+│   │   │   ├── PlansController.php                  # Menggunakan cache Plan::getActivePlansForDisplay()
 │   │   │   ├── ProjectsPageController.php
 │   │   │   ├── TeamsPageController.php
 │   │   │   ├── UserSearchController.php
+│   │   │   ├── VisionStudioController.php           # AI Generative Studio (generate, load, delete)
 │   │   │   └── WelcomeController.php                # Landing page (Welcome.vue)
 │   │   │
 │   │   └── Middleware/
 │   │       ├── CheckAccountStatus.php               # Cek apakah akun aktif/suspended
+│   │       ├── CheckVisionStudioAccess.php          # Gating fitur AI Vision Studio (khusus berbayar)
 │   │       ├── EnsureSuperAdmin.php                 # Guard route /admin/*
 │   │       ├── HandleAppearance.php                 # Dark/light/system mode
 │   │       ├── HandleInertiaRequests.php            # Share data global ke Inertia
 │   │       ├── ProjectClientAccessMiddleware.php    # Validasi email undangan vs user login
 │   │       └── RevisionLimitEnforcementMiddleware.php  # Blokir pin jika kuota habis
 │   │
-│   └── Providers/
-│       ├── AppServiceProvider.php
-│       └── FortifyServiceProvider.php              # Konfigurasi Fortify features & views
+│   ├── Providers/
+│   │   ├── AppServiceProvider.php                  # Tanpa listener berat User::retrieved (eliminasi N+1)
+│   │   └── FortifyServiceProvider.php              # Konfigurasi Fortify features & views
+│   │
+│   └── Support/                # Helper arsitektur sistem
+│       └── CacheKeys.php                           # Safe Redis cache tagging, plan keys, flush invalidation
+│
 │
 ├── resources/                  # 🟢 FRONTEND — Inertia.js + Vue 3
 │   │
@@ -300,10 +312,12 @@ web3d_arsitek/                  # Root monorepo Laravel 12 + Inertia.js + Vue 3
 │   │   │   │   ├── Import.vue          # Wizard 3-step import CSV/XLSX (Fase B)
 │   │   │   │   ├── GlbEstimator.vue    # Estimator dari .glb (Fase C) — auto-load, tabel mesh, basis selector
 │   │   │   │   └── Mappings.vue        # Halaman mapping RAB (/rab/mappings)
-│   │   │   └── Settings/
-│   │   │       ├── Profile.vue             # Profil + badan usaha + alamat wilayah Indonesia (AddressInput.vue)
-│   │   │       ├── Password.vue
-│   │   │       └── Appearance.vue
+│   │   │   ├── Settings/
+│   │   │   │   ├── Profile.vue             # Profil + badan usaha + alamat wilayah Indonesia (AddressInput.vue)
+│   │   │   │   ├── Password.vue
+│   │   │   │   └── Appearance.vue
+│   │   │   └── VisionStudio/
+│   │   │       └── Index.vue               # AI Vision Studio (Image & Video prompts, gallery, localStorage state)
 │   │   │
 │   │   ├── routes/             # Typed route helpers (Ziggy/manual)
 │   │   └── types/              # TypeScript type definitions
@@ -373,3 +387,16 @@ Routing **tidak menggunakan Nuxt file-based routing**. Semua route didefinisikan
 - Queue driver: **database** (bukan Redis).
 - `DracoCompressionJob` di-dispatch ke queue `default`.
 - Worker: `php artisan queue:work`.
+
+### Caching & Redis Architecture (Skala 1 Juta Pengguna)
+- Driver: **Redis** (`CACHE_STORE=redis`).
+- Multi-Database Separation:
+  - Database 0: Framework & general default connection.
+  - Database 1: Application cache (`REDIS_CACHE_DB=1`), safe cache tagging via `CacheKeys::tags()`, master data `Plan::getActivePlansForDisplay()` dengan TTL 1 jam.
+  - Database 2: User sessions (`REDIS_SESSION_DB=2`), memastikan perintah `cache:clear` / flush cache tidak mendrop session user yang sedang online.
+- Fallback Config: `config/session.php` mendeteksi driver secara dinamis agar kompatibel saat driver bernilai `database` maupun `redis`.
+
+### Concurrency & Race Condition Protection
+- Distributed Atomic Locks (`Cache::lock(...)->block(5)`): Digunakan pada `CreateProjectAction`, `SaveCaptureAction`, dan `PinCommentAction` untuk melindungi kuota dan revisi dari race condition.
+- Transaction Isolation: Penanganan webhook dan callback pembayaran Midtrans di `CheckoutController` dibungkus `DB::transaction` dengan `lockForUpdate()` pada record order pending.
+- Eliminasi N+1: Tidak ada listener `User::retrieved` di service provider; seluruh controller wajib menggunakan eager loading relasi (`with(...)` / `withCount(...)`).

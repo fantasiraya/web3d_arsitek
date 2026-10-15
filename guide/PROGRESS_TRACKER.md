@@ -44,7 +44,8 @@
 | Admin Transactions (`/admin/transactions`) | Backend & Frontend | 🟢 Completed | Riwayat transaksi billing |
 | Admin Audit Logs (`/admin/audit-logs`) | Backend & Frontend | 🟢 Completed | Log perubahan admin |
 | `EnsureSuperAdmin` Middleware | Backend | 🟢 Completed | Guard semua route `/admin/*` |
-| System Settings Caching | Backend | 🔴 Pending | Saat ini baca langsung DB; Redis/database cache belum diimplementasikan |
+| System Settings & Plan Caching (Redis) | Backend & Infra | 🟢 Completed | `CacheKeys.php` safe tagging, `Plan::getActivePlansForDisplay()` TTL 1h, pemisahan Redis DB 1 cache / DB 2 session — 2026-10-15 |
+| Admin Settings & API Key Config (`/admin/settings`) | Backend & Frontend | 🟢 Completed | Pengaturan API Key AI & general config — 2026-10-15 |
 
 ### 3. Project & Storage Domain (`Domains/Project`)
 | Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
@@ -193,6 +194,28 @@
 | Export SVG | Backend | 🔴 Pending | Scalable, bisa dibuka Inkscape/browser |
 | Undo/Redo | Frontend | 🔴 Pending | Stack history konva |
 
+### 12. AI Vision Studio Domain (`Domains/VisionStudio`)
+| Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
+| :--- | :--- | :---: | :--- |
+| Database Migration `vision_creations` | Database | 🟢 Completed | UUID PK, `user_id` FK cascadeOnDelete, `title`, `room_name`, `prompt_type` ('image'/'video'), `file_path`, `end_file_path`, `file_size_bytes`, `width`, `height`, `prompt`, `negative_prompt`, `metadata`, index `(user_id, created_at)` — 2026-10-15 |
+| Model `VisionCreation` | Backend DDD | 🟢 Completed | `HasUuids`, casts, relasi `user()`, accessor `url` & `end_url`, hook pembersihan storage saat model dihapus (`Storage::disk('public')->delete`) — 2026-10-15 |
+| Controller & Actions `VisionStudioController` | Backend | 🟢 Completed | Endpoints `/vision-studio` (index), `/vision-studio/generate` (POST), `/vision-studio/load/{creation}` (GET), `/vision-studio/creations/{creation}` (DELETE) — 2026-10-15 |
+| Feature Gating (Khusus Berbayar: Pro, Enterprise & Super Admin) | Backend DDD & Middleware | 🟢 Completed | `SubscriptionLimitService::canAccessVisionStudio($user)`, middleware `CheckVisionStudioAccess` (`vision.access`), redirect free tier ke `/plans` dengan pesan upgrade atau 403 API — 2026-10-15 |
+| Navigasi Sidebar & Pricing Gating | Frontend | 🟢 Completed | `AppSidebar.vue` menampilkan lock icon + badge `PRO` bagi user Free; `PricingSection.vue` mencantumkan fitur AI Vision Studio — 2026-10-15 |
+| Galeri Kreasi AI Independen | Frontend & Backend | 🟢 Completed | Galeri kreasi AI terpisah penuh dari 3D project captures, tanpa opsi switch tampil ke klien, sinkronisasi hapus storage — 2026-10-15 |
+| LocalStorage Studio Persistence | Frontend (`VisionStudio/Index.vue`) | 🟢 Completed | Form generator prompt, selected presets, dan riwayat kreasi tersimpan di browser `localStorage` agar tidak reset saat refresh halaman — 2026-10-15 |
+
+### 13. High Concurrency, Cache Architecture & Performance (1 Juta Pengguna)
+| Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
+| :--- | :--- | :---: | :--- |
+| Pemisahan Database Redis (Cache vs Session) | Backend Infra | 🟢 Completed | `config/database.php` & `config/session.php`: DB 0 default, DB 1 cache (`REDIS_CACHE_DB=1`), DB 2 session (`REDIS_SESSION_DB=2`) agar `cache:clear` tidak mendrop session user aktif — 2026-10-15 |
+| Safe Driver-Agnostic Tagging Wrapper | Backend Support | 🟢 Completed | `CacheKeys::tags()` mendukung Redis native tagging dengan graceful fallback untuk driver non-taggable — 2026-10-15 |
+| Caching Master Data Plans | Backend DDD | 🟢 Completed | `Plan::getActivePlansForDisplay()` dicache di Redis (TTL 1 jam, tag `plans`). Invalidation otomatis pada `Admin/PlanController` dan `ChangeUserPlanAction` — 2026-10-15 |
+| Eliminasi Root Cause N+1 Queries Global | Backend Infra | 🟢 Completed | Menghapus event listener `User::retrieved` di `AppServiceProvider.php` yang memicu puluhan query SQL `loadMissing('roles')` setiap kali user di-hydrate — 2026-10-15 |
+| Eager Loading di Controller Admin | Backend | 🟢 Completed | Eager load relasi `user.activeSubscription.planModel`, `user.planOverride`, `invitedClients`, dan `withCount('projects')` di `Admin/ProjectController` dan `Admin/SubscriptionController` — 2026-10-15 |
+| Distributed Atomic Locks (Race Condition Prevention) | Backend DDD | 🟢 Completed | `Cache::lock(...)->block(5)` pada `CreateProjectAction`, `SaveCaptureAction`, dan `PinCommentAction` untuk menjamin kuota tidak jebol saat concurrency tinggi — 2026-10-15 |
+| Payment Concurrency & Idempotency Protection | Backend | 🟢 Completed | `CheckoutController::paymentCallback` dan webhook notification dibungkus `DB::transaction` dengan `lockForUpdate()` pada record order pending untuk mencegah aktivasi ganda — 2026-10-15 |
+
 ---
 
 ## 📝 Activity Logs
@@ -219,3 +242,8 @@
 - **2026-10-14 (Update):** Three.js Photorealistic Post-Processing (Studio HD Render) & Admin Quota Controls — `usePostProcessing.ts` memanfaatkan `EffectComposer`, `GTAOPass` (Ground Truth Ambient Occlusion untuk bayangan kontak sudut dinding/lantai arsitektural), `UnrealBloomPass` (pendaran cahaya lembut jendela & lampu), `OutputPass`, dan `ACESFilmicToneMapping`. Tombol interaktif "Studio HD" pada toolbar atas & toggle preview di modal capture snapshot canvas dengan dukungan resolusi offscreen Viewport, 1080p Full HD, dan 4K Ultra HD (3840×2160). Admin backoffice (`/admin/plans`) diperbarui dengan kontrol kuota capture untuk Free Tier & Pro Tier. 116 Pest tests lulus 100%.
 - **2026-10-14 (Update):** Tingkat 2: True GPU Ray-Tracing & Path-Tracing (`three-gpu-pathtracer`) — Composable `usePathTracer.ts` mengintegrasikan `WebGLPathTracer` dan `three-mesh-bvh` untuk kalkulasi Global Illumination (GI) fisik, pantulan cermin nyata, dan soft shadows tanpa artefak shadow map. Mode switcher pada modal Ambil Gambar ("Real-Time Studio" vs "Path-Tracing PRO"), pilihan kualitas sampel (15 Cepat, 30 Standar, 60 Ultra), overlay progress bar interaktif dengan animasi persentase & hitungan sampel real-time, tombol batalkan render, dan auto-fallback resolusi hingga 4K Ultra HD. 116 Pest tests lulus 100%, Vite build sukses.
 - **2026-10-14 (Update):** AI Prompt Generator & Auto-Save on Blur untuk 3D Captures — Generator prompt arsitektural otomatis berbasis konteks 3D (ruangan, jam pencahayaan matahari, engine render, judul proyek). Editable textarea di modal ambil gambar dengan tombol Salin Prompt & Reset. Kolom `prompt` di tabel `project_captures`, `UpdateCapturePromptAction` + Form Request + route `PATCH /projects/{project}/captures/{capture}/prompt`. Tampilan prompt di Drawer Galeri & Lightbox modal dengan fitur **Auto-Save otomatis saat kursor keluar (blur)** tanpa tombol simpan manual, dilengkapi indikator status visual (Menyimpan... / Tersimpan ✓). 119 Pest tests lulus 100%.
+- **2026-10-15:** Implementasi AI Vision Studio (`Domains/VisionStudio`) & Pengaturan API Key Admin — Penambahan menu AI Vision Studio dengan kapabilitas Image & Video generative prompt arsitektural. Pembuatan migration `vision_creations`, Model `VisionCreation` (dengan hook pembersihan storage file), dan `VisionStudioController`. Integrasi pengaturan API key AI di admin panel (`/admin/settings`). Fitur galeri mandiri terpisah dari 3D capture (tanpa opsi tampil ke klien). Dukungan persistensi parameter prompt dan state generator ke browser `localStorage`.
+- **2026-10-15 (Update):** Feature Gating AI Vision Studio Berbayar (Paid-Only) — Fitur AI Vision Studio diubah menjadi eksklusif untuk tier berbayar (Pro, Enterprise, dan Super Admin). Penambahan method `canAccessVisionStudio` di `SubscriptionLimitService`, middleware `CheckVisionStudioAccess` (`vision.access`), lock badge di `AppSidebar.vue`, serta benefit card di `PricingSection.vue`.
+- **2026-10-15 (Update):** Arsitektur Caching Skala 1 Juta Pengguna & Optimasi Redis — Konfigurasi multi-database Redis (`config/database.php` DB 1 untuk cache, DB 2 untuk session user), helper `CacheKeys.php` dengan safe-tagging wrapper, caching master data paket langganan aktif `Plan::getActivePlansForDisplay()` dengan TTL 1 jam dan auto-invalidation pada edit admin/plan changes. Perbaikan fallback session connection agar tidak crash pada driver non-redis saat build Wayfinder/Vite.
+- **2026-10-15 (Update):** Proteksi Race Condition & Eliminasi N+1 Query Sistemik — Penghapusan hook berat `User::retrieved` di `AppServiceProvider.php` yang mengeliminasi puluhan query overhead per request. Eager loading relasi admin pagination di `ProjectController` dan `SubscriptionController`. Implementasi Redis distributed atomic lock (`Cache::lock()->block()`) pada `CreateProjectAction`, `SaveCaptureAction`, dan `PinCommentAction`. Penerapan `DB::transaction` + `lockForUpdate()` pada penanganan webhook dan callback pembayaran Midtrans di `CheckoutController`. 132 Pest tests lulus 100%.
+

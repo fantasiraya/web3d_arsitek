@@ -1,5 +1,7 @@
-# 📄 Product Requirement Document (PRD) v2.8
+# 📄 Product Requirement Document (PRD) v2.9
 
+> **v2.9 Note:** Menambahkan **Section 12 (AI Vision Studio)** dan **Section 13 (Arsitektur Caching & Proteksi Konkurensi Skala Tinggi)**. Update MoSCoW matrix: AI Vision Studio (Image/Video generative, Paid-Only) & Caching Redis Multi-DB + Concurrency Protection → ✅ Selesai.
+>
 > **v2.8 Note:** Menambahkan **Section 11 (Pencahayaan Real-Time di Viewer & Snapshot Captures)**. Update MoSCoW matrix: Real-Time Solar Lighting Simulation (Three.js + SunCalc) & 3D Snapshot Captures → ✅ Selesai.
 >
 > **v2.7 Note:** Menambahkan **Section 9 (Profil Arsitek)** dan **Section 10 (Drawing 2D — Rencana)**. Update MoSCoW matrix: RAB Fase A/B/C, AHSP, Export RAB, Mapping RAB → ✅ Selesai. Drawing 2D ditambahkan sebagai Should Have 🔴 Pending.
@@ -101,6 +103,8 @@ Membangun platform SaaS berbasis Web 3D interaktif bernama **PitchArch** yang me
 | **Should Have** | Profil Arsitek Lengkap (badan usaha, phone, alamat wilayah Indonesia) | ✅ Selesai |
 | **Should Have** | Real-Time Solar Lighting Simulation (Three.js + SunCalc, arah utara, night mode LAMPU_*) | ✅ Selesai |
 | **Should Have** | 3D Snapshot Captures (Viewport/FHD PNG, kuota gambar, galeri per-ruangan & jam, switch visibilitas klien) | ✅ Selesai |
+| **Should Have** | AI Vision Studio (Image & Video prompts arsitektural, Paid-Only gating, local persistence) | ✅ Selesai |
+| **Should Have** | Arsitektur Cache Redis Multi-DB & Proteksi Konkurensi Skala 1M User (atomic locks) | ✅ Selesai |
 | **Should Have** | Drawing 2D (Denah/Tampak/Potongan, konva.js, export DXF+SVG) — Enterprise only | 🔴 Pending |
 | **Could Have** | First-Person Walkthrough Mode | 🔴 Pending |
 | **Could Have** | Material Swapper | 🔴 Pending |
@@ -311,3 +315,54 @@ Menyediakan editor gambar teknik 2D (denah, tampak, potongan) langsung di platfo
 5. **3D Snapshot Captures:** Mengambil tangkapan layar langsung dari canvas Three.js (`preserveDrawingBuffer: true`), mendukung resolusi Viewport dan Full HD (1920x1080). Snapshot dikaitkan dengan Camera Preset (ruangan) dan jam simulasi.
 6. **Batas Kuota Simpan:** Hanya Arsitek yang boleh menyimpan gambar ke server (`SaveCaptureAction`). Batas kuota dihitung **per-gambar** (Free Tier: 5 gambar, Pro Tier: 50 gambar, Enterprise: unlimited). Klien hanya bisa mengunduh PNG secara lokal.
 7. **Galeri Snapshot:** Drawer galeri di Viewer untuk melihat, unduh PNG, menghapus (arsitek saja), dan switch toggle visibilitas ke klien (`is_visible_to_clients`).
+
+---
+
+## 12. AI Vision Studio (`Domains/VisionStudio`)
+
+### 12.A Tujuan & Konsep
+AI Vision Studio adalah lingkungan studio generatif arsitektur berbasis AI yang berdiri independen dari proyek 3D. Memfasilitasi arsitek dalam menghasilkan visualisasi konsep, render realistis, sketsa suasana, hingga prompt video sinematik.
+
+### 12.B Aturan Bisnis & Batasan Akses
+1. **Eksklusif Tier Berbayar (Paid-Only):**
+   - Hanya pengguna dengan paket aktif **Pro**, **Enterprise**, atau role **Super Admin** yang dapat mengakses AI Vision Studio (`SubscriptionLimitService::canAccessVisionStudio($user)`).
+   - Pengguna paket **Free** yang mengakses route web `/vision-studio` otomatis di-redirect ke halaman `/plans` disertai flash alert upgrade.
+   - Panggilan API dari paket Free mengembalikan respons error `403 Forbidden`.
+   - Di `AppSidebar.vue`, menu AI Vision Studio dilengkapi ikon gembok dan badge amber `PRO` bagi pengguna Free.
+2. **Galeri Kreasi Mandiri (Terpisah Penuh):**
+   - Hasil kreasi studio disimpan pada tabel `vision_creations`.
+   - Penyimpanan gambar dan kreasi AI **TIDAK digabung** dengan snapshot 3D proyek (`project_captures`).
+   - Tidak ada fitur atau switch "Tampilkan ke Klien", menjaga privasi proses eksplorasi desain arsitek.
+3. **Persistensi State Browser (LocalStorage):**
+   - Parameter prompt, jenis kreasi ('image'/'video'), dan riwayat studio disinkronkan ke browser `localStorage`.
+   - Me-refresh halaman tidak akan mereset atau menghilangkan tombol serta input yang sedang dikerjakan.
+4. **Lifecycle & Cleanup Storage:**
+   - Menghapus entri kreasi di studio secara otomatis memicu event model Eloquent yang menghapus file media fisik terkait di disk storage `public`.
+
+---
+
+## 13. Arsitektur Caching & Proteksi Konkurensi Skala Tinggi (1 Juta Pengguna)
+
+### 13.A Arsitektur Redis Multi-Database
+Untuk menjamin stabilitas sistem dengan target 1.000.000 pengguna bersamaan:
+1. **Pemisahan Database Redis:**
+   - **DB 0:** Framework internal, default connection, queue dispatcher.
+   - **DB 1 (`REDIS_CACHE_DB=1`):** Cache aplikasi, master data plans (`Plan::getActivePlansForDisplay()`), denormalized metadata.
+   - **DB 2 (`REDIS_SESSION_DB=2`):** Sesi pengguna aktif.
+   - **Manfaat:** Eksekusi `php artisan cache:clear` pada Redis DB 1 sama sekali tidak akan menghapus sesi login pengguna aktif di Redis DB 2.
+2. **Safe Driver-Agnostic Tagging:**
+   - Helper `CacheKeys::tags(['plans'])` membungkus pemanggilan tag Redis sehingga tidak crash bila aplikasi berpindah ke driver cache tanpa fitur tagging.
+3. **Cache Invalidation Terjadwal & Reaktif:**
+   - Pembaruan paket di backoffice admin (`Admin/PlanController`) atau upgrade akun (`ChangeUserPlanAction`) langsung mem-flush tag `plans` dan user cache secara otomatis.
+
+### 13.B Proteksi Race Condition (Distributed Atomic Locking)
+Operasi kritis yang memvalidasi kuota dan status kini diamankan dengan atomic distributed lock Redis:
+- **Pembuatan Proyek (`CreateProjectAction`):** `Cache::lock("user:{$user->id}:create_project", 15)->block(5)` mencegah arsitek mengeklik berkali-kali untuk menembus batas maksimal kuota proyek.
+- **Penyimpanan Snapshot 3D (`SaveCaptureAction`):** `Cache::lock("user:{$user->id}:create_capture", 15)->block(5)` mencegah bypass kuota capture per plan.
+- **Penambahan Pin Komentar Revisi (`PinCommentAction`):** `Cache::lock("project:{$project->id}:pin_comment", 15)->block(5)` mencegah inkonsistensi nomor revisi saat beberapa klien mengirim komentar di detik yang sama.
+- **Pembayaran Midtrans (`CheckoutController`):** Callback dan webhook diverifikasi di dalam `DB::transaction` dengan `lockForUpdate()` pada order pending untuk mencegah aktivasi ganda pesanan.
+
+### 13.C Eliminasi N+1 Query Sistemik
+- Event listener `User::retrieved` di `AppServiceProvider.php` telah dihapus.
+- Eager loading relasi diterapkan pada seluruh endpoint admin dan listing data (`with(['user.activeSubscription.planModel', 'user.planOverride', 'invitedClients'])` dan `withCount('projects')`).
+

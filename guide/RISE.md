@@ -1,3 +1,7 @@
+> **v2.9 Note:** Ditambahkan langkah 18-20 (Simulasi Pencahayaan & Captures, AI Vision Studio, Redis Multi-DB Cache & Distributed Concurrency Locking).
+>
+> **v2.8 Note:** Ditambahkan langkah 18 (Pencahayaan Matahari Real-Time Three.js + SunCalc & 3D Snapshot Captures).
+>
 > **v2.7 Note:** Ditambahkan langkah 15-17 (AHSP, Profil Arsitek & Wilayah, Drawing 2D rencana).
 >
 > **v2.6 Note:** Ditambahkan langkah 13-14 (modul RAB).
@@ -8,9 +12,9 @@
 Bertindaklah sebagai Senior Tech Lead spesialis Laravel 12 (Domain-Driven Design / DDD), Inertia.js, dan Vue 3 dengan keahlian Three.js.
 
 [INPUT]
-Mengacu pada PRD v2.5 "PitchArch — Platform Presentasi & Feedback Arsitektur 3D" beserta spesifikasi teknis terkini:
+Mengacu pada PRD v2.9 "PitchArch — Platform Presentasi & Feedback Arsitektur 3D" beserta spesifikasi teknis terkini:
 
-- **Backend:** Laravel 12 (DDD), MySQL, queue driver `database`, storage `public` disk lokal, `spatie/laravel-permission` (khusus `super_admin`), `midtrans/midtrans-php`, `laravel/socialite`, `laravel/reverb`.
+- **Backend:** Laravel 12 (DDD), MySQL, Redis (DB 1 Cache, DB 2 Session), queue driver `database`, storage `public` disk lokal, `spatie/laravel-permission` (khusus `super_admin`), `midtrans/midtrans-php`, `laravel/socialite`, `laravel/reverb`.
 - **Auth:** Laravel Fortify (registration, resetPasswords, emailVerification, twoFactor, passkeys). Google OAuth via Socialite (redirect-based, bukan token API).
 - **Frontend:** Inertia.js + Vue 3 (monorepo Laravel, bukan Nuxt 3 terpisah). Routing via `routes/web.php`. Build via Vite. CSS: Tailwind CSS v4. UI: shadcn/ui Vue port.
 - **3D Engine:** Three.js (internal viewer only — bukan di landing publik). GSAP + ScrollTrigger untuk scrollytelling landing.
@@ -52,6 +56,12 @@ Mengacu pada PRD v2.5 "PitchArch — Platform Presentasi & Feedback Arsitektur 3
 
 17. Tuliskan rancangan **Drawing 2D** *(belum diimplementasikan, tunggu perintah)*: domain baru `Domains/Drawing`, migration `drawing_sheets` (project_id, type: plan/elevation/section, scale, paper_size, orientation, grid_spacing, unit) + `drawing_elements` (sheet_id, type: wall/door/window/stair/column/dimension/text/line/room_label, x1/y1/x2/y2, properties JSON, layer), frontend editor berbasis `konva.js` dengan toolbar + grid snap + library simbol, export DXF via `nzcreations/dxf` + SVG, gating `plans.can_use_drawing = true` hanya Enterprise. Tidak ada shared state dengan RAB — domain Drawing independen.
 
+18. Tuliskan **Simulasi Pencahayaan Matahari Real-Time & 3D Snapshot Captures**: migration kolom sun simulation di `projects` (`latitude`, `longitude`, `north_angle`, `solar_date`) dan tabel `project_captures` (dengan kolom `prompt`), composable `useSunSimulation.ts` (SunCalc + arah utara + auto night mode `LAMPU_*`), composable `usePostProcessing.ts` (GTAOPass contact shadows, UnrealBloomPass, ACESFilmic ToneMapping), composable `usePathTracer.ts` (True GPU Path-Tracing, progressive samples), Action `SaveCaptureAction` (gating kuota per-gambar via `SubscriptionLimitService`, distributed lock), `DeleteCaptureAction`, `ToggleCaptureVisibilityAction`, `UpdateCapturePromptAction` (auto-save on blur), `ProjectCaptureController`, dan UI di `Viewer.vue` (modal snapshot, drawer galeri, lightbox preview).
+
+19. Tuliskan **AI Vision Studio (`Domains/VisionStudio`)**: migration tabel `vision_creations`, model `VisionCreation` (hook `deleted` untuk hapus file fisik di storage), controller `VisionStudioController`, Form Request/Actions, middleware `CheckVisionStudioAccess` (`vision.access`) yang membatasi akses khusus pengguna berbayar (Pro, Enterprise, Super Admin) dan me-redirect Free tier ke `/plans`, lock badge di `AppSidebar.vue`, halaman Vue `VisionStudio/Index.vue` dengan persistensi browser `localStorage` dan galeri mandiri terpisah dari 3D snapshot captures.
+
+20. Tuliskan **Arsitektur Caching & Proteksi Konkurensi Skala Tinggi (1 Juta Pengguna)**: konfigurasi Redis multi-database (`REDIS_CACHE_DB=1` untuk cache, `REDIS_SESSION_DB=2` untuk session), helper `CacheKeys.php` dengan safe tagging wrapper, caching master data `Plan::getActivePlansForDisplay()` dengan TTL 1 jam + auto invalidation di `Admin/PlanController` dan `ChangeUserPlanAction`, implementasi Redis distributed atomic lock (`Cache::lock()->block(5)`) pada `CreateProjectAction`, `SaveCaptureAction`, dan `PinCommentAction`, `DB::transaction` + `lockForUpdate()` pada webhook pembayaran Midtrans di `CheckoutController`, serta eliminasi global `User::retrieved` listener dan penerapan eager loading eksplisit untuk mencegah N+1 queries.
+
 [EXPECTATION]
 Output berupa contoh kode modular, rapi, aman, dan siap pakai (Developer-Ready / Production-Grade) tanpa penjelasan teori yang bertele-tele. Setiap kode yang menyentuh akses project (viewer, comment, chat) WAJIB melalui `ProjectClientAccessMiddleware` — tidak ada jalur akses tanpa login.
 
@@ -59,7 +69,10 @@ Konvensi tambahan:
 - Gunakan UUID untuk semua primary key (`Str::uuid()` atau `$table->uuid('id')->primary()`).
 - Storage path: `Storage::disk('public')->put(...)` — bukan `s3` atau `r2`.
 - Queue dispatch: `DracoCompressionJob::dispatch(...)` — bukan Redis-specific syntax.
+- Cache & Sessions: Redis multi-DB (`REDIS_CACHE_DB=1`, `REDIS_SESSION_DB=2`).
+- Concurrency: Redis distributed lock `Cache::lock()->block()` untuk operasi kuota kritis.
 - Inertia redirect: `return to_route('dashboard')` atau `return Inertia::render('PageName', [...])`.
 - Tidak ada `return response()->json(...)` untuk halaman utama — gunakan Inertia.
 - Form validation: gunakan Form Request class per domain.
 - Nama brand dalam kode dan notifikasi: **PitchArch**, email: `noreply@pitcharch.id`.
+
