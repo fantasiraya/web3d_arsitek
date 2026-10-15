@@ -64,6 +64,7 @@ class PlanController extends Controller
         ]);
 
         $plan->update($validated);
+        \App\Support\CacheKeys::flushPlans();
 
         return back()->with('success', "Tampilan paket {$plan->display_name} berhasil diperbarui.");
     }
@@ -179,6 +180,7 @@ class PlanController extends Controller
         ];
 
         $plan->update($updateData);
+        \App\Support\CacheKeys::flushPlans();
 
         $admin = auth()->user();
         $adminName = $admin?->name ?? 'Admin';

@@ -87,7 +87,32 @@ final class CacheKeys
      */
     public const KEY_SETTINGS_ALL = 'system_settings_all';
 
-    // ── Flush helpers ─────────────────────────────────────────────────────────
+    /**
+     * Tag untuk cache paket/plans.
+     */
+    public const TAG_PLANS = 'plans';
+
+    /**
+     * Key untuk daftar active plans (Welcome & Plans page).
+     * Tags: TAG_PLANS
+     */
+    public const KEY_PLANS_ACTIVE = 'plans:active_list';
+
+    // ── Safe Tagging & Flush helpers ──────────────────────────────────────────
+
+    /**
+     * Dapatkan cache store dengan tags jika didukung driver (Redis/Memcached).
+     * Jika driver tidak mendukung tags (misal file/database saat fallback),
+     * otomatis fallback ke cache store default tanpa crash (BadMethodCallException).
+     */
+    public static function tags(array $tags)
+    {
+        if (\Illuminate\Support\Facades\Cache::supportsTags()) {
+            return \Illuminate\Support\Facades\Cache::tags($tags);
+        }
+
+        return \Illuminate\Support\Facades\Cache::store();
+    }
 
     /**
      * Flush semua cache milik satu user (role, throttle, dll.).
@@ -95,9 +120,11 @@ final class CacheKeys
      */
     public static function flushUser(string $userId): void
     {
-        \Illuminate\Support\Facades\Cache::tags([
-            self::tagUser($userId),
-        ])->flush();
+        if (\Illuminate\Support\Facades\Cache::supportsTags()) {
+            \Illuminate\Support\Facades\Cache::tags([
+                self::tagUser($userId),
+            ])->flush();
+        }
     }
 
     /**
@@ -106,9 +133,11 @@ final class CacheKeys
      */
     public static function flushUserRoles(string $userId): void
     {
-        \Illuminate\Support\Facades\Cache::tags([
-            self::tagUserRoles($userId),
-        ])->flush();
+        if (\Illuminate\Support\Facades\Cache::supportsTags()) {
+            \Illuminate\Support\Facades\Cache::tags([
+                self::tagUserRoles($userId),
+            ])->flush();
+        }
     }
 
     /**
@@ -117,8 +146,27 @@ final class CacheKeys
      */
     public static function flushSettings(): void
     {
-        \Illuminate\Support\Facades\Cache::tags([
-            self::TAG_SETTINGS,
-        ])->flush();
+        if (\Illuminate\Support\Facades\Cache::supportsTags()) {
+            \Illuminate\Support\Facades\Cache::tags([
+                self::TAG_SETTINGS,
+            ])->flush();
+        } else {
+            \Illuminate\Support\Facades\Cache::forget(self::KEY_SETTINGS_ALL);
+        }
+    }
+
+    /**
+     * Flush semua cache daftar paket (plans).
+     * Dipanggil saat: admin mengupdate paket, harga, atau benefit.
+     */
+    public static function flushPlans(): void
+    {
+        if (\Illuminate\Support\Facades\Cache::supportsTags()) {
+            \Illuminate\Support\Facades\Cache::tags([
+                self::TAG_PLANS,
+            ])->flush();
+        } else {
+            \Illuminate\Support\Facades\Cache::forget(self::KEY_PLANS_ACTIVE);
+        }
     }
 }

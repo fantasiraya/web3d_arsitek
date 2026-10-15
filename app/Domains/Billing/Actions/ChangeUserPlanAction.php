@@ -85,6 +85,10 @@ class ChangeUserPlanAction
                 ]
             );
 
+            // Invalidate user cache and in-memory service plan cache immediately
+            \App\Support\CacheKeys::flushUser($targetUser->id);
+            $this->limitService->flushCache();
+
             return $subscription;
         });
     }
