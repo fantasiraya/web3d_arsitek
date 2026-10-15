@@ -384,56 +384,102 @@ function redo() {
     }
 }
 
+function drawSelectionHighlights() {
+    if (!tempLayer) return;
+
+    // Clear old individual highlights
+    const oldHighlights = tempLayer.find('.individual-highlight');
+    oldHighlights.forEach((h) => h.destroy());
+
+    const nodes = tr?.nodes() || [];
+    // If 2 or more nodes are selected, draw an individual dashed cyan outline and corner grips on EACH one!
+    if (nodes.length > 1) {
+        nodes.forEach((node) => {
+            try {
+                const box = node.getClientRect({ skipTransform: false, relativeTo: stage! });
+                const pad = 4;
+                const bx = box.x - pad;
+                const by = box.y - pad;
+                const bw = box.width + pad * 2;
+                const bh = box.height + pad * 2;
+
+                // 1. Dashed Cyan Outline on this object
+                const highlight = new Konva.Rect({
+                    name: 'individual-highlight',
+                    x: bx,
+                    y: by,
+                    width: bw,
+                    height: bh,
+                    stroke: '#06b6d4', // Vibrant Cyan (AutoCAD Grip color)
+                    strokeWidth: 2,
+                    dash: [5, 3],
+                    cornerRadius: 3,
+                    listening: false,
+                });
+                tempLayer!.add(highlight);
+
+                // 2. AutoCAD style Grips (small squares on corners)
+                const gripSize = 6;
+                const gripPositions = [
+                    { x: bx - gripSize / 2, y: by - gripSize / 2 },
+                    { x: bx + bw - gripSize / 2, y: by - gripSize / 2 },
+                    { x: bx - gripSize / 2, y: by + bh - gripSize / 2 },
+                    { x: bx + bw - gripSize / 2, y: by + bh - gripSize / 2 },
+                ];
+                gripPositions.forEach((pos) => {
+                    tempLayer!.add(
+                        new Konva.Rect({
+                            name: 'individual-highlight',
+                            x: pos.x,
+                            y: pos.y,
+                            width: gripSize,
+                            height: gripSize,
+                            fill: '#06b6d4',
+                            stroke: '#ffffff',
+                            strokeWidth: 1,
+                            listening: false,
+                        })
+                    );
+                });
+            } catch {}
+        });
+    }
+
+    tempLayer.batchDraw();
+}
+
 function updateSelectionOverlay() {
     if (!selectionOverlay || !tr || tr.nodes().length === 0 || !props.canEdit || activeTool.value !== 'select') {
         if (selectionOverlay) selectionOverlay.visible(false);
+        if (tr) tr.visible(false);
+        drawSelectionHighlights();
         return;
     }
 
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
+    const nodes = tr.nodes();
 
-    tr.nodes().forEach((node) => {
-        try {
-            const box = node.getClientRect({ skipTransform: false, relativeTo: mainLayer! });
-            minX = Math.min(minX, box.x);
-            minY = Math.min(minY, box.y);
-            maxX = Math.max(maxX, box.x + box.width);
-            maxY = Math.max(maxY, box.y + box.height);
-        } catch {
-            const nx = node.x();
-            const ny = node.y();
-            minX = Math.min(minX, nx);
-            minY = Math.min(minY, ny);
-            maxX = Math.max(maxX, nx + 50);
-            maxY = Math.max(maxY, ny + 50);
-        }
-    });
-
-    if (!isFinite(minX) || !isFinite(maxX)) {
+    // JIKA MULTI-SELEKSI (> 1 OBJEK):
+    // Matikan transformer Konva secara TOTAL (visible: false) agar TIDAK ADA box ungu raksasa,
+    // tidak ada handle resize, dan tidak ada handle rotasi di sekeliling ruangan!
+    if (nodes.length > 1) {
+        tr.visible(false);
+        tr.borderStrokeWidth(0);
+        tr.resizeEnabled(false);
+        tr.rotateEnabled(false);
+        tr.enabledAnchors([]);
+        selectionOverlay.visible(false); // Hilangkan kotak overlay raksasa
+    } else {
+        // Seleksi tunggal: tampilkan transformer normal dengan handle resize & rotate
+        tr.visible(true);
+        tr.borderStrokeWidth(1.5);
+        tr.borderStroke('#8b5cf6');
+        tr.resizeEnabled(true);
+        tr.rotateEnabled(true);
+        tr.enabledAnchors(['top-left', 'top-center', 'top-right', 'middle-right', 'middle-left', 'bottom-left', 'bottom-center', 'bottom-right']);
         selectionOverlay.visible(false);
-        return;
     }
 
-    const pad = 6;
-    const x = Math.round(minX - pad);
-    const y = Math.round(minY - pad);
-    const w = Math.round(maxX - minX + pad * 2);
-    const h = Math.round(maxY - minY + pad * 2);
-
-    selectionOverlay.setAttrs({
-        x,
-        y,
-        width: Math.max(20, w),
-        height: Math.max(20, h),
-        visible: true,
-    });
-    (selectionOverlay as any)._baseX = x;
-    (selectionOverlay as any)._baseY = y;
-    selectionOverlay.moveToTop();
-    tr.moveToTop();
+    drawSelectionHighlights();
     mainLayer?.batchDraw();
 }
 
@@ -1504,6 +1550,10 @@ function drawGrid() {
     gridLayer.batchDraw();
 }
 
+// ── PENDING SELECTION GESTURE STATE (AUTOCAD/FIGMA STYLE SELECTION & DRAG) ──
+let pendingToggleOff: Konva.Group | null = null;
+let pendingSingleSelect: Konva.Group | null = null;
+
 // ── CREATE ARCHITECTURAL SYMBOLS (SHAPES) ──────────────────────────────────
 function createShapeFromElement(el: { id: string; type: string; data: Record<string, any> }): Konva.Group {
     if (el.type === 'paper_frame') return null as any;
@@ -1891,6 +1941,8 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
     let isGroupCloneDrag = false;
 
     group.on('dragstart', (e) => {
+        pendingToggleOff = null;
+        pendingSingleSelect = null;
         isGroupCloneDrag = Boolean(isCtrlHeld.value || isAltHeld.value || e.evt?.ctrlKey || e.evt?.altKey || e.evt?.metaKey);
         groupStartPositions.clear();
         isMultiDragging = Boolean(tr && tr.nodes().length > 1 && tr.nodes().includes(group));
@@ -1922,6 +1974,8 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 }
             });
             tr.update();
+            drawSelectionHighlights();
+            mainLayer?.batchDraw();
         }
     });
 
@@ -2101,6 +2155,7 @@ function initCanvas() {
                 }
             });
             tr.update();
+            drawSelectionHighlights();
             mainLayer?.batchDraw();
         }
     });
@@ -2337,9 +2392,21 @@ function finishBoxSelection(e?: any) {
             selectedElementData.value = found ? { ...found.data, type: found.type } : null;
         } else if (finalNodes.length > 1) {
             selectedNodeId.value = 'multi';
+            const typeCounts = new Map<string, number>();
+            finalNodes.forEach((n) => {
+                const found = elementList.value.find((x) => x.id === n.id());
+                if (found) {
+                    typeCounts.set(found.type, (typeCounts.get(found.type) || 0) + 1);
+                }
+            });
+            const breakdown = Array.from(typeCounts.entries())
+                .map(([t, c]) => `${c}× ${t}`)
+                .join(', ');
+
             selectedElementData.value = {
                 type: `${finalNodes.length} Objek Terblok`,
                 count: finalNodes.length,
+                detail: breakdown,
             };
         } else if (!isShiftOrCtrl) {
             selectedNodeId.value = null;
@@ -2387,47 +2454,80 @@ function setupDrawingInteractions() {
 
         // Selection Tool (AutoCAD Click Selection + AutoCAD Box Drag Selection)
         if (activeTool.value === 'select') {
-            if (e.target === selectionOverlay) return;
-
             const clickedOnTransformer = e.target.getParent()?.className === 'Transformer' || e.target.className === 'Transformer';
             if (clickedOnTransformer) return;
 
-            const parentGroup = getElementGroupFromTarget(e.target);
             const isMultiKey = Boolean(e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey || isCtrlHeld.value);
+
+            let parentGroup = getElementGroupFromTarget(e.target);
+
+            // If clicked on selectionOverlay, check if an element is directly under the pointer
+            if (!parentGroup && e.target === selectionOverlay) {
+                selectionOverlay.visible(false);
+                const pos = stage.getPointerPosition();
+                if (pos) {
+                    const hit = stage.getIntersection(pos);
+                    parentGroup = getElementGroupFromTarget(hit);
+                }
+                selectionOverlay.visible(Boolean(tr && tr.nodes().length > 0));
+            }
 
             if (parentGroup) {
                 if (isMultiKey) {
                     const currentNodes = [...(tr?.nodes() || [])];
                     const idx = currentNodes.indexOf(parentGroup);
                     if (idx >= 0) {
-                        currentNodes.splice(idx, 1);
+                        // Objek ini sudah ada di seleksi!
+                        // JANGAN langsung dihapus, karena user mungkin ingin melakukan Ctrl + Drag (salin seleksi)!
+                        // Kita jadikan pendingToggleOff. Jika user melepas mouse tanpa drag, baru di-deselect di mouseup.
+                        pendingToggleOff = parentGroup;
+                        pendingSingleSelect = null;
+                        return;
                     } else {
+                        // Objek baru: tambahkan ke multi-seleksi
+                        pendingToggleOff = null;
+                        pendingSingleSelect = null;
                         currentNodes.push(parentGroup);
-                    }
-                    currentNodes.forEach((n) => n.draggable(props.canEdit));
-                    tr?.nodes(currentNodes);
-                    tr?.moveToTop();
-                    if (currentNodes.length === 1) {
-                        selectedNodeId.value = currentNodes[0].id();
-                        const found = elementList.value.find((x) => x.id === currentNodes[0].id());
-                        selectedElementData.value = found ? { ...found.data, type: found.type } : null;
-                    } else if (currentNodes.length > 1) {
-                        selectedNodeId.value = 'multi';
-                        selectedElementData.value = {
-                            type: `${currentNodes.length} Objek Terpilih`,
-                            count: currentNodes.length,
-                        };
-                    } else {
-                        selectedNodeId.value = null;
-                        selectedElementData.value = null;
+                        currentNodes.forEach((n) => n.draggable(props.canEdit));
+                        tr?.nodes(currentNodes);
+                        tr?.moveToTop();
+                        if (currentNodes.length === 1) {
+                            selectedNodeId.value = currentNodes[0].id();
+                            const found = elementList.value.find((x) => x.id === currentNodes[0].id());
+                            selectedElementData.value = found ? { ...found.data, type: found.type } : null;
+                        } else {
+                            selectedNodeId.value = 'multi';
+                            const typeCounts = new Map<string, number>();
+                            currentNodes.forEach((n) => {
+                                const found = elementList.value.find((x) => x.id === n.id());
+                                if (found) {
+                                    typeCounts.set(found.type, (typeCounts.get(found.type) || 0) + 1);
+                                }
+                            });
+                            const breakdown = Array.from(typeCounts.entries())
+                                .map(([t, c]) => `${c}× ${t}`)
+                                .join(', ');
+
+                            selectedElementData.value = {
+                                type: `${currentNodes.length} Objek Terpilih`,
+                                count: currentNodes.length,
+                                detail: breakdown,
+                            };
+                        }
                     }
                 } else {
                     const currentNodes = tr?.nodes() || [];
                     if (currentNodes.length > 1 && currentNodes.includes(parentGroup)) {
-                        // Pertahankan multi-seleksi agar user bisa men-drag semua objek bersamaan
+                        // User mengklik salah satu objek yang sudah terpilih di antara multi-seleksi tanpa Ctrl
+                        // Jika di-drag, geser bersama! Jika dilepas tanpa drag, jadikan single select.
+                        pendingSingleSelect = parentGroup;
+                        pendingToggleOff = null;
                         updateSelectionOverlay();
                         return;
                     } else {
+                        // Klik tunggal: pilih hanya objek ini
+                        pendingToggleOff = null;
+                        pendingSingleSelect = null;
                         selectedNodeId.value = parentGroup.id();
                         parentGroup.draggable(props.canEdit);
                         tr?.nodes([parentGroup]);
@@ -2441,23 +2541,15 @@ function setupDrawingInteractions() {
                 return;
             }
 
-            // Jika objek sedang terblok dan user mengklik di dalam area bounding box seleksi,
-            // pertahankan blok seleksi agar tidak hilang dan dapat langsung di-drag!
-            const clickPos = stage.getPointerPosition();
-            if (clickPos && tr && tr.nodes().length > 0 && !isMultiKey) {
-                const trRect = tr.getClientRect();
-                if (
-                    clickPos.x >= trRect.x &&
-                    clickPos.x <= trRect.x + trRect.width &&
-                    clickPos.y >= trRect.y &&
-                    clickPos.y <= trRect.y + trRect.height
-                ) {
-                    return;
-                }
+            // Jika mengklik area kosong di dalam selectionOverlay tanpa Ctrl, biarkan untuk di-drag
+            if (e.target === selectionOverlay && !isMultiKey) {
+                return;
             }
 
-            // Klik di area luar: Mulai seleksi kotak Marquee khas AutoCAD
+            // Klik di area kosong luar: Hapus seleksi jika tidak menekan Ctrl/Shift
             if (!isMultiKey) {
+                pendingToggleOff = null;
+                pendingSingleSelect = null;
                 selectedNodeId.value = null;
                 selectedElementData.value = null;
                 tr?.nodes([]);
@@ -2599,6 +2691,60 @@ function setupDrawingInteractions() {
             if (containerRef.value) {
                 containerRef.value.style.cursor = activeTool.value === 'pan' ? 'grab' : 'crosshair';
             }
+        }
+
+        // Handle pending multi-selection toggle off (jika klik tanpa drag pada objek yang sudah terpilih dengan Ctrl/Shift)
+        if (pendingToggleOff) {
+            const targetGroup = pendingToggleOff;
+            pendingToggleOff = null;
+            pendingSingleSelect = null;
+            const currentNodes = (tr?.nodes() || []).filter((n) => n !== targetGroup);
+            tr?.nodes(currentNodes);
+            if (currentNodes.length === 1) {
+                selectedNodeId.value = currentNodes[0].id();
+                const found = elementList.value.find((x) => x.id === currentNodes[0].id());
+                selectedElementData.value = found ? { ...found.data, type: found.type } : null;
+            } else if (currentNodes.length > 1) {
+                selectedNodeId.value = 'multi';
+                const typeCounts = new Map<string, number>();
+                currentNodes.forEach((n) => {
+                    const found = elementList.value.find((x) => x.id === n.id());
+                    if (found) {
+                        typeCounts.set(found.type, (typeCounts.get(found.type) || 0) + 1);
+                    }
+                });
+                const breakdown = Array.from(typeCounts.entries())
+                    .map(([t, c]) => `${c}× ${t}`)
+                    .join(', ');
+
+                selectedElementData.value = {
+                    type: `${currentNodes.length} Objek Terpilih`,
+                    count: currentNodes.length,
+                    detail: breakdown,
+                };
+            } else {
+                selectedNodeId.value = null;
+                selectedElementData.value = null;
+            }
+            updateSelectionOverlay();
+            mainLayer?.batchDraw();
+            return;
+        }
+
+        // Handle pending single select (jika user mengklik objek dalam grup multi-select tanpa Ctrl dan tanpa drag)
+        if (pendingSingleSelect) {
+            const targetGroup = pendingSingleSelect;
+            pendingSingleSelect = null;
+            pendingToggleOff = null;
+            selectedNodeId.value = targetGroup.id();
+            targetGroup.draggable(props.canEdit);
+            tr?.nodes([targetGroup]);
+            tr?.moveToTop();
+            const found = elementList.value.find((x) => x.id === targetGroup.id());
+            selectedElementData.value = found ? { ...found.data, type: found.type } : null;
+            updateSelectionOverlay();
+            mainLayer?.batchDraw();
+            return;
         }
 
         // Selesaikan seleksi kotak AutoCAD Marquee Box Selection
@@ -2993,6 +3139,9 @@ function exportPng() {
     const oldNodes = tr?.nodes() || [];
     tr?.nodes([]);
     if (selectionOverlay) selectionOverlay.visible(false);
+    const oldHighlights = tempLayer?.find('.individual-highlight') || [];
+    oldHighlights.forEach((h) => h.destroy());
+    tempLayer?.batchDraw();
     stage.batchDraw();
 
     try {
@@ -3037,6 +3186,9 @@ function exportPdfOrPrint() {
     const oldNodes = tr?.nodes() || [];
     tr?.nodes([]);
     if (selectionOverlay) selectionOverlay.visible(false);
+    const oldHighlights = tempLayer?.find('.individual-highlight') || [];
+    oldHighlights.forEach((h) => h.destroy());
+    tempLayer?.batchDraw();
     stage?.batchDraw();
 
     setTimeout(() => {
@@ -3992,12 +4144,17 @@ onUnmounted(() => {
                         <span>Jumlah:</span>
                         <span class="font-mono text-emerald-400 font-bold">{{ selectedElementData.count }} elemen</span>
                     </div>
+                    <div v-if="selectedElementData?.detail" class="flex justify-between text-slate-400">
+                        <span>Rincian:</span>
+                        <span class="font-mono text-sky-300 font-semibold text-right max-w-[140px] truncate" :title="selectedElementData.detail">{{ selectedElementData.detail }}</span>
+                    </div>
                     <div class="flex justify-between text-slate-400">
                         <span>ID:</span>
                         <span class="font-mono text-slate-300 truncate max-w-[120px]">{{ selectedNodeId }}</span>
                     </div>
-                    <div v-if="selectedElementData?.count" class="p-2 rounded-xl bg-violet-500/10 border border-violet-500/20 text-[11px] text-violet-300 leading-relaxed">
-                        💡 Tarik (drag) salah satu objek di kanvas untuk menggeser semuanya bersamaan.
+                    <div v-if="selectedElementData?.count" class="p-2 rounded-xl bg-violet-500/10 border border-violet-500/20 text-[11px] text-violet-300 leading-relaxed space-y-1">
+                        <div>💡 <strong>Ctrl + Klik</strong> objek lain untuk menambah/melepas dari blok.</div>
+                        <div>✨ <strong>Tarik (drag)</strong> objek untuk menggeser semuanya bersamaan.</div>
                     </div>
                     <div v-if="selectedElementData?.text" class="space-y-1 pt-1">
                         <span class="text-slate-400 block">Teks Label:</span>
