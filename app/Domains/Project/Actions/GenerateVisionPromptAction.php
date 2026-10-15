@@ -36,7 +36,7 @@ class GenerateVisionPromptAction
         $this->settingsRepo = $settingsRepo ?? app(SystemSettingRepository::class);
     }
 
-    public function execute(?User $user, Project $project, array $data): array
+    public function execute(?User $user, ?Project $project = null, array $data = []): array
     {
         $metadata = $data['scene_metadata'] ?? [];
         $rawImage = $data['image'] ?? '';
@@ -606,8 +606,8 @@ PROMPT;
     }
 
     private function buildFallbackPrompt(
-        Project $project,
-        array $metadata,
+        ?Project $project = null,
+        array $metadata = [],
         string $promptType = 'image',
         array|string $motions = ['push_in'],
         bool $hasEndFrame = false,
@@ -626,7 +626,7 @@ PROMPT;
         $cutKeywords = $metadata['cut_keywords'] ?? ($metadata['clipping_desc'] ?? (!empty($metadata['clipping_enabled']) ? 'Architectural section cut' : 'Solid intact architectural massing, unclipped complete geometry'));
         $angleKeywords = $metadata['angle_keywords'] ?? trim(($metadata['camera_perspective'] ?? 'straight-on rectilinear architectural framing') . ', ' . ($metadata['shot_type'] ?? '35mm lens'));
         $lightingKeywords = $metadata['lighting_keywords'] ?? ($metadata['lighting_desc'] ?? 'crisp natural daylight with directional architectural shadows, neutral white balance, accurate true-to-life surface colors without heavy color tinting');
-        $projName = $project->title ? 'for ' . $project->title : 'for this architectural project';
+        $projName = $project?->title ? 'for ' . $project->title : 'for this architectural project';
 
         if ($promptType === 'video') {
             $motionsArray = is_array($motions) ? $motions : [$motions];

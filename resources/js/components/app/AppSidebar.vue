@@ -13,6 +13,7 @@ import {
     GitMerge,
     FileSpreadsheet,
     Lock,
+    Sparkles,
 } from '@lucide/vue'
 import { useSidebar } from '@/composables/useSidebar'
 
@@ -67,6 +68,9 @@ const showUserDropdown = ref(false)
 
 // Check if current route matches
 const isActiveRoute = (routeName: string) => {
+    if (routeName === 'vision-studio') {
+        return page.url.startsWith('/vision-studio')
+    }
     if (routeName === 'rab-template') {
         return page.url.startsWith('/rab/templates')
     }
@@ -252,6 +256,50 @@ onUnmounted(() => {
                     >
                         <span v-if="isSidebarOpen && stats?.owned_count" class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-white border border-slate-200 dark:border-white/5 shrink-0">
                             {{ stats.owned_count }}
+                        </span>
+                    </Transition>
+                </Link>
+
+                <!-- AI Vision Studio -->
+                <Link 
+                    href="/vision-studio"
+                    :class="[
+                        'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all',
+                        isActiveRoute('vision-studio')
+                            ? 'bg-slate-100 dark:bg-white/[0.06] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 shadow-sm'
+                            : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
+                        !isSidebarOpen && 'justify-center'
+                    ]"
+                    :title="!isSidebarOpen ? 'AI Vision Studio' : ''"
+                >
+                    <div v-if="isActiveRoute('vision-studio')" class="absolute left-0 top-2 bottom-2 w-1 bg-gradient-to-b from-indigo-500 to-purple-500 rounded-r-full"></div>
+                    <div class="flex items-center gap-3 min-w-0">
+                        <Sparkles
+                            class="h-[19px] w-[19px] shrink-0 transition-colors"
+                            :class="isActiveRoute('vision-studio') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
+                            :stroke-width="2"
+                        />
+                        <Transition
+                            enter-active-class="transition-opacity duration-200 delay-75"
+                            enter-from-class="opacity-0"
+                            enter-to-class="opacity-100"
+                            leave-active-class="transition-opacity duration-150"
+                            leave-from-class="opacity-100"
+                            leave-to-class="opacity-0"
+                        >
+                            <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">AI Vision Studio</span>
+                        </Transition>
+                    </div>
+                    <Transition
+                        enter-active-class="transition-opacity duration-200 delay-100"
+                        enter-from-class="opacity-0"
+                        enter-to-class="opacity-100"
+                        leave-active-class="transition-opacity duration-150"
+                        leave-from-class="opacity-100"
+                        leave-to-class="opacity-0"
+                    >
+                        <span v-if="isSidebarOpen" class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-indigo-50 dark:bg-indigo-400/15 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-400/25 shrink-0">
+                            AI
                         </span>
                     </Transition>
                 </Link>

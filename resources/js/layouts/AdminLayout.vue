@@ -71,6 +71,7 @@ const navItems = [
     { title: 'Projects', href: '/admin/projects', icon: FolderKanban },
     { title: 'Subscriptions', href: '/admin/subscriptions', icon: CreditCard },
     { title: 'Plans', href: '/admin/plans', icon: Layers },
+    { title: 'AI Vision Studio', href: '/vision-studio', icon: Sparkles },
     { title: 'Audit Logs', href: '/admin/audit-logs', icon: ShieldAlert },
 ];
 

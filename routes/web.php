@@ -21,6 +21,7 @@ use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Project\ProjectController;
 use App\Http\Controllers\Project\ViewerController;
+use App\Http\Controllers\VisionStudioController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', \App\Http\Controllers\WelcomeController::class)->name('home');
@@ -40,6 +41,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Proyek 3D page
     Route::get('/projects', [ProjectsPageController::class, 'index'])->name('projects.index');
+
+    // AI Vision Studio (Image-to-Prompt & Video AI Generator)
+    Route::get('/vision-studio', [VisionStudioController::class, 'index'])->name('vision-studio.index');
+    Route::post('/vision-studio/generate-prompt', [VisionStudioController::class, 'generatePrompt'])->name('vision-studio.generate-prompt');
+    Route::post('/vision-studio/creations', [VisionStudioController::class, 'store'])->name('vision-studio.creations.store');
+    Route::delete('/vision-studio/creations/{id}', [VisionStudioController::class, 'destroy'])->name('vision-studio.creations.destroy');
 
     // Tim & Klien page
     Route::get('/teams', [TeamsPageController::class, 'index'])->name('teams.index');
