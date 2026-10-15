@@ -277,6 +277,24 @@ class SubscriptionLimitService
     }
 
     /**
+     * Check if user has access to AI Vision Studio (Pro & Enterprise only).
+     */
+    public function canAccessVisionStudio(User $user): bool
+    {
+        if (! $user->isActiveAccount()) {
+            return false;
+        }
+
+        if ($user->hasRole('super_admin')) {
+            return true;
+        }
+
+        $plan = $this->getPlanForUser($user);
+
+        return $plan->slug !== Plan::SLUG_FREE;
+    }
+
+    /**
      * Get maximum file size (MB) allowed for the user's plan.
      * Cek custom override per-user dulu, lalu fallback ke system_settings per-plan.
      */

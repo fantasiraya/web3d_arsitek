@@ -29,14 +29,14 @@ const fallbackPlans = [
         badge_text: 'Paling Populer', cta_text: 'Upgrade ke Pro', cta_url: '/register?plan=pro',
         tagline: 'Untuk studio arsitektur aktif & konsultan profesional',
         price_monthly: 'Rp 149.000', price_annual: 'Rp 119.000', period_label: 'per bulan',
-        benefits: ['Batas kuota hingga 20 proyek aktif','Kustomisasi batas revisi klien (hingga unlimited)','Fitur In-App Real-time Chat Arsitek ↔ Klien','Prioritas pemrosesan kompresi Draco 3D','Ukuran file hingga 100 MB per proyek','Penyimpanan berkecepatan tinggi','Pembayaran otomatis (QRIS, VA, Kartu)'],
+        benefits: ['Batas kuota hingga 20 proyek aktif','Akses Penuh AI Vision Studio (Image-to-Prompt & Video AI)','RAB & Lembar Kerja Analisa Harga','Kustomisasi batas revisi klien (hingga unlimited)','Fitur In-App Real-time Chat Arsitek ↔ Klien','Prioritas pemrosesan kompresi Draco 3D','Ukuran file hingga 100 MB per proyek','Penyimpanan berkecepatan tinggi','Pembayaran otomatis (QRIS, VA, Kartu)'],
     },
     {
         id: 'enterprise', slug: 'enterprise', display_name: 'Enterprise Studio', is_featured: false,
         badge_text: 'Custom Team', cta_text: 'Konsultasi Tim', cta_url: '/register?plan=enterprise',
         tagline: 'Untuk biro konsultan arsitektur berskala besar',
         price_monthly: 'Hubungi Kami', price_annual: 'Hubungi Kami', period_label: 'kebutuhan tim',
-        benefits: ['Kuota proyek tanpa batas (Unlimited)','Custom Domain & Whitelabel Branding','Single Sign-On (SSO) & Audit Logs','Manajemen izin peran tingkat lanjut','Dukungan dedicated SLA & prioritas teknis'],
+        benefits: ['Kuota proyek tanpa batas (Unlimited)','Akses Prioritas AI Vision Studio & Galeri Unlimited','Custom Domain & Whitelabel Branding','Single Sign-On (SSO) & Audit Logs','Manajemen izin peran tingkat lanjut','Dukungan dedicated SLA & prioritas teknis'],
     },
 ];
 

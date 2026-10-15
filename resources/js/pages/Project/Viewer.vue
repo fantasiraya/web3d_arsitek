@@ -2427,7 +2427,15 @@
                                 <div class="flex items-start justify-between gap-3">
                                     <div>
                                         <div class="flex items-center gap-2">
-                                            <h3 class="text-base font-semibold text-white tracking-tight">
+                                            <input
+                                                v-if="isOwner"
+                                                type="text"
+                                                v-model="activeLightboxCapture.room_name"
+                                                @blur="autoSaveCaptureRoomName(activeLightboxCapture)"
+                                                class="text-base font-semibold text-white tracking-tight bg-transparent hover:bg-white/10 focus:bg-black/60 border border-transparent hover:border-white/20 focus:border-indigo-400 rounded-lg px-2 py-0.5 focus:outline-none transition max-w-[220px]"
+                                                title="Klik untuk mengubah label ruangan"
+                                            />
+                                            <h3 v-else class="text-base font-semibold text-white tracking-tight">
                                                 {{ activeLightboxCapture.room_name }}
                                             </h3>
                                             <span
@@ -4172,6 +4180,26 @@ async function toggleCaptureVisibility(capture: ProjectCaptureItem) {
         }
     } catch (err) {
         console.error('[Captures] toggle error:', err);
+    }
+}
+
+async function autoSaveCaptureRoomName(capture: ProjectCaptureItem) {
+    if (!isOwner.value) return;
+    try {
+        await fetch(`/projects/${project.value.id}/captures/${capture.id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+                room_name: capture.room_name,
+            }),
+        });
+    } catch (err) {
+        console.error('[Captures] update room_name error:', err);
     }
 }
 

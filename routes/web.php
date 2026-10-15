@@ -42,11 +42,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Proyek 3D page
     Route::get('/projects', [ProjectsPageController::class, 'index'])->name('projects.index');
 
-    // AI Vision Studio (Image-to-Prompt & Video AI Generator)
-    Route::get('/vision-studio', [VisionStudioController::class, 'index'])->name('vision-studio.index');
-    Route::post('/vision-studio/generate-prompt', [VisionStudioController::class, 'generatePrompt'])->name('vision-studio.generate-prompt');
-    Route::post('/vision-studio/creations', [VisionStudioController::class, 'store'])->name('vision-studio.creations.store');
-    Route::delete('/vision-studio/creations/{id}', [VisionStudioController::class, 'destroy'])->name('vision-studio.creations.destroy');
+    // AI Vision Studio (Image-to-Prompt & Video AI Generator) - Non-free only (Pro & Enterprise)
+    Route::middleware(['vision.access'])->group(function () {
+        Route::get('/vision-studio', [VisionStudioController::class, 'index'])->name('vision-studio.index');
+        Route::post('/vision-studio/generate-prompt', [VisionStudioController::class, 'generatePrompt'])->name('vision-studio.generate-prompt');
+        Route::post('/vision-studio/creations', [VisionStudioController::class, 'store'])->name('vision-studio.creations.store');
+        Route::patch('/vision-studio/creations/{id}', [VisionStudioController::class, 'update'])->name('vision-studio.creations.update');
+        Route::delete('/vision-studio/creations/{id}', [VisionStudioController::class, 'destroy'])->name('vision-studio.creations.destroy');
+    });
 
     // Tim & Klien page
     Route::get('/teams', [TeamsPageController::class, 'index'])->name('teams.index');
@@ -88,6 +91,7 @@ Route::middleware(['auth', 'project.access'])->group(function () {
     Route::post('/projects/{project}/captures', [ProjectCaptureController::class, 'store'])->name('projects.captures.store');
     Route::get('/projects/{project}/captures/{capture}/download', [ProjectCaptureController::class, 'download'])->name('projects.captures.download');
     Route::delete('/projects/{project}/captures/{capture}', [ProjectCaptureController::class, 'destroy'])->name('projects.captures.destroy');
+    Route::patch('/projects/{project}/captures/{capture}', [ProjectCaptureController::class, 'update'])->name('projects.captures.update');
     Route::patch('/projects/{project}/captures/{capture}/toggle-visibility', [ProjectCaptureController::class, 'toggleVisibility'])->name('projects.captures.toggle-visibility');
     Route::patch('/projects/{project}/captures/{capture}/prompt', [ProjectCaptureController::class, 'updatePrompt'])->name('projects.captures.prompt.update');
     Route::post('/projects/{project}/captures/generate-prompt', [ProjectCaptureController::class, 'generatePrompt'])->name('projects.captures.generate-prompt');

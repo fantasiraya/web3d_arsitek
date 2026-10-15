@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import UnifiedLayout from '@/layouts/UnifiedLayout.vue';
 import {
@@ -24,6 +24,7 @@ import {
     Bookmark,
     ArrowUpRight,
     Layers,
+    Pencil,
 } from '@lucide/vue';
 
 defineOptions({ layout: UnifiedLayout });
@@ -50,9 +51,48 @@ const props = defineProps<{
     initialCreations: VisionCreationItem[];
 }>();
 
-// ── Tab Navigation (Studio vs Galeri) ─────────────────────────────────────────
-const activeViewTab = ref<'studio' | 'gallery'>('studio');
+// ── Tab Navigation (Studio vs Galeri) with LocalStorage Persistence ───────────
+const STORAGE_TAB_KEY = 'pitcharch_vision_studio_active_tab';
+
+function getInitialTab(): 'studio' | 'gallery' {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+            const saved = localStorage.getItem(STORAGE_TAB_KEY);
+            if (saved === 'studio' || saved === 'gallery') {
+                return saved;
+            }
+        } catch {
+            // ignore
+        }
+    }
+    return 'studio';
+}
+
+const activeViewTab = ref<'studio' | 'gallery'>(getInitialTab());
 const savedCreations = ref<VisionCreationItem[]>([...props.initialCreations]);
+
+onMounted(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+            const saved = localStorage.getItem(STORAGE_TAB_KEY);
+            if (saved === 'studio' || saved === 'gallery') {
+                activeViewTab.value = saved;
+            }
+        } catch {
+            // ignore
+        }
+    }
+});
+
+watch(activeViewTab, (newTab) => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+            localStorage.setItem(STORAGE_TAB_KEY, newTab);
+        } catch {
+            // ignore
+        }
+    }
+});
 
 // ── Image Upload State ────────────────────────────────────────────────────────
 const imageFileA = ref<File | null>(null);
@@ -489,6 +529,61 @@ async function saveToStudioGallery() {
         saveErrorMessage.value = 'Terjadi kesalahan koneksi saat menyimpan gambar.';
     } finally {
         isSavingToGallery.value = false;
+    }
+}
+
+// ── Edit Creation Modal State ────────────────────────────────────────────────
+const editingCreation = ref<VisionCreationItem | null>(null);
+const editForm = ref({
+    room_name: '',
+    prompt: '',
+    negative_prompt: '',
+});
+const isUpdatingCreation = ref(false);
+const updateErrorMessage = ref('');
+
+function openEditModal(creation: VisionCreationItem) {
+    editingCreation.value = creation;
+    editForm.value = {
+        room_name: creation.room_name || '',
+        prompt: creation.prompt || '',
+        negative_prompt: creation.negative_prompt || '',
+    };
+    updateErrorMessage.value = '';
+}
+
+async function saveEditedCreation() {
+    if (!editingCreation.value) return;
+
+    isUpdatingCreation.value = true;
+    updateErrorMessage.value = '';
+
+    try {
+        const res = await fetch(`/vision-studio/creations/${editingCreation.value.id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify(editForm.value),
+        });
+
+        const data = await res.json();
+        if (res.ok && data.creation) {
+            const idx = savedCreations.value.findIndex(c => c.id === data.creation.id);
+            if (idx !== -1) {
+                savedCreations.value[idx] = data.creation;
+            }
+            editingCreation.value = null;
+        } else {
+            updateErrorMessage.value = data.message || 'Gagal memperbarui karya.';
+        }
+    } catch {
+        updateErrorMessage.value = 'Terjadi kesalahan koneksi saat memperbarui karya.';
+    } finally {
+        isUpdatingCreation.value = false;
     }
 }
 
@@ -1431,8 +1526,16 @@ generateDraftPrompt();
                             <div class="flex items-center gap-1">
                                 <button
                                     type="button"
+                                    @click="openEditModal(creation)"
+                                    class="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-white/10 transition"
+                                    title="Edit Nama / Prompt"
+                                >
+                                    <Pencil class="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                    type="button"
                                     @click="downloadImage(creation.url, 'gallery')"
-                                    class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white transition"
+                                    class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition"
                                     title="Download Gambar"
                                 >
                                     <Download class="h-3.5 w-3.5" />
@@ -1440,7 +1543,7 @@ generateDraftPrompt();
                                 <button
                                     type="button"
                                     @click="deleteCreation(creation)"
-                                    class="p-1.5 rounded-lg text-rose-400 hover:text-rose-600 transition"
+                                    class="p-1.5 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
                                     title="Hapus dari Galeri"
                                 >
                                     <Trash2 class="h-3.5 w-3.5" />
@@ -1448,6 +1551,91 @@ generateDraftPrompt();
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── EDIT CREATION MODAL ── -->
+        <div
+            v-if="editingCreation"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+            @click.self="editingCreation = null"
+        >
+            <div class="relative w-full max-w-lg rounded-3xl border border-slate-200 dark:border-white/15 bg-white dark:bg-neutral-900 shadow-2xl p-6 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-white/10 pb-3">
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Pencil class="h-4 w-4 text-indigo-500" />
+                        <span>Edit Karya Studio</span>
+                    </h3>
+                    <button
+                        type="button"
+                        @click="editingCreation = null"
+                        class="p-1.5 rounded-xl text-neutral-400 hover:text-white hover:bg-white/10 transition"
+                    >
+                        <X class="h-4 w-4" />
+                    </button>
+                </div>
+
+                <div class="space-y-3 text-xs">
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-600 dark:text-neutral-400 mb-1">
+                            Nama Ruangan / Judul Karya
+                        </label>
+                        <input
+                            type="text"
+                            v-model="editForm.room_name"
+                            placeholder="Contoh: Fasad Rumah Modern"
+                            class="w-full h-9 rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-black/40 px-3 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+                        />
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-600 dark:text-neutral-400 mb-1">
+                            Rumusan Prompt AI
+                        </label>
+                        <textarea
+                            v-model="editForm.prompt"
+                            rows="5"
+                            placeholder="Tulis prompt..."
+                            class="w-full rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-black/40 p-3 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 resize-y leading-relaxed font-sans"
+                        ></textarea>
+                    </div>
+
+                    <div v-if="editForm.negative_prompt">
+                        <label class="block text-[11px] font-medium text-slate-600 dark:text-neutral-400 mb-1">
+                            Negative Prompt
+                        </label>
+                        <textarea
+                            v-model="editForm.negative_prompt"
+                            rows="2"
+                            class="w-full rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-black/40 p-2 text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:border-rose-500 resize-y"
+                        ></textarea>
+                    </div>
+
+                    <div v-if="updateErrorMessage" class="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-300 text-xs flex items-center gap-1.5">
+                        <AlertCircle class="h-4 w-4 shrink-0" />
+                        <span>{{ updateErrorMessage }}</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-white/10">
+                    <button
+                        type="button"
+                        @click="editingCreation = null"
+                        class="px-4 py-2 rounded-xl text-xs font-medium text-neutral-400 hover:text-white hover:bg-white/10 transition"
+                    >
+                        Batal
+                    </button>
+                    <button
+                        type="button"
+                        :disabled="isUpdatingCreation"
+                        @click="saveEditedCreation"
+                        class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow disabled:opacity-50"
+                    >
+                        <Loader2 v-if="isUpdatingCreation" class="h-3.5 w-3.5 animate-spin" />
+                        <Check v-else class="h-3.5 w-3.5" />
+                        <span>{{ isUpdatingCreation ? 'Menyimpan...' : 'Simpan Perubahan' }}</span>
+                    </button>
                 </div>
             </div>
         </div>

@@ -44,7 +44,18 @@ const planLabel = computed<'Free' | 'Pro' | 'Enterprise'>(() => {
 });
 
 // Check if user has access to RAB features (Pro and Enterprise only)
-const hasRabAccess = computed(() => planLabel.value !== 'Free');
+const hasRabAccess = computed(() => {
+    if (user.value?.is_admin) return true;
+    if (user.value?.subscription_status && user.value.subscription_status.toLowerCase() !== 'free') return true;
+    return planLabel.value !== 'Free';
+});
+
+// Check if user has access to AI Vision Studio (Pro and Enterprise only)
+const hasVisionAccess = computed(() => {
+    if (user.value?.is_admin) return true;
+    if (user.value?.subscription_status && user.value.subscription_status.toLowerCase() !== 'free') return true;
+    return planLabel.value !== 'Free';
+});
 
 // Handle RAB feature click
 const handleRabClick = (event: Event, route: string) => {
@@ -52,6 +63,16 @@ const handleRabClick = (event: Event, route: string) => {
         event.preventDefault();
         // Show native confirmation before redirect
         if (confirm('Fitur RAB & Lembar Kerja hanya tersedia untuk pengguna Pro dan Enterprise.\n\nApakah Anda ingin melihat paket berlangganan kami?')) {
+            router.visit('/plans');
+        }
+    }
+};
+
+// Handle AI Vision Studio click
+const handleVisionClick = (event: Event) => {
+    if (!hasVisionAccess.value) {
+        event.preventDefault();
+        if (confirm('Fitur AI Vision Studio hanya tersedia untuk pengguna paket Pro dan Enterprise.\n\nApakah Anda ingin melihat paket berlangganan kami?')) {
             router.visit('/plans');
         }
     }
@@ -260,23 +281,27 @@ onUnmounted(() => {
                     </Transition>
                 </Link>
 
-                <!-- AI Vision Studio -->
-                <Link 
-                    href="/vision-studio"
+                <!-- AI Vision Studio (Pro & Enterprise only) -->
+                <component
+                    :is="hasVisionAccess ? Link : 'button'"
+                    :href="hasVisionAccess ? '/vision-studio' : undefined"
+                    @click="!hasVisionAccess ? handleVisionClick($event) : null"
                     :class="[
-                        'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all',
-                        isActiveRoute('vision-studio')
+                        'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all w-full text-left',
+                        (isActiveRoute('vision-studio') && hasVisionAccess)
                             ? 'bg-slate-100 dark:bg-white/[0.06] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 shadow-sm'
-                            : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
+                            : !hasVisionAccess
+                                ? 'text-slate-400 dark:text-[#6b7280] opacity-60 cursor-pointer hover:opacity-80'
+                                : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
                         !isSidebarOpen && 'justify-center'
                     ]"
-                    :title="!isSidebarOpen ? 'AI Vision Studio' : ''"
+                    :title="!isSidebarOpen ? (!hasVisionAccess ? 'AI Vision Studio (Pro)' : 'AI Vision Studio') : ''"
                 >
-                    <div v-if="isActiveRoute('vision-studio')" class="absolute left-0 top-2 bottom-2 w-1 bg-gradient-to-b from-indigo-500 to-purple-500 rounded-r-full"></div>
-                    <div class="flex items-center gap-3 min-w-0">
+                    <div v-if="isActiveRoute('vision-studio') && hasVisionAccess" class="absolute left-0 top-2 bottom-2 w-1 bg-gradient-to-b from-indigo-500 to-purple-500 rounded-r-full"></div>
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
                         <Sparkles
                             class="h-[19px] w-[19px] shrink-0 transition-colors"
-                            :class="isActiveRoute('vision-studio') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
+                            :class="(isActiveRoute('vision-studio') && hasVisionAccess) ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
                             :stroke-width="2"
                         />
                         <Transition
@@ -298,11 +323,17 @@ onUnmounted(() => {
                         leave-from-class="opacity-100"
                         leave-to-class="opacity-0"
                     >
-                        <span v-if="isSidebarOpen" class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-indigo-50 dark:bg-indigo-400/15 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-400/25 shrink-0">
-                            AI
-                        </span>
+                        <div v-if="isSidebarOpen" class="flex items-center gap-1.5 shrink-0">
+                            <template v-if="!hasVisionAccess">
+                                <Lock class="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" :stroke-width="2.5" />
+                                <span class="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-400/15 text-amber-600 dark:text-amber-300 border border-amber-200 dark:border-amber-400/25">PRO</span>
+                            </template>
+                            <span v-else class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-indigo-50 dark:bg-indigo-400/15 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-400/25">
+                                AI
+                            </span>
+                        </div>
                     </Transition>
-                </Link>
+                </component>
 
                 <!-- Tim & Klien -->
                 <Link 

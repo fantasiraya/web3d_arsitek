@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\CheckAccountStatus;
 use App\Http\Middleware\CheckRabAccess;
+use App\Http\Middleware\CheckVisionStudioAccess;
 use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -44,6 +45,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'account.active' => CheckAccountStatus::class,
             'super_admin' => EnsureSuperAdmin::class,
             'rab.access' => CheckRabAccess::class,
+            'vision.access' => CheckVisionStudioAccess::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

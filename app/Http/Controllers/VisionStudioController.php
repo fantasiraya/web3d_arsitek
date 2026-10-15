@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Domains\Billing\Services\SubscriptionLimitService;
 use App\Domains\Project\Actions\GenerateVisionPromptAction;
 use App\Domains\VisionStudio\Models\VisionCreation;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -13,12 +15,20 @@ use Inertia\Response;
 
 class VisionStudioController extends Controller
 {
+    public function __construct(
+        protected SubscriptionLimitService $limitService
+    ) {}
+
     /**
      * Display the AI Vision Studio page with personal creations gallery.
      */
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
+
+        if (! $this->limitService->canAccessVisionStudio($user)) {
+            return redirect()->route('plans.index')->with('warning', 'Fitur AI Vision Studio hanya tersedia untuk pengguna paket Pro dan Enterprise.');
+        }
 
         $creations = VisionCreation::where('user_id', $user->id)
             ->latest()
@@ -37,6 +47,12 @@ class VisionStudioController extends Controller
         GenerateVisionPromptAction $action
     ): JsonResponse {
         $user = $request->user();
+
+        if (! $this->limitService->canAccessVisionStudio($user)) {
+            return response()->json([
+                'message' => 'Fitur AI Vision Studio hanya tersedia untuk pengguna Pro dan Enterprise. Silakan upgrade paket Anda.',
+            ], 403);
+        }
 
         $validated = $request->validate([
             'image'            => ['required', 'string'],
@@ -85,6 +101,12 @@ class VisionStudioController extends Controller
     public function store(Request $request): JsonResponse
     {
         $user = $request->user();
+
+        if (! $this->limitService->canAccessVisionStudio($user)) {
+            return response()->json([
+                'message' => 'Fitur AI Vision Studio hanya tersedia untuk pengguna Pro dan Enterprise. Silakan upgrade paket Anda.',
+            ], 403);
+        }
 
         $validated = $request->validate([
             'image'           => ['required', 'string'],
@@ -161,11 +183,47 @@ class VisionStudioController extends Controller
     }
 
     /**
+     * Update an item in the user's Vision Studio Gallery.
+     */
+    public function update(Request $request, string $id): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! $this->limitService->canAccessVisionStudio($user)) {
+            return response()->json([
+                'message' => 'Fitur AI Vision Studio hanya tersedia untuk pengguna Pro dan Enterprise. Silakan upgrade paket Anda.',
+            ], 403);
+        }
+
+        $creation = VisionCreation::where('user_id', $user->id)->findOrFail($id);
+
+        $validated = $request->validate([
+            'room_name'       => ['nullable', 'string', 'max:255'],
+            'title'           => ['nullable', 'string', 'max:255'],
+            'prompt'          => ['nullable', 'string'],
+            'negative_prompt' => ['nullable', 'string'],
+        ]);
+
+        $creation->update($validated);
+
+        return response()->json([
+            'message'  => 'Karya berhasil diperbarui.',
+            'creation' => $creation->fresh(),
+        ]);
+    }
+
+    /**
      * Delete an item from the user's Vision Studio Gallery.
      */
     public function destroy(Request $request, string $id): JsonResponse
     {
         $user = $request->user();
+
+        if (! $this->limitService->canAccessVisionStudio($user)) {
+            return response()->json([
+                'message' => 'Fitur AI Vision Studio hanya tersedia untuk pengguna Pro dan Enterprise. Silakan upgrade paket Anda.',
+            ], 403);
+        }
 
         $creation = VisionCreation::where('user_id', $user->id)->findOrFail($id);
         $creation->delete();

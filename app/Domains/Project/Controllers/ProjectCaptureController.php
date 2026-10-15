@@ -90,6 +90,32 @@ class ProjectCaptureController extends Controller
         ]);
     }
 
+    public function update(Request $request, string $projectId, string $captureId): JsonResponse
+    {
+        $project = Project::findOrFail($projectId);
+        $user = $request->user();
+
+        if (! $user || $project->user_id !== $user->id) {
+            abort(403, 'Hanya arsitek pemilik proyek yang dapat mengedit gambar.');
+        }
+
+        $capture = ProjectCapture::where('project_id', $project->id)->findOrFail($captureId);
+
+        $validated = $request->validate([
+            'room_name'             => ['nullable', 'string', 'max:255'],
+            'title'                 => ['nullable', 'string', 'max:255'],
+            'prompt'                => ['nullable', 'string'],
+            'is_visible_to_clients' => ['nullable', 'boolean'],
+        ]);
+
+        $capture->update($validated);
+
+        return response()->json([
+            'message' => 'Detail gambar berhasil diperbarui.',
+            'data'    => $capture->fresh(),
+        ]);
+    }
+
     public function updatePrompt(
         \App\Domains\Project\Requests\UpdateCapturePromptRequest $request,
         string $projectId,
