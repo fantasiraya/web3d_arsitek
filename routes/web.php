@@ -8,6 +8,8 @@ use App\Domains\Project\Controllers\ProjectCaptureController;
 use App\Domains\Rab\Controllers\RabDocumentController;
 use App\Domains\Rab\Controllers\RabItemController;
 use App\Domains\Rab\Controllers\RabMappingController;
+use App\Domains\Drawing\Controllers\DrawingSheetController;
+use App\Domains\Drawing\Controllers\DrawingElementController;
 use App\Domains\Rab\Controllers\RabPriceItemController;
 use App\Domains\Rab\Controllers\RabPriceItemComponentController;
 use App\Domains\Rab\Controllers\RabTemplateController;
@@ -162,6 +164,18 @@ Route::middleware(['auth', 'verified', 'rab.access'])->group(function () {
     Route::post('/projects/{project}/rab/{rab}/items', [RabItemController::class, 'store'])->name('rab.items.store');
     Route::put('/projects/{project}/rab/{rab}/items/{item}', [RabItemController::class, 'update'])->name('rab.items.update');
     Route::delete('/projects/{project}/rab/{rab}/items/{item}', [RabItemController::class, 'destroy'])->name('rab.items.destroy');
+});
+
+// ── Drawing 2D — Lembar Kerja CAD (Enterprise Gating) ──
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/drawings', [DrawingSheetController::class, 'index'])->name('drawings.index');
+    Route::post('/drawings', [DrawingSheetController::class, 'store'])->name('drawings.store');
+    Route::get('/drawings/{sheet}', [DrawingSheetController::class, 'editor'])->name('drawings.editor');
+    Route::patch('/drawings/{sheet}', [DrawingSheetController::class, 'update'])->name('drawings.update');
+    Route::delete('/drawings/{sheet}', [DrawingSheetController::class, 'destroy'])->name('drawings.destroy');
+    Route::post('/drawings/{sheet}/sync', [DrawingElementController::class, 'sync'])->name('drawings.sync');
+    Route::get('/drawings/{sheet}/export-dxf', [DrawingSheetController::class, 'exportDxf'])->name('drawings.export-dxf');
+    Route::post('/drawings/{sheet}/export-svg', [DrawingSheetController::class, 'exportSvg'])->name('drawings.export-svg');
 });
 
 // ── Chat realtime routes ──

@@ -68,6 +68,8 @@ class Plan extends Model
         'sso',
         'custom_branding',
         'priority_support',
+        'can_use_rab',
+        'can_use_drawing',
         'status',
     ];
 
@@ -86,6 +88,8 @@ class Plan extends Model
             'sso'                  => 'boolean',
             'custom_branding'      => 'boolean',
             'priority_support'     => 'boolean',
+            'can_use_rab'          => 'boolean',
+            'can_use_drawing'      => 'boolean',
             'is_featured'          => 'boolean',
             'benefits'             => 'array',
             'sort_order'           => 'integer',

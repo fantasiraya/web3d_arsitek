@@ -90,7 +90,7 @@
 
         @fonts
 
-        @vite(['resources/css/app.css', 'resources/js/app.ts', "resources/js/pages/{$page['component']}.vue"])
+        @vite(['resources/css/app.css', 'resources/js/app.ts'])
 
         {{-- Satu-satunya <title> --}}
         <x-inertia::head>

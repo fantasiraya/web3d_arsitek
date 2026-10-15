@@ -14,6 +14,7 @@ import {
     FileSpreadsheet,
     Lock,
     Sparkles,
+    DraftingCompass,
 } from '@lucide/vue'
 import { useSidebar } from '@/composables/useSidebar'
 
@@ -57,6 +58,24 @@ const hasVisionAccess = computed(() => {
     return planLabel.value !== 'Free';
 });
 
+// Check if user has access to Drawing 2D features (Enterprise only)
+const hasDrawingAccess = computed(() => {
+    if (user.value?.is_admin) return true;
+    const status = (user.value?.subscription_status ?? '').toLowerCase();
+    if (status === 'enterprise') return true;
+    return planLabel.value === 'Enterprise';
+});
+
+// Handle Drawing 2D feature click
+const handleDrawingClick = (event: Event) => {
+    if (!hasDrawingAccess.value) {
+        event.preventDefault();
+        if (confirm('Fitur Lembar Kerja 2D (Drawing CAD) eksklusif untuk pengguna paket Enterprise.\n\nApakah Anda ingin melihat paket berlangganan kami?')) {
+            router.visit('/plans');
+        }
+    }
+};
+
 // Handle RAB feature click
 const handleRabClick = (event: Event, route: string) => {
     if (!hasRabAccess.value) {
@@ -89,6 +108,9 @@ const showUserDropdown = ref(false)
 
 // Check if current route matches
 const isActiveRoute = (routeName: string) => {
+    if (routeName === 'drawings') {
+        return page.url.startsWith('/drawings')
+    }
     if (routeName === 'vision-studio') {
         return page.url.startsWith('/vision-studio')
     }
@@ -330,6 +352,60 @@ onUnmounted(() => {
                             </template>
                             <span v-else class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-indigo-50 dark:bg-indigo-400/15 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-400/25">
                                 AI
+                            </span>
+                        </div>
+                    </Transition>
+                </component>
+
+                <!-- Lembar Kerja 2D (CAD - Enterprise only) -->
+                <component
+                    :is="hasDrawingAccess ? Link : 'button'"
+                    :href="hasDrawingAccess ? '/drawings' : undefined"
+                    @click="!hasDrawingAccess ? handleDrawingClick($event) : null"
+                    :class="[
+                        'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all w-full text-left',
+                        (isActiveRoute('drawings') && hasDrawingAccess)
+                            ? 'bg-slate-100 dark:bg-white/[0.06] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 shadow-sm'
+                            : !hasDrawingAccess
+                                ? 'text-slate-400 dark:text-[#6b7280] opacity-60 cursor-pointer hover:opacity-80'
+                                : 'text-slate-500 dark:text-[#9ca3af] hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/[0.04]',
+                        !isSidebarOpen && 'justify-center'
+                    ]"
+                    :title="!isSidebarOpen ? (!hasDrawingAccess ? 'Lembar Kerja 2D (Enterprise)' : 'Lembar Kerja 2D') : ''"
+                >
+                    <div v-if="isActiveRoute('drawings') && hasDrawingAccess" class="absolute left-0 top-2 bottom-2 w-1 bg-violet-500 dark:bg-violet-400 rounded-r-full"></div>
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                        <DraftingCompass
+                            class="h-[19px] w-[19px] shrink-0 transition-colors"
+                            :class="(isActiveRoute('drawings') && hasDrawingAccess) ? 'text-violet-600 dark:text-violet-400' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
+                            :stroke-width="2"
+                        />
+                        <Transition
+                            enter-active-class="transition-opacity duration-200 delay-75"
+                            enter-from-class="opacity-0"
+                            enter-to-class="opacity-100"
+                            leave-active-class="transition-opacity duration-150"
+                            leave-from-class="opacity-100"
+                            leave-to-class="opacity-0"
+                        >
+                            <span v-if="isSidebarOpen" class="text-[13px] tracking-tight font-medium">Lembar Kerja 2D</span>
+                        </Transition>
+                    </div>
+                    <Transition
+                        enter-active-class="transition-opacity duration-200 delay-100"
+                        enter-from-class="opacity-0"
+                        enter-to-class="opacity-100"
+                        leave-active-class="transition-opacity duration-150"
+                        leave-from-class="opacity-100"
+                        leave-to-class="opacity-0"
+                    >
+                        <div v-if="isSidebarOpen" class="flex items-center gap-1.5 shrink-0">
+                            <template v-if="!hasDrawingAccess">
+                                <Lock class="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" :stroke-width="2.5" />
+                                <span class="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-400/15 text-amber-600 dark:text-amber-300 border border-amber-200 dark:border-amber-400/25">ENT</span>
+                            </template>
+                            <span v-else class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-50 dark:bg-violet-400/15 text-violet-600 dark:text-violet-300 border border-violet-200 dark:border-violet-400/25">
+                                CAD
                             </span>
                         </div>
                     </Transition>

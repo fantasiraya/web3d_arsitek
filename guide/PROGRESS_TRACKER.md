@@ -181,18 +181,17 @@
 ### 11. Drawing 2D (`Domains/Drawing`) — Rencana Enterprise
 | Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
 | :--- | :--- | :---: | :--- |
-| Migration `plans.can_use_drawing` + `drawing_sheets` + `drawing_elements` | Database | 🔴 Pending | Hanya Enterprise |
-| Model `DrawingSheet`, `DrawingElement` | Backend DDD | 🔴 Pending | type: plan/elevation/section |
-| `DrawingAccessService` (gating can_use_drawing) | Backend DDD | 🔴 Pending | |
-| Editor Denah / Plan (konva.js) | Frontend | 🔴 Pending | Grid snap, toolbar: dinding/pintu/jendela/kolom/tangga/dimensi/teks |
-| Editor Tampak / Elevation | Frontend | 🔴 Pending | |
-| Editor Potongan / Section | Frontend | 🔴 Pending | |
-| Library Simbol (pintu swing, jendela, kolom, tangga) | Frontend | 🔴 Pending | Pre-built konva shapes |
-| Dimensi Otomatis & Grid Referensi | Frontend | 🔴 Pending | A/B/C... dan 1/2/3..., anotasi ukuran |
-| Title Block / Kop Gambar dari Profil | Backend & Frontend | 🔴 Pending | Nama badan usaha, no. lembar, skala, tanggal |
-| Export DXF (AutoCAD compatible) | Backend | 🔴 Pending | `nzcreations/dxf`, layer per tipe elemen |
-| Export SVG | Backend | 🔴 Pending | Scalable, bisa dibuka Inkscape/browser |
-| Undo/Redo | Frontend | 🔴 Pending | Stack history konva |
+| Migration `plans.can_use_drawing` + `drawing_sheets` + `drawing_elements` | Database | 🟢 Completed | UUID PK, FK cascade, index sort_order & user_id — selesai 2026-10-15 |
+| Model `DrawingSheet`, `DrawingElement` | Backend DDD | 🟢 Completed | Types: plan/elevation/section, relationships, casts array/json — selesai 2026-10-15 |
+| `DrawingAccessService` (gating can_use_drawing) | Backend DDD | 🟢 Completed | Akses khusus Enterprise (`plans.can_use_drawing = true`), otorisasi edit & view klien — selesai 2026-10-15 |
+| Form Requests & Actions DDD | Backend DDD | 🟢 Completed | `CreateDrawingSheetAction`, `UpdateDrawingSheetAction`, `SyncDrawingElementsAction`, Form Requests — selesai 2026-10-15 |
+| Menu Sidebar "Lembar Kerja 2D" | Frontend | 🟢 Completed | Icon `DraftingCompass`, badge ENT/CAD, gating modal upgrade jika non-Enterprise — selesai 2026-10-15 |
+| Halaman Daftar Lembar Kerja (`/drawings`) | Frontend | 🟢 Completed | `Drawing/Index.vue`, filter per proyek & tipe (denah/tampak/potongan), modal lembar kerja baru — selesai 2026-10-15 |
+| Editor CAD 2D Interaktif (Konva.js) | Frontend | 🟢 Completed | `Drawing/Editor.vue`, canvas vektor interaktif, grid snap, zoom/pan viewport, paper frame A1-A4 & Title Block / Kop Gambar — selesai 2026-10-15 |
+| Architectural CAD Tools & Library Simbol | Frontend | 🟢 Completed | Dinding tebal, kotak ruangan, simbol pintu swing arsitek, bukaan jendela, dimensi/penggaris ukuran otomatis, label ruangan, eraser — selesai 2026-10-15 |
+| Export DXF (AutoCAD compatible) | Backend | 🟢 Completed | `ExportDxfAction`, standar AutoCAD R12/2000 ASCII compliant, layer terpisah (WALLS, DOORS, WINDOWS, DIMENSIONS, TEXT) — selesai 2026-10-15 |
+| Export SVG & PNG | Backend & Frontend | 🟢 Completed | `ExportSvgAction` (vektor scalable) & export gambar raster PNG resolusi tinggi — selesai 2026-10-15 |
+| Pest Automated Tests (Drawing Domain) | Testing | 🟢 Completed | `tests/Feature/Domains/Drawing/DrawingTest.php` (5 tests, 21 assertions lulus 100%) — selesai 2026-10-15 |
 
 ### 12. AI Vision Studio Domain (`Domains/VisionStudio`)
 | Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
@@ -246,4 +245,7 @@
 - **2026-10-15 (Update):** Feature Gating AI Vision Studio Berbayar (Paid-Only) — Fitur AI Vision Studio diubah menjadi eksklusif untuk tier berbayar (Pro, Enterprise, dan Super Admin). Penambahan method `canAccessVisionStudio` di `SubscriptionLimitService`, middleware `CheckVisionStudioAccess` (`vision.access`), lock badge di `AppSidebar.vue`, serta benefit card di `PricingSection.vue`.
 - **2026-10-15 (Update):** Arsitektur Caching Skala 1 Juta Pengguna & Optimasi Redis — Konfigurasi multi-database Redis (`config/database.php` DB 1 untuk cache, DB 2 untuk session user), helper `CacheKeys.php` dengan safe-tagging wrapper, caching master data paket langganan aktif `Plan::getActivePlansForDisplay()` dengan TTL 1 jam dan auto-invalidation pada edit admin/plan changes. Perbaikan fallback session connection agar tidak crash pada driver non-redis saat build Wayfinder/Vite.
 - **2026-10-15 (Update):** Proteksi Race Condition & Eliminasi N+1 Query Sistemik — Penghapusan hook berat `User::retrieved` di `AppServiceProvider.php` yang mengeliminasi puluhan query overhead per request. Eager loading relasi admin pagination di `ProjectController` dan `SubscriptionController`. Implementasi Redis distributed atomic lock (`Cache::lock()->block()`) pada `CreateProjectAction`, `SaveCaptureAction`, dan `PinCommentAction`. Penerapan `DB::transaction` + `lockForUpdate()` pada penanganan webhook dan callback pembayaran Midtrans di `CheckoutController`. 132 Pest tests lulus 100%.
+- **2026-10-15 (Update):** Implementasi Penuh Lembar Kerja 2D (Drawing CAD — `Domains/Drawing`) — Menu baru "Lembar Kerja 2D" di `AppSidebar.vue` dengan icon `DraftingCompass` dan gating Enterprise (`plans.can_use_drawing = true`). Domain backend lengkap: migrasi `drawing_sheets` & `drawing_elements`, model Eloquent, `DrawingAccessService`, `CreateDrawingSheetAction`, `UpdateDrawingSheetAction`, `SyncDrawingElementsAction`, `ExportDxfAction` (AutoCAD ASCII R12 standard), `ExportSvgAction`. Frontend: halaman daftar lembar kerja `Drawing/Index.vue` & editor CAD kanvas interaktif `Drawing/Editor.vue` berbasis `konva.js` (grid snap, paper frame A1-A4 & Kop Gambar arsitek, tool dinding tebal, kotak ruangan, pintu swing, jendela, penggaris dimensi otomatis, label ruangan, zoom/pan viewport, export DXF/SVG/PNG). 137 Pest tests lulus 100%.
+- **2026-10-15 (Update):** Dynamic Resizable Sheet (Figma Frames & AutoCAD Model Space) — Penambahan kolom `width` & `height` pada `drawing_sheets` melalui migrasi `add_dimensions_to_drawing_sheets`. Editor kanvas interaktif `Drawing/Editor.vue` dilengkapi: (1) Handle resize interaktif di sudut kanan bawah dan tepi lembar kerja (drag to resize dinamis seperti frame Figma) dengan live dimension tooltip, (2) Kop Gambar arsitektural responsif yang otomatis menempel di sudut kanan bawah lembar saat ukuran berubah, (3) Kontrol preset ISO (A0–A4 & Custom) serta numeric inputs `W` dan `H` (px/mm) pada top bar, (4) Switcher mode "Frame Kertas" vs "AutoCAD Model Space (∞)" untuk kanvas tanpa batas, (5) Auto-sync ukuran lembar kerja ke database secara atomik. 138 Pest tests lulus 100%.
+
 

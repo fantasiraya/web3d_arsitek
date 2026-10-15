@@ -20,6 +20,7 @@ void createInertiaApp({
         switch (true) {
             case name === 'Welcome':
             case name === 'Error':
+            case name === 'Drawing/Editor':
             case name.startsWith('Project/'):
             case name.startsWith('Projects/'):
             case name.startsWith('Teams/'):
