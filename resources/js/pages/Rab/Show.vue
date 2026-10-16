@@ -364,46 +364,60 @@ function fmt(val: number) {
                 </div>
 
                 <!-- Items table -->
-                <div v-if="!collapsed.has(String(section))">
-                    <!-- Table header -->
-                    <div class="hidden sm:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-2 text-xs font-medium uppercase tracking-wide text-slate-400 bg-white dark:bg-transparent border-b border-slate-100 dark:border-white/5">
-                        <span>Uraian Pekerjaan</span>
-                        <span>Satuan</span>
-                        <span class="text-right">Volume</span>
-                        <span class="text-right">Harga Satuan</span>
-                        <span class="text-right">Subtotal</span>
-                        <span></span>
-                    </div>
-
-                    <div v-for="item in items" :key="item.id"
-                         class="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 items-center px-4 py-3 border-b border-slate-100 dark:border-white/5 last:border-0 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
-                        <div class="min-w-0">
-                            <p class="text-sm text-slate-800 dark:text-slate-100 truncate">
-                                {{ item.description }}
-                                <span v-if="item.is_estimate"
-                                      class="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400 border border-violet-200 dark:border-violet-500/20">
-                                    Estimasi
-                                </span>
-                            </p>
-                            <p v-if="item.waste_percent > 0" class="text-xs text-slate-400 mt-0.5">
-                                Sisa: {{ item.waste_percent }}%
-                            </p>
-                        </div>
-                        <span class="text-xs text-slate-500 font-mono">{{ item.unit }}</span>
-                        <span class="text-sm text-right text-slate-700 dark:text-slate-300">{{ item.quantity.toLocaleString('id-ID') }}</span>
-                        <span class="text-sm text-right text-slate-700 dark:text-slate-300">{{ fmt(item.unit_price) }}</span>
-                        <span class="text-sm text-right font-semibold text-slate-800 dark:text-slate-100">{{ fmt(item.subtotal) }}</span>
-                        <div v-if="can_edit" class="flex items-center gap-0.5 justify-end">
-                            <Button size="icon" variant="ghost" class="h-7 w-7" @click="openEditItem(item)">
-                                <Pencil class="h-3 w-3" />
-                            </Button>
-                            <Button size="icon" variant="ghost"
-                                    class="h-7 w-7 text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10"
-                                    @click="deleteItem(item)">
-                                <Trash2 class="h-3 w-3" />
-                            </Button>
-                        </div>
-                    </div>
+                <div v-if="!collapsed.has(String(section))" class="overflow-x-auto">
+                    <table class="w-full text-left text-sm border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.01] text-xs font-medium uppercase tracking-wide text-slate-400">
+                                <th class="px-4 py-2.5 font-medium">Uraian Pekerjaan</th>
+                                <th class="px-4 py-2.5 font-medium w-24">Satuan</th>
+                                <th class="px-4 py-2.5 font-medium text-right w-28">Volume</th>
+                                <th class="px-4 py-2.5 font-medium text-right w-36">Harga Satuan</th>
+                                <th class="px-4 py-2.5 font-medium text-right w-36">Subtotal</th>
+                                <th v-if="can_edit" class="px-4 py-2.5 w-20 text-right"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-white/5">
+                            <tr v-for="item in items" :key="item.id"
+                                class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
+                                <td class="px-4 py-3 align-middle">
+                                    <p class="text-sm text-slate-800 dark:text-slate-100 font-medium">
+                                        {{ item.description }}
+                                        <span v-if="item.is_estimate"
+                                              class="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-normal bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400 border border-violet-200 dark:border-violet-500/20 inline-block align-middle">
+                                            Estimasi
+                                        </span>
+                                    </p>
+                                    <p v-if="item.waste_percent > 0" class="text-xs text-slate-400 mt-0.5">
+                                        Sisa: {{ item.waste_percent }}%
+                                    </p>
+                                </td>
+                                <td class="px-4 py-3 align-middle text-xs text-slate-500 font-mono whitespace-nowrap">
+                                    {{ item.unit }}
+                                </td>
+                                <td class="px-4 py-3 align-middle text-sm text-right text-slate-700 dark:text-slate-300 font-mono whitespace-nowrap">
+                                    {{ item.quantity.toLocaleString('id-ID') }}
+                                </td>
+                                <td class="px-4 py-3 align-middle text-sm text-right text-slate-700 dark:text-slate-300 font-mono whitespace-nowrap">
+                                    {{ fmt(item.unit_price) }}
+                                </td>
+                                <td class="px-4 py-3 align-middle text-sm text-right font-semibold text-slate-800 dark:text-slate-100 font-mono whitespace-nowrap">
+                                    {{ fmt(item.subtotal) }}
+                                </td>
+                                <td v-if="can_edit" class="px-4 py-3 align-middle text-right whitespace-nowrap">
+                                    <div class="flex items-center gap-0.5 justify-end">
+                                        <Button size="icon" variant="ghost" class="h-7 w-7" @click="openEditItem(item)" title="Edit item">
+                                            <Pencil class="h-3.5 w-3.5" />
+                                        </Button>
+                                        <Button size="icon" variant="ghost"
+                                                class="h-7 w-7 text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                                                @click="deleteItem(item)" title="Hapus item">
+                                            <Trash2 class="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
