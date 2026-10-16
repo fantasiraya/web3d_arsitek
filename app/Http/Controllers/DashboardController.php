@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Domains\Billing\Models\Transaction;
 use App\Domains\Billing\Services\SubscriptionLimitService;
 use App\Domains\Project\Models\Project;
+use App\Domains\Project\Models\ProjectCapture;
 use App\Domains\Project\Models\ProjectClient;
 use App\Domains\Rab\Models\RabDocument;
 use Illuminate\Http\Request;
@@ -49,14 +50,23 @@ class DashboardController extends Controller
             ->latest()
             ->get();
 
+        $projectIds = $ownedProjects->pluck('id');
+        $thumbnails = ProjectCapture::whereIn('project_id', $projectIds)
+            ->orderBy('created_at', 'desc')
+            ->get(['project_id', 'file_path'])
+            ->unique('project_id')
+            ->pluck('file_path', 'project_id');
+
         // Collect stale project IDs to batch-update in a single query
         $staleOwnedIds = [];
-        $ownedProjectsMapped = $ownedProjects->map(function (Project $project) use (&$staleOwnedIds) {
+        $ownedProjectsMapped = $ownedProjects->map(function (Project $project) use (&$staleOwnedIds, $thumbnails) {
             $actualCount = (int) $project->actual_revisions_count;
 
             if ($project->current_revision_count !== $actualCount) {
                 $staleOwnedIds[$project->id] = $actualCount;
             }
+
+            $thumb = $thumbnails[$project->id] ?? null;
 
             return [
                 'id'                     => $project->id,
@@ -64,6 +74,7 @@ class DashboardController extends Controller
                 'slug'                   => $project->slug,
                 'description'            => $project->description,
                 'file_path'              => $project->file_path,
+                'thumbnail_url'          => $thumb ? "/storage/{$thumb}" : null,
                 'file_size_bytes'        => $project->file_size_bytes,
                 'is_draco_compressed'    => $project->is_draco_compressed,
                 'max_revisions_allowed'  => $project->max_revisions_allowed,

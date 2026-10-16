@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
-    AlertTriangle, Box, CheckCircle2, Clock, FolderOpen,
+    AlertTriangle, Box, CheckCircle2, ClipboardList, Clock, FileUp, FolderOpen,
     Pencil, Plus, Search, Send, Sparkles, Trash2,
     UserCheck, UserPlus, Users, X,
 } from '@lucide/vue';
@@ -24,6 +24,7 @@ import { useConfirm } from '@/composables/useConfirm';
 import { usePageLoading } from '@/composables/usePageLoading';
 import SkeletonProjectGrid from '@/components/skeletons/SkeletonProjectGrid.vue';
 import { Skeleton } from '@/components/ui/skeleton';
+import ProjectCard from '@/components/ProjectCard.vue';
 
 // ─── Types ───────────────────────────────────────────────
 interface ProjectClientItem {
@@ -38,6 +39,8 @@ interface Project {
     id: string;
     title: string;
     description: string | null;
+    file_path?: string;
+    thumbnail_url?: string | null;
     file_size_bytes: number;
     is_draco_compressed: boolean;
     max_revisions_allowed: number;
@@ -100,6 +103,9 @@ async function deleteProject(project: Project) {
     });
 }
 
+const iconButtonClass =
+    'border-slate-200 bg-white text-xs text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 dark:border-white/15 dark:bg-white/5 dark:text-neutral-300 dark:hover:border-white/30 dark:hover:bg-white/10 dark:hover:text-white';
+
 // ─── Create project modal ────────────────────────────────
 const isCreateModalOpen = ref(false);
 const createForm = useForm({
@@ -132,6 +138,92 @@ function submitCreate() {
             createForm.reset();
             selectedFileName.value = '';
             toast.success('Proyek berhasil dibuat!');
+        },
+    });
+}
+
+// ─── Edit project modal ──────────────────────────────────
+const isEditModalOpen = ref(false);
+const editingProject = ref<Project | null>(null);
+const editForm = useForm({
+    title: '',
+    description: '',
+    max_revisions_allowed: 3,
+    file: null as File | null,
+});
+
+const editFileInputRef = ref<HTMLInputElement | null>(null);
+const editSelectedFileName = ref('');
+const editSelectedFileSize = ref('');
+const editFileError = ref('');
+
+function openEditModal(project: Project) {
+    editingProject.value = project;
+    editForm.title = project.title;
+    editForm.description = project.description || '';
+    editForm.max_revisions_allowed = project.max_revisions_allowed;
+    editForm.file = null;
+    editSelectedFileName.value = '';
+    editSelectedFileSize.value = '';
+    editFileError.value = '';
+    editForm.clearErrors();
+    isEditModalOpen.value = true;
+}
+
+function onEditFileSelected(e: Event) {
+    editFileError.value = '';
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files[0]) {
+        const file = target.files[0];
+        const sizeMb = file.size / (1024 * 1024);
+        editSelectedFileName.value = file.name;
+        editSelectedFileSize.value = sizeMb.toFixed(2) + ' MB';
+
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (ext !== 'glb' && ext !== 'gltf') {
+            editFileError.value = 'Format file tidak didukung! Mohon pilih file 3D (.glb atau .gltf).';
+            editForm.file = null;
+            return;
+        }
+
+        if (sizeMb > 100) {
+            editFileError.value = `Ukuran file (${sizeMb.toFixed(1)} MB) terlalu besar! Maksimal 100 MB.`;
+            editForm.file = null;
+            return;
+        }
+
+        editForm.file = file;
+    }
+}
+
+function submitEditProject() {
+    if (!editingProject.value || editFileError.value) return;
+
+    editForm.transform((data) => {
+        const payload: any = {
+            title: data.title,
+            description: data.description,
+            max_revisions_allowed: data.max_revisions_allowed,
+            _method: 'PATCH',
+        };
+        if (data.file) {
+            payload.file = data.file;
+        }
+        return payload;
+    }).post(`/projects/${editingProject.value.id}`, {
+        preserveScroll: true,
+        forceFormData: true,
+        onSuccess: () => {
+            isEditModalOpen.value = false;
+            editForm.reset();
+            editSelectedFileName.value = '';
+            editSelectedFileSize.value = '';
+            editFileError.value = '';
+            editingProject.value = null;
+            toast.success('Proyek berhasil diperbarui.');
+        },
+        onError: () => {
+            toast.error('Gagal memperbarui proyek.');
         },
     });
 }
@@ -263,77 +355,14 @@ async function revokeClient(client: ProjectClientItem) {
 
                 <!-- Project grid -->
                 <div v-else class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                    <div
+                    <ProjectCard
                         v-for="project in projects"
                         :key="project.id"
-                        class="flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/[0.04] shadow-sm dark:shadow-lg transition-all hover:shadow-md dark:hover:shadow-[0_0_45px_rgba(99,102,241,0.25)] hover:border-slate-300 dark:hover:border-white/30 group"
-                    >
-                        <!-- Thumbnail banner -->
-                        <div class="relative flex h-32 w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-950 overflow-hidden">
-                            <Box class="h-14 w-14 opacity-20 group-hover:opacity-30 group-hover:scale-110 transition-all duration-500" />
-                            <div class="absolute top-3 left-3 flex gap-1.5">
-                                <Badge class="bg-black/60 text-white text-[11px] border border-white/20">3D GLB</Badge>
-                                <Badge v-if="project.is_draco_compressed" class="bg-emerald-500/80 text-white text-[10px]">Draco</Badge>
-                            </div>
-                            <div class="absolute top-3 right-3 flex gap-1.5">
-                                <button @click="deleteProject(project)" class="rounded-full bg-black/50 border border-white/20 p-1.5 text-slate-300 hover:bg-rose-600 hover:text-white transition-all">
-                                    <Trash2 class="h-3.5 w-3.5" />
-                                </button>
-                            </div>
-                            <div class="absolute bottom-2 right-3 text-[11px] text-slate-300 font-mono">{{ formatBytes(project.file_size_bytes) }}</div>
-                        </div>
-
-                        <!-- Card content -->
-                        <div class="p-5 flex-1">
-                            <h3 class="font-bold text-base text-slate-900 dark:text-neutral-100 line-clamp-1">{{ project.title }}</h3>
-                            <p class="mt-1 text-xs text-slate-400 dark:text-neutral-400 line-clamp-2 min-h-[32px]">{{ project.description || 'Tidak ada deskripsi.' }}</p>
-
-                            <!-- Revision progress -->
-                            <div class="mt-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-3">
-                                <div class="flex items-center justify-between text-xs">
-                                    <span class="font-medium text-slate-500 dark:text-neutral-400">Kuota Revisi:</span>
-                                    <span class="font-bold text-slate-900 dark:text-neutral-100">
-                                        {{ project.current_revision_count }} / {{ project.max_revisions_allowed }}
-                                    </span>
-                                </div>
-                                <div class="mt-2 h-1.5 w-full rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
-                                    <div
-                                        class="h-full rounded-full transition-all"
-                                        :class="project.has_reached_revision_limit ? 'bg-gradient-to-r from-rose-500 to-rose-600' : 'bg-gradient-to-r from-indigo-500 to-purple-500'"
-                                        :style="{ width: `${Math.min(100, (project.current_revision_count / project.max_revisions_allowed) * 100)}%` }"
-                                    ></div>
-                                </div>
-                                <div class="mt-1.5 flex items-center justify-between text-[11px]">
-                                    <span v-if="project.has_reached_revision_limit" class="font-semibold text-rose-500 dark:text-rose-400 flex items-center gap-1">
-                                        <AlertTriangle class="h-3 w-3" /> Batas habis
-                                    </span>
-                                    <span v-else class="text-emerald-600 dark:text-emerald-400">Terbuka</span>
-                                    <span class="text-slate-400">{{ project.created_at }}</span>
-                                </div>
-                            </div>
-
-                            <!-- Klien -->
-                            <div class="mt-3 flex items-center justify-between text-xs">
-                                <span class="text-slate-400 dark:text-neutral-400">Klien Kolaborator:</span>
-                                <button @click="openClientModal(project)" class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1">
-                                    <UserCheck class="h-3.5 w-3.5" />
-                                    {{ project.invited_clients.length }} Klien
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Footer -->
-                        <div class="border-t border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4 flex items-center gap-2">
-                            <Link :href="`/projects/${project.id}/viewer`" class="flex-1">
-                                <Button class="w-full text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white" size="sm">
-                                    <Box class="mr-1.5 h-3.5 w-3.5" /> Buka 3D Viewer
-                                </Button>
-                            </Link>
-                            <Button @click="openClientModal(project)" variant="outline" size="sm" class="text-xs border-slate-200 dark:border-white/15" title="Kelola Klien">
-                                <UserPlus class="h-3.5 w-3.5" />
-                            </Button>
-                        </div>
-                    </div>
+                        :project="project"
+                        @edit="openEditModal"
+                        @delete="deleteProject"
+                        @manage-clients="openClientModal"
+                    />
                 </div>
                 </template><!-- end v-else -->
             </main>
@@ -379,6 +408,127 @@ async function revokeClient(client: ProjectClientItem) {
                     <DialogClose as-child><Button type="button" variant="outline">Batal</Button></DialogClose>
                     <Button type="submit" :disabled="createForm.processing || !createForm.file" class="bg-indigo-600 hover:bg-indigo-700 text-white">
                         {{ createForm.processing ? 'Mengunggah...' : 'Buat Proyek' }}
+                    </Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+    </Dialog>
+
+    <!-- ── MODAL: Edit Proyek ── -->
+    <Dialog :open="isEditModalOpen" @update:open="isEditModalOpen = $event">
+        <DialogContent class="sm:max-w-lg">
+            <DialogHeader>
+                <DialogTitle class="flex items-center gap-2">
+                    <Pencil class="h-5 w-5 text-primary" /> Edit Data Proyek 3D
+                </DialogTitle>
+                <DialogDescription>
+                    Perbarui informasi proyek atau ganti file model 3D (.glb / .gltf) yang telah diunggah.
+                </DialogDescription>
+            </DialogHeader>
+
+            <form @submit.prevent="submitEditProject" class="space-y-4 py-2">
+                <!-- Judul Proyek -->
+                <div class="space-y-1.5">
+                    <Label for="edit_title">Judul Proyek <span class="text-rose-500">*</span></Label>
+                    <Input
+                        id="edit_title"
+                        v-model="editForm.title"
+                        placeholder="Contoh: Desain Villa Modern Canggu"
+                        required
+                    />
+                    <p v-if="editForm.errors.title" class="text-xs text-rose-500">
+                        {{ editForm.errors.title }}
+                    </p>
+                </div>
+
+                <!-- Deskripsi -->
+                <div class="space-y-1.5">
+                    <Label for="edit_description">Deskripsi Proyek (Opsional)</Label>
+                    <textarea
+                        id="edit_description"
+                        v-model="editForm.description"
+                        placeholder="Catatan konsep arsitektur, lokasi, atau arahan khusus klien..."
+                        rows="2"
+                        class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    ></textarea>
+                    <p v-if="editForm.errors.description" class="text-xs text-rose-500">
+                        {{ editForm.errors.description }}
+                    </p>
+                </div>
+
+                <!-- Batas Maksimal Revisi Klien -->
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <Label for="edit_max_revisions">Batas Revisi Klien</Label>
+                        <span class="text-xs text-muted-foreground">Saat ini terpakai: {{ editingProject?.current_revision_count ?? 0 }}</span>
+                    </div>
+                    <Input
+                        id="edit_max_revisions"
+                        type="number"
+                        v-model.number="editForm.max_revisions_allowed"
+                        min="1"
+                        max="50"
+                        required
+                    />
+                    <p class="text-[11px] text-muted-foreground">
+                        Klien akan dibatasi hanya dapat membuat thread revisi baru hingga batas ini tercapai.
+                    </p>
+                    <p v-if="editForm.errors.max_revisions_allowed" class="text-xs text-rose-500">
+                        {{ editForm.errors.max_revisions_allowed }}
+                    </p>
+                </div>
+
+                <!-- File Upload Input (Opsional saat Edit) -->
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <Label>Ganti File Model 3D (.glb / .gltf)</Label>
+                        <span class="text-xs text-muted-foreground">Opsional</span>
+                    </div>
+                    <input
+                        ref="editFileInputRef"
+                        type="file"
+                        accept=".glb,.gltf"
+                        @change="onEditFileSelected"
+                        class="hidden"
+                    />
+                    <div
+                        @click="editFileInputRef?.click()"
+                        class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-input p-6 text-center cursor-pointer hover:border-primary/60 hover:bg-primary/5 transition"
+                    >
+                        <FileUp class="h-8 w-8 text-muted-foreground mb-2" />
+                        <div v-if="editSelectedFileName" class="text-sm font-semibold text-primary">
+                            {{ editSelectedFileName }} ({{ editSelectedFileSize }})
+                        </div>
+                        <div v-else class="text-sm font-medium">
+                            Klik jika ingin mengganti file model 3D saat ini ({{ formatBytes(editingProject?.file_size_bytes ?? 0) }})
+                        </div>
+                        <p class="text-[11px] text-muted-foreground mt-1">
+                            Biarkan kosong jika tidak ingin mengubah file 3D
+                        </p>
+                    </div>
+
+                    <p v-if="editFileError" class="text-xs font-semibold text-rose-500 mt-1">
+                        {{ editFileError }}
+                    </p>
+                    <p v-if="editForm.errors.file" class="text-xs font-semibold text-rose-500 mt-1">
+                        {{ editForm.errors.file }}
+                    </p>
+                </div>
+
+                <DialogFooter class="gap-2 sm:gap-0 pt-3">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        @click="isEditModalOpen = false"
+                    >
+                        Batal
+                    </Button>
+                    <Button
+                        type="submit"
+                        :disabled="editForm.processing || !editForm.title || !!editFileError"
+                    >
+                        <span v-if="editForm.processing">Menyimpan...</span>
+                        <span v-else>Simpan Perubahan</span>
                     </Button>
                 </DialogFooter>
             </form>

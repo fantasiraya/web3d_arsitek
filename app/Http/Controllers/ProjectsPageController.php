@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Domains\Billing\Services\SubscriptionLimitService;
 use App\Domains\Project\Models\Project;
+use App\Domains\Project\Models\ProjectCapture;
 use App\Domains\Project\Models\ProjectClient;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -35,13 +36,24 @@ class ProjectsPageController extends Controller
             });
         }
 
-        $projects = $projectsQuery->latest()->get()->map(function (Project $project) {
+        $projects = $projectsQuery->latest()->get();
+        $projectIds = $projects->pluck('id');
+        $thumbnails = ProjectCapture::whereIn('project_id', $projectIds)
+            ->orderBy('created_at', 'desc')
+            ->get(['project_id', 'file_path'])
+            ->unique('project_id')
+            ->pluck('file_path', 'project_id');
+
+        $projectsMapped = $projects->map(function (Project $project) use ($thumbnails) {
             $actual = (int) $project->revision_count;
+            $thumb = $thumbnails[$project->id] ?? null;
 
             return [
                 'id'                       => $project->id,
                 'title'                    => $project->title,
                 'description'              => $project->description,
+                'file_path'                => $project->file_path,
+                'thumbnail_url'            => $thumb ? "/storage/{$thumb}" : null,
                 'file_size_bytes'          => $project->file_size_bytes,
                 'is_draco_compressed'      => $project->is_draco_compressed,
                 'max_revisions_allowed'    => $project->max_revisions_allowed,
@@ -61,11 +73,11 @@ class ProjectsPageController extends Controller
         $canCreate = $this->limitService->canCreateProject($user);
 
         return Inertia::render('Projects/Index', [
-            'projects'   => $projects,
+            'projects'   => $projectsMapped,
             'search'     => $query,
             'canCreate'  => $canCreate['allowed'],
             'stats'      => [
-                'total'        => $projects->count(),
+                'total'        => $projectsMapped->count(),
                 'max_projects' => $this->limitService->getEffectiveProjectLimit($user) ?? 999,
             ],
         ]);
