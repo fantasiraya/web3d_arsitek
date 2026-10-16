@@ -3,8 +3,8 @@
 **Database Engine:** MySQL
 **Primary Key Standard:** UUID
 **Reference:** PRD v2.9, RTCF, RISE Framework
-**Revision:** v2.9 — ditambah tabel `vision_creations` (AI Vision Studio), kolom `prompt` di `project_captures`, optimasi Redis cache multi-DB, distributed locking & eliminasi N+1
-**v2.8 Changelog:** Menambahkan tabel `project_captures`, kolom sun simulation di `projects` (`latitude`, `longitude`, `north_angle`, `solar_date`)
+**Revision:** v3.0 — Architectural Working Booklet PDF & Per-Room RAB Generator: kolom `ai_rendered_path`, `drawing_sheet_id`, `room_element_id`, `description`, `sort_order` di `project_captures`, dan konstanta `source = 'worksheet'` di `rab_documents`.
+**v2.9 Changelog:** Ditambah tabel `vision_creations` (AI Vision Studio), kolom `prompt` di `project_captures`, optimasi Redis cache multi-DB, distributed locking & eliminasi N+1
 **v2.7 Changelog:** Ditambah kolom profil arsitek di `users`, kolom `is_pinned` di `comments`, tabel `rab_price_item_components` (AHSP), kolom `overhead_percent`/`has_components` di `rab_price_items`, tabel wilayah `laravolt/indonesia`, rancangan Drawing 2D
 **v2.6 Changelog:** Menambahkan modul RAB (tabel `rab_*`, kolom `plans.can_use_rab`)
 **v2.5 Changelog:** Mengganti engine dari PostgreSQL ke **MySQL** (aktual). Menambahkan tabel `camera_presets`. Semua tipe `jsonb` → `json` (MySQL syntax). Menyesuaikan catatan storage dari Cloudflare R2 ke **local disk `public`**.
@@ -223,16 +223,22 @@ Menyimpan snapshot gambar 3D yang diambil dari WebGL Canvas Three.js per ruangan
 | Field | Type | Modifiers | Description |
 | :--- | :--- | :--- | :--- |
 | `id` | `uuid` | `PRIMARY KEY` | Unique Identifier |
+| `code` | `string(50)` | `NULLABLE` | Kode identifikasi snapshot (contoh: `R-01`, `EXT-01`) untuk sinkronisasi denah 2D & booklet |
 | `project_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Relasi ke `projects.id` |
 | `user_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Relasi ke `users.id` (Arsitek pemilik proyek) |
 | `title` | `string` | `NULLABLE` | Judul opsional capture |
 | `room_name` | `string` | `NOT NULL, DEFAULT('Sudut Bebas')` | Nama ruangan / preset sudut kamera |
 | `captured_hour` | `string(10)` | `NOT NULL, DEFAULT('12:00')` | Jam pencahayaan simulasi matahari saat capture |
 | `file_path` | `string` | `NOT NULL` | Path file PNG di storage (`projects/{id}/captures/{uuid}.png`) |
+| `ai_rendered_path` | `string` | `NULLABLE` | Path file gambar hasil render AI eksternal (`projects/{id}/captures/ai/{uuid}.png`) |
+| `drawing_sheet_id` | `uuid` | `FOREIGN KEY, NULLABLE` | Relasi ke `drawing_sheets.id` (denah 2D terkait) |
+| `room_element_id` | `uuid` | `NULLABLE` | UUID elemen label/poligon ruangan di denah 2D |
 | `file_size_bytes` | `bigInteger` | `NOT NULL, DEFAULT(0)` | Ukuran file dalam bytes |
 | `width` | `integer` | `NOT NULL, DEFAULT(1920)` | Resolusi lebar gambar (piksel) |
 | `height` | `integer` | `NOT NULL, DEFAULT(1080)` | Resolusi tinggi gambar (piksel) |
 | `prompt` | `longText` | `NULLABLE` | Prompt AI arsitektural kontekstual (auto-save on blur) |
+| `description` | `text` | `NULLABLE` | Catatan/deskripsi lembar kerja ruangan untuk booklet |
+| `sort_order` | `unsignedInteger` | `NOT NULL, DEFAULT(0)` | Urutan halaman di Architectural Booklet |
 | `is_visible_to_clients` | `boolean` | `NOT NULL, DEFAULT(false)` | Switch apakah gambar tampil di galeri Klien |
 | `created_at` | `timestamp` | `NULLABLE` | Waktu capture dibuat |
 | `updated_at` | `timestamp` | `NULLABLE` | Waktu capture diperbarui |

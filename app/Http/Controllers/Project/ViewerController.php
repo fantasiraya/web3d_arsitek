@@ -69,9 +69,34 @@ class ViewerController extends Controller
 
         $rabDocuments = $rabQuery->latest()->get();
 
+        $planSheet = \App\Domains\Drawing\Models\DrawingSheet::where('project_id', $project->id)
+            ->where('type', 'plan')
+            ->first();
+
+        $drawingRooms = [];
+        if ($planSheet) {
+            $drawingRooms = \App\Domains\Drawing\Models\DrawingElement::where('drawing_sheet_id', $planSheet->id)
+                ->where('type', 'room_label')
+                ->get()
+                ->map(function ($el) use ($planSheet) {
+                    $text = $el->data['text'] ?? '';
+                    $cleanName = trim(explode("\n", $text)[0]);
+                    return [
+                        'id'               => $el->id,
+                        'drawing_sheet_id' => $planSheet->id,
+                        'name'             => $cleanName,
+                        'raw_text'         => $text,
+                    ];
+                })
+                ->filter(fn ($r) => ! empty($r['name']))
+                ->values();
+        }
+
         return Inertia::render('Project/Viewer', [
             'project'      => $project,
             'rabDocuments' => $rabDocuments,
+            'drawingRooms' => $drawingRooms,
+            'planSheetId'  => $planSheet?->id,
             'isOwner'      => $isOwner,
         ]);
     }

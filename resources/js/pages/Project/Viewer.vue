@@ -50,6 +50,16 @@
                     <span class="hidden sm:inline">{{ isFullscreen ? 'Keluar Penuh' : 'Layar Penuh' }}</span>
                 </button>
 
+                <!-- Booklet PDF button -->
+                <Link
+                    :href="`/projects/${project.id}/booklet`"
+                    class="flex items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-600/15 hover:bg-orange-600/30 px-3 py-1.5 text-xs font-semibold text-orange-300 transition shadow-sm"
+                    title="Buka Lembar Kerja & Booklet PDF Standar Studio Arsitek"
+                >
+                    <Layers class="h-3.5 w-3.5 text-orange-400" />
+                    <span class="hidden sm:inline">Booklet PDF</span>
+                </Link>
+
                 <!-- RAB button — muncul jika ada dokumen RAB yang visible -->
                 <div v-if="hasVisibleRab" class="relative">
                     <button
@@ -2062,16 +2072,35 @@
                                 </p>
                             </div>
 
-                            <!-- Settings: Label Ruangan, Jam, Resolusi -->
-                            <div class="grid grid-cols-2 gap-2 text-xs">
+                            <!-- Settings: Kode, Label Ruangan, Resolusi -->
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                                 <div>
-                                    <label class="text-[10px] font-medium text-neutral-400 block mb-1">Label Ruangan</label>
+                                    <label class="text-[10px] font-medium text-amber-300 block mb-1">
+                                        Kode Snapshot
+                                    </label>
+                                    <input
+                                        type="text"
+                                        v-model="captureCode"
+                                        placeholder="Contoh: R-01"
+                                        class="w-full h-8 rounded-xl border border-amber-500/30 bg-amber-500/10 px-2.5 text-xs font-mono font-bold text-amber-300 placeholder:text-neutral-500 focus:outline-none focus:border-amber-400"
+                                        title="Kode referensi unik untuk denah 2D dan booklet (contoh: R-01, EXT-01)"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="text-[10px] font-medium text-neutral-400 block mb-1">
+                                        Label Ruangan
+                                        <span v-if="drawingRooms.length > 0" class="text-orange-400 font-mono text-[9px] ml-1">(Sinkron Denah 2D)</span>
+                                    </label>
                                     <input
                                         type="text"
                                         v-model="captureRoomName"
+                                        list="drawing-room-options"
                                         placeholder="Contoh: Dapur & Meja Makan"
                                         class="w-full h-8 rounded-xl border border-white/10 bg-white/5 px-2.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-rose-400"
                                     />
+                                    <datalist id="drawing-room-options">
+                                        <option v-for="r in drawingRooms" :key="r.id" :value="r.name">{{ r.name }}</option>
+                                    </datalist>
                                 </div>
                                 <div>
                                     <label class="text-[10px] font-medium text-neutral-400 block mb-1">Resolusi Simpan</label>
@@ -2177,10 +2206,21 @@
                     </div>
 
                     <!-- Filter Bar -->
-                    <div class="p-3 border-b border-white/5 grid grid-cols-2 gap-2 shrink-0">
+                    <div class="p-3 border-b border-white/5 grid grid-cols-3 gap-1.5 shrink-0">
+                        <select
+                            v-model="galleryCodeGroupFilter"
+                            class="h-7 rounded-lg border border-amber-500/30 bg-amber-500/10 px-1.5 text-[11px] font-mono text-amber-300 focus:outline-none focus:border-amber-400"
+                            title="Filter pengelompokan kode snapshot"
+                        >
+                            <option value="all" class="bg-neutral-900 text-white">Semua Kode</option>
+                            <option value="R" class="bg-neutral-900 text-white">R-* (Interior)</option>
+                            <option value="EXT" class="bg-neutral-900 text-white">EXT-* (Eksterior)</option>
+                            <option value="CUSTOM" class="bg-neutral-900 text-white">Kustom</option>
+                        </select>
+
                         <select
                             v-model="galleryRoomFilter"
-                            class="h-7 rounded-lg border border-white/10 bg-white/5 px-2 text-[11px] text-white focus:outline-none focus:border-amber-400"
+                            class="h-7 rounded-lg border border-white/10 bg-white/5 px-1.5 text-[11px] text-white focus:outline-none focus:border-amber-400"
                         >
                             <option value="all" class="bg-neutral-900 text-white">Semua Ruangan</option>
                             <option
@@ -2195,7 +2235,7 @@
 
                         <select
                             v-model="galleryHourFilter"
-                            class="h-7 rounded-lg border border-white/10 bg-white/5 px-2 text-[11px] text-white focus:outline-none focus:border-amber-400"
+                            class="h-7 rounded-lg border border-white/10 bg-white/5 px-1.5 text-[11px] text-white focus:outline-none focus:border-amber-400"
                         >
                             <option value="all" class="bg-neutral-900 text-white">Semua Jam</option>
                             <option
@@ -2239,8 +2279,13 @@
                                     class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                                 />
                                 <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity flex items-end justify-between p-2.5">
-                                    <span class="text-xs font-semibold text-white drop-shadow">{{ capture.room_name }}</span>
-                                    <span class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-[10px] font-mono text-amber-300">
+                                    <div class="flex items-center gap-1.5 min-w-0">
+                                        <span v-if="capture.code" class="px-1.5 py-0.5 rounded bg-amber-500/90 text-black text-[10px] font-mono font-bold shrink-0 shadow">
+                                            {{ capture.code }}
+                                        </span>
+                                        <span class="text-xs font-semibold text-white drop-shadow truncate">{{ capture.room_name }}</span>
+                                    </div>
+                                    <span class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-[10px] font-mono text-amber-300 shrink-0 ml-1">
                                         {{ capture.captured_hour }}
                                     </span>
                                 </div>
@@ -2430,10 +2475,23 @@
                                             <input
                                                 v-if="isOwner"
                                                 type="text"
+                                                v-model="activeLightboxCapture.code"
+                                                @blur="autoSaveCaptureCode(activeLightboxCapture)"
+                                                placeholder="Kode (R-01)"
+                                                class="w-20 px-2 py-0.5 text-xs font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg focus:outline-none focus:border-amber-400"
+                                                title="Ubah kode identifikasi gambar (contoh: R-01, EXT-01)"
+                                            />
+                                            <span v-else-if="activeLightboxCapture.code" class="px-2 py-0.5 rounded text-xs font-mono font-bold bg-amber-500/20 border border-amber-500/30 text-amber-300">
+                                                {{ activeLightboxCapture.code }}
+                                            </span>
+                                            <input
+                                                v-if="isOwner"
+                                                type="text"
+                                                list="drawing-room-options"
                                                 v-model="activeLightboxCapture.room_name"
                                                 @blur="autoSaveCaptureRoomName(activeLightboxCapture)"
-                                                class="text-base font-semibold text-white tracking-tight bg-transparent hover:bg-white/10 focus:bg-black/60 border border-transparent hover:border-white/20 focus:border-indigo-400 rounded-lg px-2 py-0.5 focus:outline-none transition max-w-[220px]"
-                                                title="Klik untuk mengubah label ruangan"
+                                                class="text-base font-semibold text-white tracking-tight bg-transparent hover:bg-white/10 focus:bg-black/60 border border-transparent hover:border-white/20 focus:border-indigo-400 rounded-lg px-2 py-0.5 focus:outline-none transition max-w-[180px]"
+                                                title="Klik untuk mengubah label ruangan (Sinkron Denah 2D)"
                                             />
                                             <h3 v-else class="text-base font-semibold text-white tracking-tight">
                                                 {{ activeLightboxCapture.room_name }}
@@ -2992,12 +3050,17 @@ async function saveSunSettings() {
 // ── Captures & Gallery ───────────────────────────────────
 interface ProjectCaptureItem {
     id: string;
+    code?: string | null;
     project_id: string;
+    drawing_sheet_id?: string | null;
+    room_element_id?: string | null;
     user_id: string;
     title: string | null;
     room_name: string;
     captured_hour: string;
     file_path: string;
+    ai_rendered_path?: string | null;
+    ai_rendered_url?: string | null;
     file_size_bytes: number;
     width: number;
     height: number;
@@ -3017,6 +3080,7 @@ const isGalleryOpen = ref(false);
 const activeLightboxCapture = ref<ProjectCaptureItem | null>(null);
 
 const selectedPresetForCapture = ref<string>('current');
+const captureCode = ref('');
 const captureRoomName = ref('Sudut Bebas');
 const captureHour = ref('12:00');
 const captureTitle = ref('');
@@ -3025,6 +3089,7 @@ const captureVisibleToClients = ref(false);
 const capturePreviewDataUrl = ref('');
 const isSavingCapture = ref(false);
 const captureError = ref('');
+const galleryCodeGroupFilter = ref('all');
 
 // ── AI Prompt States, Scene 3D Analysis & Auto-Save ──
 const capturePrompt = ref('');
@@ -3689,6 +3754,18 @@ const uniqueHours = computed(() => {
 
 const filteredCaptures = computed(() => {
     return captures.value.filter(c => {
+        if (galleryCodeGroupFilter.value !== 'all') {
+            const code = (c.code || '').toUpperCase();
+            if (galleryCodeGroupFilter.value === 'R' && !code.startsWith('R-')) {
+                return false;
+            }
+            if (galleryCodeGroupFilter.value === 'EXT' && !code.startsWith('EXT-')) {
+                return false;
+            }
+            if (galleryCodeGroupFilter.value === 'CUSTOM' && (code.startsWith('R-') || code.startsWith('EXT-') || !code)) {
+                return false;
+            }
+        }
         if (galleryRoomFilter.value !== 'all' && c.room_name !== galleryRoomFilter.value) {
             return false;
         }
@@ -4045,6 +4122,10 @@ async function openCaptureModal() {
         // 2. Ekstrak status fitur aplikasi (kamera, potongan, cahaya, objek)
         const meta = extractSceneMetadata();
         captureRoomName.value = meta.detected_object_id || 'Sudut Bebas';
+        const isExt = /tampak|depan|eksterior|exterior|fasad|belakang|samping/i.test(captureRoomName.value);
+        const prefix = isExt ? 'EXT-' : 'R-';
+        const count = captures.value.filter(c => (c.code || '').toUpperCase().startsWith(prefix)).length + 1;
+        captureCode.value = `${prefix}${String(count).padStart(2, '0')}`;
 
         // 3. Set prompt lokal instan (0 token) agar user leluasa memilih foto/video
         syncPromptWithCurrentState();
@@ -4064,6 +4145,10 @@ function onCapturePresetChange() {
         refreshCaptureSnapshot();
         const meta = extractSceneMetadata();
         captureRoomName.value = meta.detected_object_id || 'Sudut Bebas';
+        const isExt = /tampak|depan|eksterior|exterior|fasad|belakang|samping/i.test(captureRoomName.value);
+        const prefix = isExt ? 'EXT-' : 'R-';
+        const count = captures.value.filter(c => (c.code || '').toUpperCase().startsWith(prefix)).length + 1;
+        captureCode.value = `${prefix}${String(count).padStart(2, '0')}`;
         syncPromptWithCurrentState();
         return;
     }
@@ -4071,6 +4156,10 @@ function onCapturePresetChange() {
     const preset = cameraPresets.value.find(p => p.id === selectedPresetForCapture.value);
     if (preset) {
         captureRoomName.value = preset.name;
+        const isExt = /tampak|depan|eksterior|exterior|fasad|belakang|samping/i.test(preset.name);
+        const prefix = isExt ? 'EXT-' : 'R-';
+        const count = captures.value.filter(c => (c.code || '').toUpperCase().startsWith(prefix)).length + 1;
+        captureCode.value = `${prefix}${String(count).padStart(2, '0')}`;
         applyPreset(preset);
 
         setTimeout(() => {
@@ -4122,9 +4211,14 @@ async function saveCaptureToGallery() {
     isSavingCapture.value = true;
     captureError.value = '';
 
+    const matchedRoom = drawingRooms.value.find(r => r.name.toLowerCase() === (captureRoomName.value || '').trim().toLowerCase());
+
     const payload = {
         image: capturePreviewDataUrl.value,
+        code: captureCode.value || null,
         room_name: captureRoomName.value || 'Sudut Bebas',
+        drawing_sheet_id: matchedRoom?.drawing_sheet_id || null,
+        room_element_id: matchedRoom?.id || null,
         captured_hour: captureHour.value || '12:00',
         title: captureTitle.value || null,
         width: captureResolution.value === '1080p' ? 1920 : (renderer?.domElement.width ?? 1280),
@@ -4180,6 +4274,26 @@ async function toggleCaptureVisibility(capture: ProjectCaptureItem) {
         }
     } catch (err) {
         console.error('[Captures] toggle error:', err);
+    }
+}
+
+async function autoSaveCaptureCode(capture: ProjectCaptureItem) {
+    if (!isOwner.value) return;
+    try {
+        await fetch(`/projects/${project.value.id}/captures/${capture.id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+                code: capture.code,
+            }),
+        });
+    } catch (err) {
+        console.error('[Captures] update code error:', err);
     }
 }
 
@@ -4310,6 +4424,8 @@ interface RabDocSummary {
 const rabDocuments = computed(() => (page.props.rabDocuments ?? []) as RabDocSummary[]);
 const hasVisibleRab = computed(() => rabDocuments.value.length > 0);
 const showRabPanel  = ref(false);
+
+const drawingRooms = computed(() => (page.props.drawingRooms ?? []) as Array<{ id: string; drawing_sheet_id: string; name: string; raw_text: string }>);
 
 // Lerp target — sama polanya dengan framing model
 let presetLerpTarget: { pos: THREE.Vector3; tgt: THREE.Vector3 } | null = null;

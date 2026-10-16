@@ -47,8 +47,21 @@ class SaveCaptureAction
             Storage::disk('public')->put($filePath, $decoded);
             $fileSize = strlen($decoded);
 
+            // Auto-generate standard code if not supplied (e.g. R-01, EXT-01)
+            $code = ! empty($data['code']) ? trim($data['code']) : null;
+            if (! $code) {
+                $roomUpper = strtoupper($data['room_name'] ?? '');
+                $isExterior = str_contains($roomUpper, 'TAMPAK') || str_contains($roomUpper, 'FASAD') || str_contains($roomUpper, 'EKSTERIOR');
+                $prefix = $isExterior ? 'EXT' : 'R';
+                $existingCount = ProjectCapture::where('project_id', $project->id)
+                    ->where('code', 'LIKE', "{$prefix}-%")
+                    ->count();
+                $code = sprintf('%s-%02d', $prefix, $existingCount + 1);
+            }
+
             return ProjectCapture::create([
                 'id'                    => $captureId,
+                'code'                  => $code,
                 'project_id'            => $project->id,
                 'user_id'               => $user->id,
                 'title'                 => $data['title'] ?? null,
@@ -60,6 +73,10 @@ class SaveCaptureAction
                 'height'                => (int) ($data['height'] ?? 1080),
                 'is_visible_to_clients' => (bool) ($data['is_visible_to_clients'] ?? false),
                 'prompt'                => $data['prompt'] ?? null,
+                'drawing_sheet_id'      => $data['drawing_sheet_id'] ?? null,
+                'room_element_id'       => $data['room_element_id'] ?? null,
+                'description'           => $data['description'] ?? null,
+                'sort_order'            => (int) ($data['sort_order'] ?? 0),
             ]);
         });
     }

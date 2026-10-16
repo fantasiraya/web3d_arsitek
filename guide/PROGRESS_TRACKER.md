@@ -222,6 +222,18 @@
 | Distributed Atomic Locks (Race Condition Prevention) | Backend DDD | 🟢 Completed | `Cache::lock(...)->block(5)` pada `CreateProjectAction`, `SaveCaptureAction`, dan `PinCommentAction` untuk menjamin kuota tidak jebol saat concurrency tinggi — 2026-10-15 |
 | Payment Concurrency & Idempotency Protection | Backend | 🟢 Completed | `CheckoutController::paymentCallback` dan webhook notification dibungkus `DB::transaction` dengan `lockForUpdate()` pada record order pending untuk mencegah aktivasi ganda — 2026-10-15 |
 
+### 14. Architectural Working Booklet & Per-Room RAB Generator (`Domains/Project`, `Domains/Drawing`, `Domains/Rab`)
+| Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
+| :--- | :--- | :---: | :--- |
+| Migrasi Skema Booklet `project_captures` | Database | 🟢 Completed | Kolom `ai_rendered_path`, `drawing_sheet_id` (FK `drawing_sheets`, nullOnDelete), `room_element_id`, `description`, `sort_order`, auto-cleanup file fisik saat delete — selesai 2026-10-16 |
+| Upload Render AI & Mode Switcher Galeri | Backend DDD & UI | 🟢 Completed | `UploadAiRenderedCaptureAction`, `UploadAiRenderedCaptureRequest`, route upload & delete render AI, prioritas toggle "Render AI" vs "3D Asli" — selesai 2026-10-16 |
+| Sinkronisasi Nama Ruangan 2D ↔ 3D | Backend & Frontend | 🟢 Completed | Mengambil label ruangan dari denah 2D (`drawing_elements`), datalist autocomplete di 3D Viewer & auto-bind `drawing_sheet_id`/`room_element_id` saat capture — selesai 2026-10-16 |
+| Auto Key-Plan Renderer (`KeyPlanCanvas.vue`) | Frontend (SVG) | 🟢 Completed | Denah mini otomatis menghitung bounding box, merender denah monokrom dengan highlight warna oranye menyala (`#EA580C`) dan badge ruangan aktif persis standar lembar kerja studio arsitek — selesai 2026-10-16 |
+| Bidirectional Code & Reference System (3D ↔ 2D) | Backend & Frontend | 🟢 Completed | Penambahan kolom `code` pada `project_captures` (auto-code `R-01`/`EXT-01` + custom editing), group filter (`R-*`, `EXT-*`, `Kustom`) di galeri 3D, Select2/Combobox pencarian referensi visual di Inspector CAD Editor 2D (top 5 default, badge `📷 R-01` di kanvas Konva), dan indikator visual di daftar `/drawings` — selesai 2026-10-16 |
+| Halaman Booklet Builder & PDF Preview (`Booklet.vue`) | Frontend & Backend | 🟢 Completed | Layout A3/A4 Landscape studio: Halaman 1 Cover + watermark `DESIGN BY [company_name]`, Halaman 2 Master Plan Denah 2D 80/20, Halaman 3+ Eksterior & Interior per ruangan (Visual 3D/AI + Key Plan Locator + Kop Gambar Title Block 20%), 1-Click CSS print engine — selesai 2026-10-16 |
+| Generator Draf RAB Per Ruangan dari Lembar Kerja | Backend DDD & UI | 🟢 Completed | `GenerateRabFromWorksheetAction`, `POST /projects/{project}/rab/from-worksheet`, mengelompokkan item RAB per `section = Nama Ruangan` (`TERAS`, `KASIR`, `AREA VIP`, dll.), auto-match master harga arsitek, `is_estimate = true`, kalkulasi total via `RecalculateRabAction` — selesai 2026-10-16 |
+| Automated Pest Tests Suite | Backend Testing | 🟢 Completed | `UploadAiRenderedCaptureTest`, `BookletAccessTest`, `GenerateRabFromWorksheetTest`, 15 feature tests lulus 100%, total 146 tests lulus tanpa error — selesai 2026-10-16 |
+
 ---
 
 ## 📝 Activity Logs
@@ -262,6 +274,21 @@
   5. **Header 2-Row & Bottom HUD Responsif:** Header tools 2 baris terorganisir dengan deteksi overflow horizontal dan indikator visual berkedip ("Menu Lainnya ▶"); navbottom HUD responsif dengan scroll cue kiri dan kanan.
   6. **Sidebar CAD Anti-Tabrakan & Scroll Vertikal:** Left sidebar diberi batas bawah aman `bottom-18 sm:bottom-20 z-30` sehingga tidak tumpang tindih dengan bottom HUD pada mode mobile / layar sempit, dilengkapi indikator panah scroll vertikal (`▲` / `▼`).
   7. **Sinkronisasi & Audit Panduan Hotkeys CAD:** Melengkapi modal panduan (`showHelpModal`) dengan pintasan Garis Bebas (`L`), Hapus Objek (`Delete`/`Backspace`), Batal Seleksi (`Esc`), dan Redo (`Ctrl+Y`/`Ctrl+Shift+Z`), terverifikasi 100% konsisten dengan keydown handler kanvas.
+- **2026-10-16 (Update):** Implementasi Penuh Architectural Working Booklet PDF & Per-Room RAB Generator —
+  1. **Database & Lifecycle Storage Cleanup:** Migrasi kolom `ai_rendered_path`, `drawing_sheet_id`, `room_element_id`, `description`, `sort_order` pada `project_captures` dengan hook penghapusan otomatis file fisik saat record dihapus.
+  2. **Upload Render AI & Mode Prioritas:** Action `UploadAiRenderedCaptureAction` & route `POST /projects/{project}/captures/{capture}/ai-render` + toggle prioritas "Render AI" vs "3D Asli" di Booklet dan 3D Viewer.
+  3. **Sinkronisasi Nama Ruangan 2D ↔ 3D:** Data elemen `room_label` dari denah 2D dibaca otomatis oleh `ViewerController` dan disediakan sebagai datalist autocomplete pada form snapshot 3D serta edit nama ruangan capture, otomatis mengikat `drawing_sheet_id` dan `room_element_id`.
+  4. **Auto Key-Plan Renderer (`KeyPlanCanvas.vue`):** Mini denah berbasis SVG responsif beresolusi vektor tajam yang menghitung bounding box denah 2D secara otomatis, menampilkan seluruh denah dalam palet monokrom bersih, dan **menyorot ruangan aktif dengan warna oranye menyala (`#EA580C`) beserta badge namanya** persis seperti standar studio arsitek (referensi proyek TRIVES).
+  5. **Halaman Booklet Builder & PDF Engine (`Drawing/Booklet.vue`):** Tata letak ISO A3/A4 Landscape standar studio: Halaman 1 Cover + watermark monumental `DESIGN BY [company_name]`, Halaman 2 Master Floor Plan Denah 2D 80/20, Halaman 3+ Eksterior & Interior per ruangan (Visual 3D/AI 68% + Nama Ruangan & Catatan + Key Plan Locator + Kop Gambar Title Block 20%), dilengkapi CSS print engine `@page { size: A3 landscape; margin: 0; }` untuk 1-Click download/cetak PDF tanpa pemotongan elemen.
+  6. **Worksheet to Per-Room RAB Generator:** Action `GenerateRabFromWorksheetAction` & endpoint `POST /projects/{project}/rab/from-worksheet` yang otomatis mengelompokkan item RAB per `section = Nama Ruangan` (`TERAS`, `KASIR`, `AREA VIP`, dll.), memetakan ke harga satuan arsitek, dan mengkalkulasi ulang subtotal, overhead 10%, PPN 11%, dan total melalui `RecalculateRabAction`.
+  7. **Testing:** 15 Pest Feature Tests baru lulus 100%, total 146 tests seluruh sistem lulus tanpa error. Vite build sukses.
+- **2026-10-16 (Update):** Sistem Kode Otomatis & Sinkronisasi Referensi Dua Arah (3D ↔ 2D CAD) —
+  1. **Auto Code Generation & Custom Editing (`Viewer.vue`):** Penambahan kolom `code` pada `project_captures` (migrasi MySQL). Kode di-generate otomatis saat snapshot diambil (`EXT-01`, `EXT-02` untuk tampak/fasad eksterior dan `R-01`, `R-02` untuk interior ruangan) atau diisi custom oleh arsitek. Dapat diedit langsung di Lightbox dengan auto-save on blur (`autoSaveCaptureCode`).
+  2. **Filter Pengelompokan Kode di Galeri 3D:** Drawer galeri dilengkapi filter pengelompokan kode (`Semua Kode`, `R-* (Interior)`, `EXT-* (Eksterior)`, `Kustom`), serta badge kode kontras di atas thumbnail snapshot.
+  3. **Pencarian Referensi Visual 3D (Select2 / Combobox) di CAD Editor (`Drawing/Editor.vue`):** Pada panel Inspector properti elemen saat label ruangan (`room_label`) atau objek denah dipilih, disediakan input pencarian live combobox (default menampilkan 5 referensi teratas lengkap dengan thumbnail, badge kode, nama ruangan, dan jam). Item yang sudah tertaut otomatis diberi penanda status: badge **"Sudah Digunakan"** (disertai nama ruangan tempat visual tersebut terpasang) atau **"Sedang Dipakai"** untuk elemen yang sedang aktif, sehingga arsitek terhindar dari duplikasi penautan.
+  4. **Badge Visual pada Kanvas CAD Konva:** Elemen label ruangan yang terhubung ke snapshot 3D menampilkan badge oranye elegan `📷 R-01` langsung di atas label denah untuk kejelasan visual instan.
+  5. **Indikator Referensi pada Daftar Lembar Kerja (`Drawing/Index.vue`):** Kartu denah menampilkan badge jumlah visual 3D terhubung (`📷 {count} 3D`) dan tombol akses cepat langsung ke Booklet PDF. Build Vite (3767 modules) sukses, 146 Pest tests lulus 100%.
+
 
 
 

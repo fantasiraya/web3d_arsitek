@@ -19,6 +19,7 @@ import {
     Maximize2,
     Sparkles,
     Lock,
+    Camera,
 } from '@lucide/vue';
 
 defineOptions({ layout: UnifiedLayout });
@@ -40,6 +41,7 @@ interface DrawingSheetItem {
     grid_spacing: number;
     unit: string;
     sort_order: number;
+    captures_count?: number;
     created_at: string;
     updated_at: string;
     project?: {
@@ -255,9 +257,19 @@ const getTypeColor = (type: string) => {
                         
                         <!-- Top badges -->
                         <div class="relative z-10 flex items-center justify-between">
-                            <span :class="['px-2.5 py-0.5 rounded-full text-[10px] font-semibold border', getTypeColor(sheet.type)]">
-                                {{ getTypeLabel(sheet.type) }}
-                            </span>
+                            <div class="flex items-center gap-1.5">
+                                <span :class="['px-2.5 py-0.5 rounded-full text-[10px] font-semibold border', getTypeColor(sheet.type)]">
+                                    {{ getTypeLabel(sheet.type) }}
+                                </span>
+                                <span
+                                    v-if="sheet.captures_count && sheet.captures_count > 0"
+                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                                    title="Visual 3D snapshot terhubung ke denah ini"
+                                >
+                                    <Camera class="w-3 h-3" />
+                                    {{ sheet.captures_count }} 3D
+                                </span>
+                            </div>
                             <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-200/60 dark:bg-white/10 text-slate-700 dark:text-slate-300">
                                 {{ sheet.scale }} • {{ sheet.paper_size }}
                             </span>
@@ -300,6 +312,13 @@ const getTypeColor = (type: string) => {
                             </Link>
 
                             <div class="flex items-center gap-1">
+                                <Link
+                                    :href="`/projects/${sheet.project_id}/booklet`"
+                                    title="Lihat Lembar Kerja & Booklet PDF"
+                                    class="p-2 rounded-xl text-amber-500 hover:text-amber-600 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-400/10 transition-colors"
+                                >
+                                    <Sparkles class="w-4 h-4" />
+                                </Link>
                                 <a
                                     :href="`/drawings/${sheet.id}/export-dxf`"
                                     title="Unduh AutoCAD DXF"

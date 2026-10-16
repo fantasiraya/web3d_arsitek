@@ -102,9 +102,14 @@ class ProjectCaptureController extends Controller
         $capture = ProjectCapture::where('project_id', $project->id)->findOrFail($captureId);
 
         $validated = $request->validate([
+            'code'                  => ['nullable', 'string', 'max:50'],
             'room_name'             => ['nullable', 'string', 'max:255'],
             'title'                 => ['nullable', 'string', 'max:255'],
             'prompt'                => ['nullable', 'string'],
+            'description'           => ['nullable', 'string'],
+            'sort_order'            => ['nullable', 'integer', 'min:0'],
+            'drawing_sheet_id'      => ['nullable', 'uuid', 'exists:drawing_sheets,id'],
+            'room_element_id'       => ['nullable', 'uuid'],
             'is_visible_to_clients' => ['nullable', 'boolean'],
         ]);
 
@@ -112,6 +117,46 @@ class ProjectCaptureController extends Controller
 
         return response()->json([
             'message' => 'Detail gambar berhasil diperbarui.',
+            'data'    => $capture->fresh(),
+        ]);
+    }
+
+    public function uploadAiRender(
+        \App\Domains\Project\Requests\UploadAiRenderedCaptureRequest $request,
+        string $projectId,
+        string $captureId,
+        \App\Domains\Project\Actions\UploadAiRenderedCaptureAction $action
+    ): JsonResponse {
+        $project = Project::findOrFail($projectId);
+        $capture = ProjectCapture::where('project_id', $project->id)->findOrFail($captureId);
+
+        $updated = $action->execute($request->user(), $project, $capture, $request->file('image'));
+
+        return response()->json([
+            'message' => 'Gambar render AI berhasil diunggah.',
+            'data'    => $updated,
+        ]);
+    }
+
+    public function deleteAiRender(Request $request, string $projectId, string $captureId): JsonResponse
+    {
+        $project = Project::findOrFail($projectId);
+        $user = $request->user();
+
+        if (! $user || $project->user_id !== $user->id) {
+            abort(403, 'Hanya arsitek pemilik proyek yang dapat menghapus render AI.');
+        }
+
+        $capture = ProjectCapture::where('project_id', $project->id)->findOrFail($captureId);
+
+        if ($capture->ai_rendered_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($capture->ai_rendered_path)) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($capture->ai_rendered_path);
+        }
+
+        $capture->update(['ai_rendered_path' => null]);
+
+        return response()->json([
+            'message' => 'Gambar render AI berhasil dihapus.',
             'data'    => $capture->fresh(),
         ]);
     }

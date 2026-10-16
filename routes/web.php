@@ -97,6 +97,8 @@ Route::middleware(['auth', 'project.access'])->group(function () {
     Route::patch('/projects/{project}/captures/{capture}/toggle-visibility', [ProjectCaptureController::class, 'toggleVisibility'])->name('projects.captures.toggle-visibility');
     Route::patch('/projects/{project}/captures/{capture}/prompt', [ProjectCaptureController::class, 'updatePrompt'])->name('projects.captures.prompt.update');
     Route::post('/projects/{project}/captures/generate-prompt', [ProjectCaptureController::class, 'generatePrompt'])->name('projects.captures.generate-prompt');
+    Route::post('/projects/{project}/captures/{capture}/ai-render', [ProjectCaptureController::class, 'uploadAiRender'])->name('projects.captures.ai-render.upload');
+    Route::delete('/projects/{project}/captures/{capture}/ai-render', [ProjectCaptureController::class, 'deleteAiRender'])->name('projects.captures.ai-render.delete');
     Route::patch('/projects/{project}/sun-settings', [ProjectCaptureController::class, 'updateSunSettings'])->name('projects.sun-settings.update');
 });
 
@@ -135,6 +137,7 @@ Route::middleware(['auth', 'verified', 'rab.access'])->group(function () {
     // Dokumen RAB (terikat project)
     Route::get('/projects/{project}/rab', [RabDocumentController::class, 'index'])->name('rab.index');
     Route::post('/projects/{project}/rab', [RabDocumentController::class, 'store'])->name('rab.store');
+    Route::post('/projects/{project}/rab/from-worksheet', [RabDocumentController::class, 'generateFromWorksheet'])->name('rab.generate-from-worksheet');
     Route::get('/projects/{project}/rab/{rab}', [RabDocumentController::class, 'show'])->name('rab.show');
     Route::put('/projects/{project}/rab/{rab}', [RabDocumentController::class, 'update'])->name('rab.update');
     Route::delete('/projects/{project}/rab/{rab}', [RabDocumentController::class, 'destroy'])->name('rab.destroy');
@@ -176,6 +179,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/drawings/{sheet}/sync', [DrawingElementController::class, 'sync'])->name('drawings.sync');
     Route::get('/drawings/{sheet}/export-dxf', [DrawingSheetController::class, 'exportDxf'])->name('drawings.export-dxf');
     Route::match(['get', 'post'], '/drawings/{sheet}/export-svg', [DrawingSheetController::class, 'exportSvg'])->name('drawings.export-svg');
+    Route::get('/projects/{project}/booklet', [\App\Domains\Drawing\Controllers\BookletController::class, 'show'])->name('projects.booklet');
 });
 
 // ── Chat realtime routes ──

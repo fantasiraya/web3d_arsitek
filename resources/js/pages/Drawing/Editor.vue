@@ -54,6 +54,9 @@ import {
     RotateCcw,
     Printer,
     FileText,
+    Camera,
+    Search,
+    X,
 } from '@lucide/vue';
 
 interface SheetData {
@@ -100,11 +103,25 @@ interface ArchitectProfile {
     city_name?: string | null;
 }
 
+interface ProjectCaptureProp {
+    id: string;
+    code?: string | null;
+    room_name: string;
+    captured_hour: string;
+    file_path: string;
+    ai_rendered_path?: string | null;
+    drawing_sheet_id?: string | null;
+    room_element_id?: string | null;
+    url?: string;
+    ai_rendered_url?: string | null;
+}
+
 const props = defineProps<{
     sheet: SheetData;
     project: ProjectData;
     elements: ElementData[];
     projectSheets?: ProjectSheetItem[] | null;
+    projectCaptures?: ProjectCaptureProp[] | null;
     canEdit: boolean;
     architect?: ArchitectProfile | null;
 }>();
@@ -475,6 +492,171 @@ const saveSuccess = ref(false);
 const isAutoSaving = ref(false);
 const selectedNodeId = ref<string | null>(null);
 const selectedElementData = ref<Record<string, any> | null>(null);
+
+// ── 3D Capture Reference Synchronization ─────────────────────────────────────
+const localProjectCaptures = ref<ProjectCaptureProp[]>([...(props.projectCaptures || [])]);
+const captureSearchQuery = ref('');
+const isCaptureDropdownOpen = ref(false);
+
+const boundCapture = computed(() => {
+    if (!selectedNodeId.value) return null;
+    return (
+        localProjectCaptures.value.find(
+            (c) =>
+                c.room_element_id === selectedNodeId.value ||
+                (selectedElementData.value?.capture_id && c.id === selectedElementData.value.capture_id)
+        ) || null
+    );
+});
+
+const filteredCaptureReferences = computed(() => {
+    const list = localProjectCaptures.value;
+    const query = captureSearchQuery.value.trim().toLowerCase();
+    if (!query) {
+        return list.slice(0, 5);
+    }
+    return list
+        .filter((c) => {
+            const matchCode = (c.code || '').toLowerCase().includes(query);
+            const matchRoom = (c.room_name || '').toLowerCase().includes(query);
+            const matchHour = (c.captured_hour || '').toLowerCase().includes(query);
+            return matchCode || matchRoom || matchHour;
+        })
+        .slice(0, 10);
+});
+
+function getCaptureUsage(cap: ProjectCaptureProp): { isUsed: boolean; isCurrent: boolean; roomLabel?: string } {
+    const isCurrent = boundCapture.value?.id === cap.id;
+
+    // Cek apakah tertaut ke salah satu elemen di lembar kerja saat ini
+    const boundEl = elementList.value.find(
+        (el) => el.data?.capture_id === cap.id || el.id === cap.room_element_id
+    );
+
+    if (boundEl) {
+        const roomName = boundEl.data?.text ? boundEl.data.text.split('\n')[0].trim() : (boundEl.type || 'Elemen');
+        return {
+            isUsed: true,
+            isCurrent,
+            roomLabel: roomName,
+        };
+    }
+
+    // Cek apakah tertaut ke elemen/lembar kerja lain di database
+    if (cap.room_element_id || cap.drawing_sheet_id) {
+        return {
+            isUsed: true,
+            isCurrent,
+            roomLabel: cap.room_name || 'Ruangan lain',
+        };
+    }
+
+    return {
+        isUsed: false,
+        isCurrent: false,
+    };
+}
+
+async function bindCaptureToElement(capture: ProjectCaptureProp) {
+    if (!selectedNodeId.value || !props.canEdit) return;
+
+    if (selectedElementData.value) {
+        selectedElementData.value.capture_id = capture.id;
+        selectedElementData.value.capture_code = capture.code;
+    }
+    const found = elementList.value.find((x) => x.id === selectedNodeId.value);
+    if (found) {
+        found.data = {
+            ...found.data,
+            capture_id: capture.id,
+            capture_code: capture.code,
+        };
+    }
+
+    localProjectCaptures.value = localProjectCaptures.value.map((c) => {
+        if (c.id === capture.id) {
+            return { ...c, drawing_sheet_id: props.sheet.id, room_element_id: selectedNodeId.value };
+        }
+        if (c.room_element_id === selectedNodeId.value && c.id !== capture.id) {
+            return { ...c, drawing_sheet_id: null, room_element_id: null };
+        }
+        return c;
+    });
+
+    isCaptureDropdownOpen.value = false;
+    captureSearchQuery.value = '';
+
+    try {
+        await fetch(`/projects/${props.project.id}/captures/${capture.id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+                drawing_sheet_id: props.sheet.id,
+                room_element_id: selectedNodeId.value,
+            }),
+        });
+        toast.success(`Visual 3D [${capture.code || capture.room_name}] terhubung ke elemen!`);
+    } catch (err) {
+        console.error('[Editor] Failed to link capture:', err);
+    }
+
+    restoreFromState(elementList.value, true);
+    triggerAutoSaveDebounced();
+}
+
+async function unbindCaptureFromElement() {
+    if (!selectedNodeId.value || !props.canEdit) return;
+    const currentCap = boundCapture.value;
+
+    if (selectedElementData.value) {
+        selectedElementData.value.capture_id = null;
+        selectedElementData.value.capture_code = null;
+    }
+    const found = elementList.value.find((x) => x.id === selectedNodeId.value);
+    if (found) {
+        const newData = { ...found.data };
+        delete newData.capture_id;
+        delete newData.capture_code;
+        found.data = newData;
+    }
+
+    if (currentCap) {
+        localProjectCaptures.value = localProjectCaptures.value.map((c) => {
+            if (c.id === currentCap.id) {
+                return { ...c, drawing_sheet_id: null, room_element_id: null };
+            }
+            return c;
+        });
+
+        try {
+            await fetch(`/projects/${props.project.id}/captures/${currentCap.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    drawing_sheet_id: null,
+                    room_element_id: null,
+                }),
+            });
+            toast.info(`Tautan visual 3D dilepas.`);
+        } catch (err) {
+            console.error('[Editor] Failed to unlink capture:', err);
+        }
+    }
+
+    isCaptureDropdownOpen.value = false;
+    restoreFromState(elementList.value, true);
+    triggerAutoSaveDebounced();
+}
 
 // Pan state with spacebar & modifier keys for multi-select and clone-drag
 const isSpacePressed = ref(false);
@@ -2306,6 +2488,7 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
             const x = data.x ?? 0;
             const y = data.y ?? 0;
             const labelText = data.text ?? 'R. UTAMA\n±0.00';
+            const boundCode = data.capture_code || localProjectCaptures.value.find(c => c.room_element_id === el.id)?.code;
 
             const bg = new Konva.Rect({
                 x: x - 45,
@@ -2313,8 +2496,8 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 width: 90,
                 height: 36,
                 fill: isCad ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.9)',
-                stroke: isCad ? '#38bdf8' : '#94a3b8',
-                strokeWidth: 1.5,
+                stroke: boundCode ? '#ea580c' : (isCad ? '#38bdf8' : '#94a3b8'),
+                strokeWidth: boundCode ? 2 : 1.5,
                 cornerRadius: 4,
             });
             const text = new Konva.Text({
@@ -2329,6 +2512,30 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
             });
             group.add(bg);
             group.add(text);
+
+            if (boundCode) {
+                const badge = new Konva.Rect({
+                    x: x - 45,
+                    y: y - 36,
+                    width: 90,
+                    height: 16,
+                    fill: '#ea580c',
+                    cornerRadius: 3,
+                });
+                const badgeText = new Konva.Text({
+                    x: x - 45,
+                    y: y - 33,
+                    width: 90,
+                    text: `📷 ${boundCode}`,
+                    fontSize: 9,
+                    fontFamily: 'monospace',
+                    align: 'center',
+                    fill: '#ffffff',
+                    fontStyle: 'bold',
+                });
+                group.add(badge);
+                group.add(badgeText);
+            }
             break;
         }
 
@@ -4218,6 +4425,16 @@ onUnmounted(() => {
                         <span>{{ isSaving ? 'Menyimpan...' : (isAutoSaving ? 'Auto-Save...' : (saveSuccess ? 'Tersimpan!' : 'Simpan')) }}</span>
                     </button>
 
+                    <!-- Booklet PDF Link Button -->
+                    <Link
+                        :href="`/projects/${project.id}/booklet`"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white shadow-sm transition-all cursor-pointer shrink-0"
+                        title="Buka Lembar Kerja & Booklet PDF Standar Studio"
+                    >
+                        <Layers class="w-3.5 h-3.5" />
+                        <span>📄 Booklet PDF</span>
+                    </Link>
+
                     <!-- Compact Export Dropdown Menu (DXF, SVG, PNG, PDF, Print) -->
                     <div class="relative export-menu-container shrink-0">
                         <button
@@ -4237,6 +4454,20 @@ onUnmounted(() => {
                             <div class="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-white/10 mb-1">
                                 Ekspor Lembar Kerja
                             </div>
+
+                            <!-- Booklet PDF Standar Arsitektur -->
+                            <Link
+                                :href="`/projects/${project.id}/booklet`"
+                                class="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-orange-600/15 hover:bg-orange-600/25 text-orange-300 hover:text-white transition-colors text-left w-full cursor-pointer group"
+                            >
+                                <div class="w-7 h-7 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center border border-orange-500/30 shrink-0 group-hover:bg-orange-500 group-hover:text-white transition-colors">
+                                    <FileText class="w-3.5 h-3.5" />
+                                </div>
+                                <div>
+                                    <div class="font-semibold text-white">Booklet PDF Arsitek</div>
+                                    <div class="text-[10px] text-slate-400">3D + Key Plan + Draf RAB</div>
+                                </div>
+                            </Link>
 
                             <!-- Unduh Langsung PDF Asli -->
                             <button
@@ -4992,6 +5223,124 @@ onUnmounted(() => {
                             class="w-full text-xs p-2 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
                             rows="2"
                         ></textarea>
+                    </div>
+
+                    <!-- Referensi Visual 3D (Sync Snapshot Gallery) -->
+                    <div v-if="selectedNodeId && selectedNodeId !== 'multi' && selectedNodeId !== 'all'" class="space-y-2 pt-2 border-t border-white/10">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-semibold text-amber-300 flex items-center gap-1.5">
+                                <Camera class="w-3.5 h-3.5 text-amber-400" />
+                                Referensi Visual 3D
+                            </span>
+                            <span v-if="boundCapture" class="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                                Terhubung ✓
+                            </span>
+                        </div>
+
+                        <!-- Current Bound Capture Card -->
+                        <div v-if="boundCapture" class="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1.5">
+                            <div class="flex items-center gap-2">
+                                <img
+                                    :src="boundCapture.ai_rendered_url || boundCapture.url"
+                                    :alt="boundCapture.room_name"
+                                    class="w-12 h-9 object-cover rounded-lg border border-amber-500/30 bg-black shrink-0"
+                                />
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center gap-1">
+                                        <span class="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500 text-black">
+                                            {{ boundCapture.code || '3D' }}
+                                        </span>
+                                        <span class="text-xs font-semibold text-white truncate">{{ boundCapture.room_name }}</span>
+                                    </div>
+                                    <span class="text-[10px] text-neutral-400 font-mono">{{ boundCapture.captured_hour }}</span>
+                                </div>
+                                <button
+                                    v-if="canEdit"
+                                    type="button"
+                                    @click="unbindCaptureFromElement"
+                                    class="p-1 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer"
+                                    title="Lepas Tautan"
+                                >
+                                    <X class="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Searchable Select2 / Combobox Dropdown -->
+                        <div v-if="canEdit" class="relative">
+                            <div class="relative">
+                                <Search class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                <input
+                                    v-model="captureSearchQuery"
+                                    @focus="isCaptureDropdownOpen = true"
+                                    type="text"
+                                    :placeholder="boundCapture ? 'Ganti referensi visual...' : 'Cari kode (R-01) atau nama...'"
+                                    class="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                />
+                            </div>
+
+                            <!-- Dropdown Menu (Default top 5, or filtered results) -->
+                            <div
+                                v-if="isCaptureDropdownOpen"
+                                class="absolute left-0 right-0 top-full mt-1 z-30 max-h-56 overflow-y-auto rounded-xl bg-slate-900 border border-white/15 shadow-2xl p-1.5 space-y-1 backdrop-blur"
+                            >
+                                <div class="px-2 py-1 text-[10px] text-slate-400 font-medium flex items-center justify-between border-b border-white/5">
+                                    <span>{{ captureSearchQuery ? 'Hasil Pencarian' : 'Visual 3D Proyek (Top 5)' }}</span>
+                                    <button @click="isCaptureDropdownOpen = false" class="text-slate-400 hover:text-white cursor-pointer">✕</button>
+                                </div>
+
+                                <div v-if="filteredCaptureReferences.length === 0" class="py-3 text-center text-xs text-slate-500">
+                                    Tidak ada visual 3D yang cocok.
+                                </div>
+
+                                <div
+                                    v-for="cap in filteredCaptureReferences"
+                                    :key="cap.id"
+                                    @click="bindCaptureToElement(cap)"
+                                    class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-amber-500/15 cursor-pointer transition-colors group"
+                                    :class="boundCapture?.id === cap.id ? 'bg-amber-500/20 border border-amber-500/30' : ''"
+                                >
+                                    <img
+                                        :src="cap.ai_rendered_url || cap.url"
+                                        :alt="cap.room_name"
+                                        class="w-10 h-7 object-cover rounded border border-white/10 bg-black shrink-0"
+                                    />
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center justify-between gap-1">
+                                            <div class="flex items-center gap-1.5 min-w-0">
+                                                <span class="font-mono text-[9px] font-bold px-1 rounded bg-amber-500/80 text-black shrink-0">
+                                                    {{ cap.code || '3D' }}
+                                                </span>
+                                                <span class="text-xs text-white truncate font-medium group-hover:text-amber-300">{{ cap.room_name }}</span>
+                                            </div>
+
+                                            <!-- Label Status: Sudah Digunakan -->
+                                            <span
+                                                v-if="getCaptureUsage(cap).isUsed"
+                                                class="text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 flex items-center gap-0.5"
+                                                :class="getCaptureUsage(cap).isCurrent
+                                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                                    : 'bg-amber-500/15 text-amber-300 border-amber-500/30'"
+                                            >
+                                                <Check v-if="getCaptureUsage(cap).isCurrent" class="w-2.5 h-2.5" />
+                                                <span>{{ getCaptureUsage(cap).isCurrent ? 'Sedang Dipakai' : 'Sudah Digunakan' }}</span>
+                                            </span>
+                                        </div>
+                                        <div class="flex items-center justify-between text-[9px] text-slate-400 font-mono mt-0.5">
+                                            <span>{{ cap.captured_hour }}</span>
+                                            <span
+                                                v-if="getCaptureUsage(cap).isUsed && !getCaptureUsage(cap).isCurrent && getCaptureUsage(cap).roomLabel"
+                                                class="text-neutral-400 truncate max-w-[100px]"
+                                                :title="'Digunakan di: ' + getCaptureUsage(cap).roomLabel"
+                                            >
+                                                Di: {{ getCaptureUsage(cap).roomLabel }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <Check v-if="boundCapture?.id === cap.id" class="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

@@ -39,9 +39,10 @@ class RabDocument extends Model
     public const STATUS_DRAFT = 'draft';
     public const STATUS_FINAL = 'final';
 
-    public const SOURCE_MANUAL = 'manual';
-    public const SOURCE_CSV    = 'csv';
-    public const SOURCE_GLB    = 'glb';
+    public const SOURCE_MANUAL    = 'manual';
+    public const SOURCE_CSV       = 'csv';
+    public const SOURCE_GLB       = 'glb';
+    public const SOURCE_WORKSHEET = 'worksheet';
 
     protected $table = 'rab_documents';
 

@@ -356,4 +356,38 @@ class RabDocumentController extends Controller
 
         return $this->exporter->execute($rab);
     }
+
+    /**
+     * Buat draf dokumen RAB baru dikelompokkan per ruangan dari lembar kerja 2D/3D.
+     */
+    public function generateFromWorksheet(
+        Request $request,
+        Project $project,
+        \App\Domains\Rab\Actions\GenerateRabFromWorksheetAction $action
+    ) {
+        $user = $request->user();
+        abort_unless($this->access->canEdit($user, $project), 403);
+
+        $validated = $request->validate([
+            'title'                    => ['nullable', 'string', 'max:255'],
+            'drawing_sheet_id'         => ['nullable', 'uuid'],
+            'rooms'                    => ['required', 'array', 'min:1'],
+            'rooms.*.name'             => ['required', 'string', 'max:100'],
+            'rooms.*.area_sqm'         => ['nullable', 'numeric', 'min:0'],
+            'rooms.*.wall_perimeter_m' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $document = $action->execute($user, $project, $validated);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message'  => 'Draf RAB per ruangan berhasil dibuat dari lembar kerja.',
+                'document' => $document,
+                'redirect' => route('rab.show', [$project->id, $document->id]),
+            ]);
+        }
+
+        return redirect()->route('rab.show', [$project->id, $document->id])
+            ->with('success', 'Draf RAB per ruangan berhasil dibuat dari lembar kerja.');
+    }
 }

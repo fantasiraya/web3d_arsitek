@@ -15,6 +15,7 @@ class StoreCaptureRequest extends FormRequest
     {
         return [
             'image'                 => ['required', 'string'],
+            'code'                  => ['nullable', 'string', 'max:50'],
             'room_name'             => ['required', 'string', 'max:100'],
             'captured_hour'         => ['required', 'string', 'max:10'],
             'title'                 => ['nullable', 'string', 'max:255'],
@@ -22,6 +23,10 @@ class StoreCaptureRequest extends FormRequest
             'height'                => ['nullable', 'integer', 'min:100', 'max:4320'],
             'is_visible_to_clients' => ['nullable', 'boolean'],
             'prompt'                => ['nullable', 'string', 'max:5000'],
+            'drawing_sheet_id'      => ['nullable', 'uuid'],
+            'room_element_id'       => ['nullable', 'uuid'],
+            'description'           => ['nullable', 'string', 'max:5000'],
+            'sort_order'            => ['nullable', 'integer', 'min:0'],
         ];
     }
 

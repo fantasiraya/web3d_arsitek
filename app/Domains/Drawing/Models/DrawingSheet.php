@@ -68,5 +68,10 @@ class DrawingSheet extends Model
     {
         return $this->hasMany(DrawingElement::class, 'drawing_sheet_id')->orderBy('sort_order');
     }
+
+    public function captures(): HasMany
+    {
+        return $this->hasMany(\App\Domains\Project\Models\ProjectCapture::class, 'drawing_sheet_id')->orderBy('sort_order');
+    }
 }
 

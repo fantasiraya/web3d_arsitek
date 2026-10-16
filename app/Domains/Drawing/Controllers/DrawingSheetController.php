@@ -41,6 +41,7 @@ class DrawingSheetController extends Controller
         $selectedProjectId = $request->query('project_id');
 
         $query = DrawingSheet::with(['project:id,title'])
+            ->withCount('captures')
             ->where(function ($q) use ($user) {
                 $q->where('user_id', $user->id)
                   ->orWhereHas('project.invitedClients', function ($clientQ) use ($user) {
@@ -100,13 +101,20 @@ class DrawingSheetController extends Controller
 
         $architect = $sheet->user;
 
+        $projectCaptures = \App\Domains\Project\Models\ProjectCapture::where('project_id', $project->id)
+            ->select(['id', 'code', 'room_name', 'captured_hour', 'file_path', 'ai_rendered_path', 'drawing_sheet_id', 'room_element_id'])
+            ->orderBy('sort_order')
+            ->orderBy('created_at')
+            ->get();
+
         return Inertia::render('Drawing/Editor', [
-            'sheet'         => $sheet,
-            'project'       => $project->only(['id', 'title', 'user_id']),
-            'elements'      => $sheet->elements,
-            'projectSheets' => $projectSheets,
-            'canEdit'       => $canEdit,
-            'architect'     => [
+            'sheet'           => $sheet,
+            'project'         => $project->only(['id', 'title', 'user_id']),
+            'elements'        => $sheet->elements,
+            'projectSheets'   => $projectSheets,
+            'projectCaptures' => $projectCaptures,
+            'canEdit'         => $canEdit,
+            'architect'       => [
                 'name'         => $architect->name,
                 'company_name' => $architect->company_name,
                 'company_type' => $architect->company_type,
