@@ -145,7 +145,7 @@ function getRoomSubtitle(text: string): string {
         :class="className"
     >
         <!-- Header Key Plan Badge -->
-        <div class="px-2 py-1 bg-slate-800 text-white flex items-center justify-between text-[10px] font-mono tracking-wider font-semibold uppercase">
+        <div class="px-2 py-1 bg-slate-800 text-white flex items-center justify-between text-[10px] font-mono tracking-wider font-semibold uppercase shrink-0">
             <span class="flex items-center gap-1.5">
                 <span class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
                 {{ activeRoomName ? 'KEY PLAN' : 'DENAH 2D ARSITEKTUR' }}
@@ -159,7 +159,7 @@ function getRoomSubtitle(text: string): string {
         </div>
 
         <!-- SVG Mini / Master Floor Plan -->
-        <div class="flex-1 w-full h-full p-1.5 flex items-center justify-center">
+        <div class="flex-1 min-h-0 w-full p-1.5 flex items-center justify-center">
             <svg
                 :viewBox="viewBox"
                 class="w-full h-full max-h-full object-contain"

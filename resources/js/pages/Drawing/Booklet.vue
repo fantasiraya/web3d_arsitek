@@ -698,7 +698,7 @@ async function handleGenerateRabFromWorksheet() {
                 <!-- Area Kiri: 80% Denah 2D Utuh + Garis Dimensi -->
                 <div class="w-[80%] h-full p-6 sm:p-8 flex flex-col justify-between relative bg-white border-r border-slate-800">
                     <!-- Kanvas Denah 2D Mini/Utuh -->
-                    <div class="flex-1 w-full h-full relative flex items-center justify-center">
+                    <div class="flex-1 min-h-0 w-full relative flex items-center justify-center">
                         <KeyPlanCanvas
                             :elements="planSheet?.elements || []"
                             width="100%"
@@ -708,7 +708,7 @@ async function handleGenerateRabFromWorksheet() {
                     </div>
 
                     <!-- Label Nama Halaman Kiri Bawah -->
-                    <div class="pt-4">
+                    <div class="pt-4 shrink-0">
                         <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight uppercase">
                             {{ planSheet?.title || 'DENAH' }}
                         </h2>
@@ -774,7 +774,7 @@ async function handleGenerateRabFromWorksheet() {
                     <!-- Area Kiri: 80% Visual Eksterior 3D / AI -->
                     <div class="w-[80%] h-full flex flex-col justify-between p-6 sm:p-8 relative bg-slate-100 border-r border-slate-800">
                         <!-- Gambar 3D / AI -->
-                        <div class="flex-1 w-full relative rounded overflow-hidden bg-black flex items-center justify-center">
+                        <div class="flex-1 min-h-0 w-full relative rounded overflow-hidden bg-black flex items-center justify-center">
                             <img
                                 :src="getCaptureDisplayUrl(ext)"
                                 :alt="ext.room_name"
@@ -807,7 +807,7 @@ async function handleGenerateRabFromWorksheet() {
                         </div>
 
                         <!-- Judul Bawah -->
-                        <div class="pt-4">
+                        <div class="pt-4 shrink-0">
                             <div class="flex items-center gap-2">
                                 <span v-if="ext.code" class="px-2 py-0.5 rounded bg-orange-600 text-white font-mono text-xs font-bold shadow-sm">
                                     {{ ext.code }}
