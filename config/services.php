@@ -68,4 +68,14 @@ return [
             ],
         ],
     ],
+
+    'image_render' => [
+        'provider'   => env('IMAGE_RENDER_PROVIDER', 'pollinations'),
+        'model'      => env('IMAGE_RENDER_MODEL', 'flux'),
+        'api_key'    => env('IMAGE_RENDER_API_KEY'),
+        'replicate'  => [
+            'api_token' => env('REPLICATE_API_TOKEN', env('IMAGE_RENDER_API_KEY')),
+            'model'     => env('REPLICATE_MODEL', 'black-forest-labs/flux-schnell'),
+        ],
+    ],
 ];

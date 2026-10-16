@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import KeyPlanCanvas from '@/components/drawing/KeyPlanCanvas.vue';
 import {
     ArrowLeft,
@@ -20,6 +20,11 @@ import {
     X,
     Menu,
     SlidersHorizontal,
+    ChevronRight,
+    ChevronLeft,
+    Download,
+    Copy,
+    ExternalLink,
 } from '@lucide/vue';
 
 interface ProjectUser {
@@ -345,6 +350,123 @@ async function removeAiRender(captureId: string) {
     }
 }
 
+// State & Handler Generate AI Render via Gemini Imagen
+const isAiModalOpen = ref(false);
+const activeGenerateCapture = ref<ProjectCapture | null>(null);
+const aiPromptText = ref('');
+const selectedMood = ref('natural bright daylight');
+const selectedAspectRatio = ref<'16:9' | '4:3' | '1:1'>('16:9');
+const isGeneratingAiRender = ref<string | null>(null);
+const aiGenerationError = ref<string | null>(null);
+
+const moodPresets = [
+    { id: 'natural bright daylight', label: '☀️ Siang Alami', desc: 'Cahaya matahari siang cerah, bayangan lembut dan natural' },
+    { id: 'golden hour sunset', label: '🌅 Golden Hour', desc: 'Cahaya keemasan sore hari dengan pantulan hangat dramatis' },
+    { id: 'evening ambient lighting', label: '🌙 Malam Hangat', desc: 'Pencahayaan lampu arsitektural interior yang elegan dan intim' },
+    { id: 'minimalist cloudy diffuse', label: '☁️ Mendung Teduh', desc: 'Pencahayaan difus merata dengan nuansa arsitektural modern' },
+];
+
+function openAiGenerateModal(capture: ProjectCapture) {
+    activeGenerateCapture.value = capture;
+    aiGenerationError.value = null;
+    selectedMood.value = 'natural bright daylight';
+    selectedAspectRatio.value = '16:9';
+
+    if (capture.prompt && capture.prompt.trim().length > 0) {
+        aiPromptText.value = capture.prompt;
+    } else {
+        const roomName = capture.room_name || 'Ruangan Arsitektur';
+        aiPromptText.value = `Masterpiece architectural photograph of ${roomName}, modern high-end architectural design, realistic physical materials, clean geometry, architectural digest style, natural daylight, photorealistic 8k.`;
+    }
+
+    isAiModalOpen.value = true;
+}
+
+function applyMoodPreset(presetId: string) {
+    selectedMood.value = presetId;
+    // Tambahkan atau update mood di prompt text
+    aiPromptText.value = aiPromptText.value.replace(/, (natural bright daylight|golden hour sunset|evening ambient lighting|minimalist cloudy diffuse)/g, '');
+    aiPromptText.value += `, ${presetId}`;
+}
+
+const isPromptCopied = ref(false);
+
+function copyAiPrompt() {
+    if (!aiPromptText.value) return;
+    navigator.clipboard.writeText(aiPromptText.value);
+    isPromptCopied.value = true;
+    setTimeout(() => {
+        isPromptCopied.value = false;
+    }, 2000);
+}
+
+function downloadReferenceImage() {
+    if (!activeGenerateCapture.value) return;
+    const a = document.createElement('a');
+    a.href = activeGenerateCapture.value.url;
+    a.download = `3d_ref_${activeGenerateCapture.value.room_name || 'capture'}.jpg`;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+async function handleExecuteAiGenerate() {
+    if (!activeGenerateCapture.value) return;
+
+    const capture = activeGenerateCapture.value;
+    const captureId = capture.id;
+    isGeneratingAiRender.value = captureId;
+    aiGenerationError.value = null;
+
+    try {
+        const formData = new FormData();
+        formData.append('prompt', aiPromptText.value);
+        formData.append('mood', selectedMood.value);
+        formData.append('aspect_ratio', selectedAspectRatio.value);
+
+        // Ambil file gambar 3D aktif dan kirimkan sebagai file referensi nyata
+        try {
+            const imgRes = await fetch(capture.url);
+            if (imgRes.ok) {
+                const blob = await imgRes.blob();
+                formData.append('image', blob, `ref_${capture.room_name || '3d'}.jpg`);
+            }
+        } catch (fetchErr) {
+            console.warn('Gagal fetch blob gambar, backend akan membaca file_path dari storage:', fetchErr);
+        }
+
+        const res = await fetch(`/projects/${props.project.id}/captures/${captureId}/generate-ai`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+                Accept: 'application/json',
+            },
+            body: formData,
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            const idx = props.captures.findIndex(c => c.id === captureId);
+            if (idx !== -1) {
+                props.captures[idx] = data.data;
+            }
+            // Otomatis aktifkan view preferensi AI agar gambar langsung berubah
+            preferAiRender.value = true;
+            isAiModalOpen.value = false;
+        } else {
+            aiGenerationError.value = data.message || 'Gagal membuat render AI.';
+        }
+    } catch (err: any) {
+        console.error(err);
+        aiGenerationError.value = err.message || 'Terjadi kesalahan saat memproses permintaan render AI.';
+    } finally {
+        isGeneratingAiRender.value = null;
+    }
+}
+
 // Eksekusi 1-Klik Pembuatan Draf RAB Per Ruangan
 async function handleGenerateRabFromWorksheet() {
     isGeneratingRab.value = true;
@@ -398,6 +520,36 @@ async function handleGenerateRabFromWorksheet() {
         isGeneratingRab.value = false;
     }
 }
+
+// State dan Handler Scroll Horizontal Satu Baris Toolbar pada layar menengah (md - xl)
+const toolsScrollRef = ref<HTMLDivElement | null>(null);
+const canScrollRight = ref(false);
+const canScrollLeft = ref(false);
+
+function updateToolsScrollIndicators() {
+    if (!toolsScrollRef.value) return;
+    const { scrollLeft, scrollWidth, clientWidth } = toolsScrollRef.value;
+    canScrollLeft.value = scrollLeft > 8;
+    canScrollRight.value = scrollLeft + clientWidth < scrollWidth - 8;
+}
+
+function scrollTools(direction: 'left' | 'right') {
+    if (!toolsScrollRef.value) return;
+    const offset = direction === 'right' ? 240 : -240;
+    toolsScrollRef.value.scrollBy({ left: offset, behavior: 'smooth' });
+}
+
+onMounted(() => {
+    // Beri sedikit delay untuk kalkulasi layout awal
+    setTimeout(() => {
+        updateToolsScrollIndicators();
+    }, 100);
+    window.addEventListener('resize', updateToolsScrollIndicators);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('resize', updateToolsScrollIndicators);
+});
 </script>
 
 <template>
@@ -437,131 +589,174 @@ async function handleGenerateRabFromWorksheet() {
                 </div>
             </div>
 
-            <!-- Action Controls Desktop (Tampil pada layar lebar xl ke atas) -->
-            <div class="hidden xl:flex items-center flex-wrap gap-2.5">
-                <!-- Pilih Gambar Cover -->
-                <div class="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs">
-                    <span class="text-slate-400 font-medium shrink-0">Cover:</span>
-                    <select
-                        v-model="selectedCoverCaptureId"
-                        class="bg-transparent text-white text-xs font-semibold focus:outline-none cursor-pointer max-w-[140px] truncate"
-                        title="Pilih gambar yang dijadikan cover booklet"
+            <!-- Action Controls (1 Baris Scrollable pada layar md ke atas dengan indikator petunjuk kanan) -->
+            <div class="hidden md:flex flex-1 min-w-0 relative items-center justify-end pl-2">
+                <div class="relative w-full flex items-center justify-end overflow-hidden">
+                    <!-- Scrollable Track: 1 Baris Penuh (no-wrap) -->
+                    <div
+                        ref="toolsScrollRef"
+                        @scroll="updateToolsScrollIndicators"
+                        class="flex items-center gap-2.5 overflow-x-auto scrollbar-none scroll-smooth py-1 px-1 flex-nowrap"
                     >
-                        <option value="auto" class="bg-neutral-900 text-white">Otomatis (Fasad / Eksterior)</option>
-                        <option
-                            v-for="cap in captures"
-                            :key="cap.id"
-                            :value="cap.id"
-                            class="bg-neutral-900 text-white"
+                        <!-- Pilih Gambar Cover -->
+                        <div class="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs shrink-0">
+                            <span class="text-slate-400 font-medium shrink-0">Cover:</span>
+                            <select
+                                v-model="selectedCoverCaptureId"
+                                class="bg-transparent text-white text-xs font-semibold focus:outline-none cursor-pointer max-w-[140px] truncate"
+                                title="Pilih gambar yang dijadikan cover booklet"
+                            >
+                                <option value="auto" class="bg-neutral-900 text-white">Otomatis (Fasad / Eksterior)</option>
+                                <option
+                                    v-for="cap in captures"
+                                    :key="cap.id"
+                                    :value="cap.id"
+                                    class="bg-neutral-900 text-white"
+                                >
+                                    {{ cap.code ? `[${cap.code}] ` : '' }}{{ cap.room_name }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Filter Visual Ruangan: Khusus Lembar Ini vs Semua Proyek -->
+                        <div v-if="hasSheetCaptures && captures.length > 0" class="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5 text-xs shrink-0">
+                            <button
+                                @click="filterMode = 'sheet'"
+                                class="px-2.5 py-1 rounded transition"
+                                :class="filterMode === 'sheet' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                                title="Tampilkan hanya visual 3D yang ditautkan ke lembar kerja ini"
+                            >
+                                Khusus Lembar Ini
+                            </button>
+                            <button
+                                @click="filterMode = 'all'"
+                                class="px-2.5 py-1 rounded transition"
+                                :class="filterMode === 'all' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                                title="Tampilkan semua visual 3D dari proyek ini"
+                            >
+                                Semua Proyek ({{ captures.length }})
+                            </button>
+                        </div>
+
+                        <!-- Selector Denah Acuan jika ada lebih dari 1 denah -->
+                        <div v-if="planSheets && planSheets.length > 1" class="flex items-center gap-1.5 px-2 py-1 bg-slate-800/80 border border-slate-700 rounded-lg text-xs shrink-0">
+                            <span class="text-slate-400 font-medium shrink-0">Lembar:</span>
+                            <select
+                                :value="currentSelectedSheetId"
+                                @change="handlePlanSheetChange"
+                                class="bg-transparent text-amber-300 text-xs font-semibold focus:outline-none cursor-pointer max-w-[150px] truncate"
+                                title="Pilih lembar kerja yang ditampilkan"
+                            >
+                                <option
+                                    v-for="s in planSheets"
+                                    :key="s.id"
+                                    :value="s.id"
+                                    class="bg-neutral-900 text-white"
+                                >
+                                    {{ s.title }} ({{ s.scale || '1:100' }})
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Edit Kop Gambar Dialog Trigger -->
+                        <button
+                            @click="isEditingKop = true"
+                            class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition flex items-center gap-1.5 shrink-0"
+                            title="Ubah info Kop Gambar (Client, Tanggal, Drafter)"
                         >
-                            {{ cap.code ? `[${cap.code}] ` : '' }}{{ cap.room_name }}
-                        </option>
-                    </select>
-                </div>
+                            <FileText class="w-3.5 h-3.5 text-orange-400" />
+                            <span>Kop Info</span>
+                        </button>
 
-                <!-- Filter Visual Ruangan: Khusus Lembar Ini vs Semua Proyek -->
-                <div v-if="hasSheetCaptures && captures.length > 0" class="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5 text-xs">
-                    <button
-                        @click="filterMode = 'sheet'"
-                        class="px-2.5 py-1 rounded transition"
-                        :class="filterMode === 'sheet' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
-                        title="Tampilkan hanya visual 3D yang ditautkan ke lembar kerja ini"
-                    >
-                        Khusus Lembar Ini
-                    </button>
-                    <button
-                        @click="filterMode = 'all'"
-                        class="px-2.5 py-1 rounded transition"
-                        :class="filterMode === 'all' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
-                        title="Tampilkan semua visual 3D dari proyek ini"
-                    >
-                        Semua Proyek ({{ captures.length }})
-                    </button>
-                </div>
-
-                <!-- Selector Denah Acuan jika ada lebih dari 1 denah -->
-                <div v-if="planSheets && planSheets.length > 1" class="flex items-center gap-1.5 px-2 py-1 bg-slate-800/80 border border-slate-700 rounded-lg text-xs">
-                    <span class="text-slate-400 font-medium shrink-0">Lembar:</span>
-                    <select
-                        :value="currentSelectedSheetId"
-                        @change="handlePlanSheetChange"
-                        class="bg-transparent text-amber-300 text-xs font-semibold focus:outline-none cursor-pointer max-w-[150px] truncate"
-                        title="Pilih lembar kerja yang ditampilkan"
-                    >
-                        <option
-                            v-for="s in planSheets"
-                            :key="s.id"
-                            :value="s.id"
-                            class="bg-neutral-900 text-white"
+                        <!-- Toggle AI Render vs 3D Asli -->
+                        <button
+                            @click="preferAiRender = !preferAiRender"
+                            class="px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center gap-1.5 shrink-0"
+                            :class="preferAiRender
+                                ? 'bg-orange-500/15 border-orange-500/40 text-orange-400'
+                                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'"
+                            title="Gunakan gambar render AI eksternal jika tersedia"
                         >
-                            {{ s.title }} ({{ s.scale || '1:100' }})
-                        </option>
-                    </select>
-                </div>
+                            <Sparkles class="w-3.5 h-3.5" :class="preferAiRender ? 'text-orange-400 animate-spin-slow' : ''" />
+                            <span>{{ preferAiRender ? 'Prioritas: Render AI' : 'Prioritas: 3D Asli' }}</span>
+                        </button>
 
-                <!-- Edit Kop Gambar Dialog Trigger -->
-                <button
-                    @click="isEditingKop = true"
-                    class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition flex items-center gap-1.5"
-                    title="Ubah info Kop Gambar (Client, Tanggal, Drafter)"
-                >
-                    <FileText class="w-3.5 h-3.5 text-orange-400" />
-                    <span>Kop Info</span>
-                </button>
+                        <!-- Ukuran Kertas Selector -->
+                        <div class="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5 text-xs font-mono shrink-0">
+                            <button
+                                @click="paperSize = 'A3'"
+                                class="px-2.5 py-1 rounded transition"
+                                :class="paperSize === 'A3' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                            >
+                                A3 Landscape
+                            </button>
+                            <button
+                                @click="paperSize = 'A4'"
+                                class="px-2.5 py-1 rounded transition"
+                                :class="paperSize === 'A4' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                            >
+                                A4 Landscape
+                            </button>
+                        </div>
 
-                <!-- Toggle AI Render vs 3D Asli -->
-                <button
-                    @click="preferAiRender = !preferAiRender"
-                    class="px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center gap-1.5"
-                    :class="preferAiRender
-                        ? 'bg-orange-500/15 border-orange-500/40 text-orange-400'
-                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'"
-                    title="Gunakan gambar render AI eksternal jika tersedia"
-                >
-                    <Sparkles class="w-3.5 h-3.5" :class="preferAiRender ? 'text-orange-400 animate-spin-slow' : ''" />
-                    <span>{{ preferAiRender ? 'Prioritas: Render AI' : 'Prioritas: 3D Asli' }}</span>
-                </button>
+                        <!-- Tombol 1-Klik Generate RAB -->
+                        <button
+                            @click="handleGenerateRabFromWorksheet"
+                            :disabled="isGeneratingRab"
+                            class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+                        >
+                            <Calculator class="w-3.5 h-3.5" />
+                            <span>{{ isGeneratingRab ? 'Menghitung...' : '🧮 Generate Draf RAB' }}</span>
+                        </button>
 
-                <!-- Ukuran Kertas Selector -->
-                <div class="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5 text-xs font-mono">
-                    <button
-                        @click="paperSize = 'A3'"
-                        class="px-2.5 py-1 rounded transition"
-                        :class="paperSize === 'A3' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                        <!-- Tombol 1-Klik Export / Print PDF -->
+                        <button
+                            @click="handlePrintPdf"
+                            class="px-4 py-1.5 rounded-lg bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold shadow-md shadow-orange-950/40 transition flex items-center gap-2 shrink-0"
+                        >
+                            <Printer class="w-4 h-4" />
+                            <span>Cetak / Download PDF</span>
+                        </button>
+                    </div>
+
+                    <!-- Indikator Geser Kiri (jika konten di-scroll ke kanan) -->
+                    <div
+                        v-if="canScrollLeft"
+                        class="absolute left-0 top-0 bottom-0 flex items-center pl-1 z-10 pointer-events-none"
                     >
-                        A3 Landscape
-                    </button>
-                    <button
-                        @click="paperSize = 'A4'"
-                        class="px-2.5 py-1 rounded transition"
-                        :class="paperSize === 'A4' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                        <div class="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/90 to-transparent w-14 pointer-events-none"></div>
+                        <button
+                            @click="scrollTools('left')"
+                            class="relative pointer-events-auto p-1.5 rounded-full bg-slate-800/95 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-md transition shrink-0"
+                            title="Geser ke kiri"
+                        >
+                            <ChevronLeft class="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+
+                    <!-- Indikator Geser Kanan (Visual Cue: Ada tools lain di kanan) -->
+                    <div
+                        v-if="canScrollRight"
+                        class="absolute right-0 top-0 bottom-0 flex items-center pr-1 z-10 pointer-events-none"
                     >
-                        A4 Landscape
-                    </button>
+                        <!-- Gradient Fade -->
+                        <div class="absolute inset-0 bg-gradient-to-l from-slate-900 via-slate-900/95 to-transparent w-28 pointer-events-none"></div>
+
+                        <!-- Tombol Petunjuk "Tools Lain ❯" -->
+                        <button
+                            @click="scrollTools('right')"
+                            class="relative pointer-events-auto flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-[11px] font-bold shadow-lg shadow-orange-950/60 border border-orange-400/40 transition shrink-0 animate-pulse"
+                            title="Ada tools lain di sebelah kanan, klik atau geser untuk melihat"
+                        >
+                            <span>Tools Lain</span>
+                            <ChevronRight class="w-3.5 h-3.5" />
+                        </button>
+                    </div>
                 </div>
-
-                <!-- Tombol 1-Klik Generate RAB -->
-                <button
-                    @click="handleGenerateRabFromWorksheet"
-                    :disabled="isGeneratingRab"
-                    class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
-                >
-                    <Calculator class="w-3.5 h-3.5" />
-                    <span>{{ isGeneratingRab ? 'Menghitung...' : '🧮 Generate Draf RAB' }}</span>
-                </button>
-
-                <!-- Tombol 1-Klik Export / Print PDF -->
-                <button
-                    @click="handlePrintPdf"
-                    class="px-4 py-1.5 rounded-lg bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold shadow-md shadow-orange-950/40 transition flex items-center gap-2"
-                >
-                    <Printer class="w-4 h-4" />
-                    <span>Cetak / Download PDF</span>
-                </button>
             </div>
 
-            <!-- Mobile & Tablet Controls (< xl) -->
-            <div class="flex xl:hidden items-center gap-2 shrink-0">
+            <!-- Mobile Only Controls (< md) -->
+            <div class="flex md:hidden items-center gap-2 shrink-0">
                 <!-- Quick Print Button di mobile -->
                 <button
                     @click="handlePrintPdf"
@@ -584,10 +779,10 @@ async function handleGenerateRabFromWorksheet() {
             </div>
         </header>
 
-        <!-- MOBILE & TABLET SLIDE-OVER DRAWER MENU (Hidden saat print) -->
+        <!-- MOBILE SLIDE-OVER DRAWER MENU (Khusus layar < md, hidden saat print) -->
         <div
             v-if="isMobileMenuOpen"
-            class="no-print fixed inset-0 z-50 xl:hidden flex justify-end"
+            class="no-print fixed inset-0 z-50 md:hidden flex justify-end"
             role="dialog"
             aria-modal="true"
         >
@@ -779,18 +974,20 @@ async function handleGenerateRabFromWorksheet() {
         </div>
 
         <!-- Modal Edit Kop Gambar -->
-        <div v-if="isEditingKop" class="no-print fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
-                <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+        <div v-if="isEditingKop" class="no-print fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[90vh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
+                <!-- Header Pinned -->
+                <div class="shrink-0 flex items-center justify-between p-4 sm:p-5 border-b border-slate-800 bg-slate-900">
+                    <h3 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
                         <FileText class="w-4 h-4 text-orange-500" />
                         Kustomisasi Kop Gambar (Title Block)
                     </h3>
-                    <button @click="isEditingKop = false" class="text-slate-400 hover:text-white">
+                    <button @click="isEditingKop = false" class="text-slate-400 hover:text-white p-1 rounded-lg transition">
                         <X class="w-5 h-5" />
                     </button>
                 </div>
-                <div class="space-y-3 text-xs">
+                <!-- Body Scrollable -->
+                <div class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 text-xs overscroll-contain">
                     <div>
                         <label class="block text-slate-400 font-mono mb-1">CLIENT NAME</label>
                         <input v-model="clientName" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500" />
@@ -808,9 +1005,10 @@ async function handleGenerateRabFromWorksheet() {
                         <input v-model="drawnBy" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500" />
                     </div>
                 </div>
-                <div class="pt-3 flex items-center justify-between border-t border-slate-800">
-                    <span class="text-[11px] text-slate-400">Data akan tersimpan permanen pada proyek</span>
-                    <div class="flex items-center gap-2">
+                <!-- Footer Pinned -->
+                <div class="shrink-0 p-3 sm:p-4 flex items-center justify-between border-t border-slate-800 bg-slate-900/95 text-xs">
+                    <span class="text-[11px] text-slate-400 hidden sm:inline">Data akan tersimpan permanen pada proyek</span>
+                    <div class="flex items-center gap-2 ml-auto">
                         <button @click="isEditingKop = false" class="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:text-white text-xs">
                             Batal
                         </button>
@@ -824,6 +1022,166 @@ async function handleGenerateRabFromWorksheet() {
                     </div>
                 </div>
 
+            </div>
+        </div>
+
+        <!-- Modal Pop-up Generate AI Visual Ruangan via Gemini Imagen -->
+        <div v-if="isAiModalOpen && activeGenerateCapture" class="no-print fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
+                <!-- Modal Header (Sticky / Pinned Top) -->
+                <div class="shrink-0 flex items-center justify-between p-4 sm:p-5 border-b border-slate-800 bg-slate-900">
+                    <div class="flex items-center gap-2.5">
+                        <div class="p-2 rounded-xl bg-orange-500/15 text-orange-400 border border-orange-500/30">
+                            <Sparkles class="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                                Generate Render AI
+                            </h3>
+                            <p class="text-[11px] text-slate-400">
+                                {{ activeGenerateCapture.room_name || 'Ruangan' }} • Snapshot 3D ke Render Fotorealistik
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        @click="isAiModalOpen = false"
+                        :disabled="Boolean(isGeneratingAiRender)"
+                        class="text-slate-400 hover:text-white p-1 rounded-lg transition disabled:opacity-30"
+                    >
+                        <X class="w-5 h-5" />
+                    </button>
+                </div>
+
+                <!-- Modal Body (Scrollable Content) -->
+                <div class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs overscroll-contain">
+                    <!-- Thumbnail Preview Acuan 3D -->
+                    <div class="space-y-2">
+                        <div class="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 h-32 sm:h-36 flex items-center justify-center">
+                            <img
+                                :src="activeGenerateCapture.url"
+                                :alt="activeGenerateCapture.room_name"
+                                class="w-full h-full object-cover opacity-85"
+                            />
+                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent"></div>
+                            <div class="absolute bottom-2 left-3 right-3 flex items-center justify-between text-[11px]">
+                                <span class="px-2 py-0.5 rounded bg-black/70 text-slate-300 font-mono backdrop-blur border border-white/10">
+                                    📐 Acuan Geometri Snapshot 3D
+                                </span>
+                                <span v-if="activeGenerateCapture.ai_rendered_url" class="text-emerald-400 font-semibold bg-emerald-950/70 px-2 py-0.5 rounded border border-emerald-500/30">
+                                    ✓ Sudah Ada Render AI
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Shortcut Aksi Gemini / Download Referensi -->
+                        <div class="flex items-center justify-between gap-2 p-2 bg-slate-950/60 border border-slate-800 rounded-xl text-[11px]">
+                            <span class="text-slate-400 text-[10px] hidden sm:inline">
+                                💡 Gambar ini otomatis dikirim ke AI sebagai referensi
+                            </span>
+                            <div class="flex items-center gap-1.5 ml-auto">
+                                <button
+                                    type="button"
+                                    @click="downloadReferenceImage"
+                                    class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 font-medium"
+                                    title="Download gambar 3D ini ke laptop"
+                                >
+                                    <Download class="w-3 h-3 text-orange-400" />
+                                    <span>Unduh 3D</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="copyAiPrompt"
+                                    class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 font-medium"
+                                    title="Salin teks prompt arsitektural"
+                                >
+                                    <Copy class="w-3 h-3 text-orange-400" />
+                                    <span>{{ isPromptCopied ? 'Tersalin!' : 'Salin Prompt' }}</span>
+                                </button>
+                                <a
+                                    href="https://gemini.google.com/app"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="px-2 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition flex items-center gap-1 font-medium"
+                                    title="Buka web Google Gemini"
+                                >
+                                    <span>Buka Gemini</span>
+                                    <ExternalLink class="w-3 h-3" />
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pilihan Mood Pencahayaan Cepat -->
+                    <div class="space-y-1.5">
+                        <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                            1. Pilih Suasana / Pencahayaan (Mood):
+                        </label>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <button
+                                v-for="preset in moodPresets"
+                                :key="preset.id"
+                                type="button"
+                                @click="applyMoodPreset(preset.id)"
+                                class="p-2.5 rounded-xl border text-left transition flex flex-col justify-between"
+                                :class="selectedMood === preset.id
+                                    ? 'bg-orange-500/15 border-orange-500 text-white shadow-sm'
+                                    : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:border-slate-600 hover:text-white'"
+                            >
+                                <span class="font-bold text-xs">{{ preset.label }}</span>
+                                <span class="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{{ preset.desc }}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Input / Edit Prompt AI -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                                2. Prompt Arsitektural:
+                            </label>
+                            <span class="text-[10px] text-slate-400 font-mono">Bisa Diedit</span>
+                        </div>
+                        <textarea
+                            v-model="aiPromptText"
+                            rows="3"
+                            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500 transition resize-none leading-relaxed"
+                            placeholder="Deskripsi prompt visual arsitektur..."
+                        ></textarea>
+                    </div>
+
+                    <!-- Error Alert jika ada -->
+                    <div v-if="aiGenerationError" class="p-3 rounded-xl bg-red-950/70 border border-red-800 text-red-200 text-xs flex items-start gap-2">
+                        <span class="shrink-0 font-bold">⚠️</span>
+                        <div class="flex-1 text-[11px]">{{ aiGenerationError }}</div>
+                    </div>
+                </div>
+
+                <!-- Modal Footer (Sticky / Pinned Bottom) -->
+                <div class="shrink-0 p-3 sm:p-4 flex items-center justify-between border-t border-slate-800 bg-slate-900/95 text-xs">
+                    <span class="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
+                        <span class="hidden sm:inline">AI Render Engine (Flux / Pollinations)</span>
+                        <span class="sm:hidden">AI Render</span>
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            @click="isAiModalOpen = false"
+                            :disabled="Boolean(isGeneratingAiRender)"
+                            class="px-3 py-2 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 transition disabled:opacity-50"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            type="button"
+                            @click="handleExecuteAiGenerate"
+                            :disabled="Boolean(isGeneratingAiRender)"
+                            class="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white rounded-xl font-bold transition flex items-center gap-2 shadow-lg shadow-orange-950/50 disabled:opacity-50"
+                        >
+                            <Sparkles class="w-4 h-4" :class="isGeneratingAiRender ? 'animate-spin' : ''" />
+                            <span>{{ isGeneratingAiRender ? 'Sedang Me-render...' : '🚀 Mulai Render AI' }}</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1002,8 +1360,20 @@ async function handleGenerateRabFromWorksheet() {
                                 class="w-full h-full object-cover"
                             />
 
-                            <!-- Badge Sumber Gambar (AI / 3D) -->
-                            <div class="no-print absolute top-3 right-3 flex items-center gap-1.5">
+                            <!-- Loading Overlay saat sedang di-generate -->
+                            <div
+                                v-if="isGeneratingAiRender === ext.id"
+                                class="no-print absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center gap-2.5 text-white p-4 text-center z-20"
+                            >
+                                <Sparkles class="w-8 h-8 text-orange-400 animate-spin" />
+                                <div>
+                                    <p class="text-xs font-bold text-orange-300">Sedang Me-render via Gemini AI...</p>
+                                    <p class="text-[10px] text-slate-400 mt-0.5">Memproses pencahayaan dan material arsitektur fotorealistik</p>
+                                </div>
+                            </div>
+
+                            <!-- Badge Sumber Gambar & Controls (Hidden saat print) -->
+                            <div class="no-print absolute top-3 right-3 flex items-center gap-1.5 z-10">
                                 <span
                                     v-if="ext.ai_rendered_url"
                                     class="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-600 text-white shadow"
@@ -1016,13 +1386,36 @@ async function handleGenerateRabFromWorksheet() {
                                 >
                                     SNAPSHOT 3D
                                 </span>
+
+                                <!-- Tombol 1-Click Generate AI (Gemini) -->
+                                <button
+                                    v-if="isOwner"
+                                    @click="openAiGenerateModal(ext)"
+                                    :disabled="isGeneratingAiRender === ext.id"
+                                    class="px-2.5 py-1 rounded text-[10px] font-bold bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white transition flex items-center gap-1 shadow backdrop-blur disabled:opacity-50"
+                                    title="Generate Render AI fotorealistik menggunakan Gemini"
+                                >
+                                    <Sparkles class="w-3 h-3" :class="isGeneratingAiRender === ext.id ? 'animate-spin' : ''" />
+                                    <span>{{ ext.ai_rendered_url ? 'Regenerate AI' : '✨ Generate AI' }}</span>
+                                </button>
+
                                 <button
                                     v-if="isOwner"
                                     @click="triggerUploadAi(ext.id)"
-                                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-white hover:bg-slate-700 transition flex items-center gap-1 shadow"
+                                    class="px-2 py-1 rounded text-[10px] font-bold bg-slate-800 text-white hover:bg-slate-700 transition flex items-center gap-1 shadow"
+                                    title="Unggah file gambar render AI manual"
                                 >
                                     <Upload class="w-3 h-3" />
-                                    <span>Ganti AI</span>
+                                    <span>Upload</span>
+                                </button>
+
+                                <button
+                                    v-if="isOwner && ext.ai_rendered_url"
+                                    @click="removeAiRender(ext.id)"
+                                    class="p-1 rounded bg-red-600/80 text-white hover:bg-red-500 transition shadow"
+                                    title="Hapus render AI dan gunakan 3D asli"
+                                >
+                                    <X class="w-3 h-3" />
                                 </button>
                             </div>
                         </div>
@@ -1101,8 +1494,20 @@ async function handleGenerateRabFromWorksheet() {
                                 class="w-full h-full object-cover"
                             />
 
+                            <!-- Loading Overlay saat sedang di-generate -->
+                            <div
+                                v-if="isGeneratingAiRender === room.id"
+                                class="no-print absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center gap-2.5 text-white p-4 text-center z-20"
+                            >
+                                <Sparkles class="w-8 h-8 text-orange-400 animate-spin" />
+                                <div>
+                                    <p class="text-xs font-bold text-orange-300">Sedang Me-render via Gemini AI...</p>
+                                    <p class="text-[10px] text-slate-400 mt-0.5">Memproses pencahayaan dan material arsitektur fotorealistik</p>
+                                </div>
+                            </div>
+
                             <!-- Controls AI & Upload (Hidden saat print) -->
-                            <div class="no-print absolute top-3 right-3 flex items-center gap-1.5">
+                            <div class="no-print absolute top-3 right-3 flex items-center gap-1.5 z-10">
                                 <span
                                     v-if="room.ai_rendered_url"
                                     class="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-600 text-white shadow"
@@ -1116,14 +1521,26 @@ async function handleGenerateRabFromWorksheet() {
                                     SNAPSHOT 3D
                                 </span>
 
+                                <!-- Tombol 1-Click Generate AI (Gemini) -->
+                                <button
+                                    v-if="isOwner"
+                                    @click="openAiGenerateModal(room)"
+                                    :disabled="isGeneratingAiRender === room.id"
+                                    class="px-2.5 py-1 rounded text-[10px] font-bold bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white transition flex items-center gap-1 shadow backdrop-blur disabled:opacity-50"
+                                    title="Generate Render AI fotorealistik menggunakan Gemini"
+                                >
+                                    <Sparkles class="w-3 h-3" :class="isGeneratingAiRender === room.id ? 'animate-spin' : ''" />
+                                    <span>{{ room.ai_rendered_url ? 'Regenerate AI' : '✨ Generate AI' }}</span>
+                                </button>
+
                                 <button
                                     v-if="isOwner"
                                     @click="triggerUploadAi(room.id)"
-                                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800/90 text-white hover:bg-slate-700 transition flex items-center gap-1 shadow backdrop-blur"
-                                    title="Upload gambar render AI untuk ruangan ini"
+                                    class="px-2 py-1 rounded text-[10px] font-bold bg-slate-800/90 text-white hover:bg-slate-700 transition flex items-center gap-1 shadow backdrop-blur"
+                                    title="Upload gambar render AI manual untuk ruangan ini"
                                 >
                                     <Upload class="w-3 h-3" />
-                                    <span>{{ room.ai_rendered_url ? 'Ganti AI' : '+ AI Render' }}</span>
+                                    <span>Upload</span>
                                 </button>
                                 
                                 <button

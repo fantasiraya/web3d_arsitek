@@ -98,6 +98,7 @@ Route::middleware(['auth', 'project.access'])->group(function () {
     Route::patch('/projects/{project}/captures/{capture}/prompt', [ProjectCaptureController::class, 'updatePrompt'])->name('projects.captures.prompt.update');
     Route::post('/projects/{project}/captures/generate-prompt', [ProjectCaptureController::class, 'generatePrompt'])->name('projects.captures.generate-prompt');
     Route::post('/projects/{project}/captures/{capture}/ai-render', [ProjectCaptureController::class, 'uploadAiRender'])->name('projects.captures.ai-render.upload');
+    Route::post('/projects/{project}/captures/{capture}/generate-ai', [ProjectCaptureController::class, 'generateAiRender'])->name('projects.captures.ai-render.generate');
     Route::delete('/projects/{project}/captures/{capture}/ai-render', [ProjectCaptureController::class, 'deleteAiRender'])->name('projects.captures.ai-render.delete');
     Route::patch('/projects/{project}/sun-settings', [ProjectCaptureController::class, 'updateSunSettings'])->name('projects.sun-settings.update');
 });

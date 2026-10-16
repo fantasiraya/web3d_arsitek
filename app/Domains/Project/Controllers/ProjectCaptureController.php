@@ -161,6 +161,42 @@ class ProjectCaptureController extends Controller
         ]);
     }
 
+    public function generateAiRender(
+        Request $request,
+        string $projectId,
+        string $captureId,
+        \App\Domains\Project\Actions\GenerateAiRenderFromCaptureAction $action
+    ): JsonResponse {
+        $project = Project::findOrFail($projectId);
+        $capture = ProjectCapture::where('project_id', $project->id)->findOrFail($captureId);
+
+        $validated = $request->validate([
+            'image'        => ['nullable', 'file', 'image', 'max:20480'],
+            'prompt'       => ['nullable', 'string', 'max:2000'],
+            'mood'         => ['nullable', 'string', 'max:255'],
+            'aspect_ratio' => ['nullable', 'string', 'in:16:9,4:3,1:1'],
+        ]);
+
+        try {
+            $updated = $action->execute(
+                $request->user(),
+                $project,
+                $capture,
+                $validated,
+                $request->file('image')
+            );
+
+            return response()->json([
+                'message' => 'Render AI berhasil dibuat.',
+                'data'    => $updated,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => $e->getMessage() ?: 'Gagal melakukan render AI.',
+            ], 422);
+        }
+    }
+
     public function updatePrompt(
         \App\Domains\Project\Requests\UpdateCapturePromptRequest $request,
         string $projectId,
