@@ -1159,7 +1159,7 @@ onUnmounted(() => {
                 <!-- Modal Footer (Sticky / Pinned Bottom) -->
                 <div class="shrink-0 p-3 sm:p-4 flex items-center justify-between border-t border-slate-800 bg-slate-900/95 text-xs">
                     <span class="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
-                        <span class="hidden sm:inline">AI Render Engine (Flux / Pollinations)</span>
+                        <span class="hidden sm:inline">AI Render Engine (Gemini / Flux)</span>
                         <span class="sm:hidden">AI Render</span>
                     </span>
                     <div class="flex items-center gap-2">

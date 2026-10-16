@@ -36,10 +36,10 @@ class GenerateAiRenderFromCaptureAction
             abort(422, 'Capture tidak cocok dengan proyek.');
         }
 
-        // Tentukan provider & model yang aktif
-        $provider = strtolower((string) ($this->getSetting('image_render_provider') ?: config('services.image_render.provider') ?: 'pollinations'));
-        $model = (string) ($this->getSetting('image_render_model') ?: config('services.image_render.model') ?: 'flux');
-        $apiKey = (string) ($this->getSetting('image_render_api_key') ?: config('services.image_render.api_key'));
+        // Resolusi konfigurasi AI sesuai sistem backend sebelumnya (VISION_AI_PROVIDER & GEMINI_API_KEY)
+        $dbProvider = $this->getSetting('vision_ai_provider');
+        $provider = strtolower((string) ($dbProvider ?: config('services.vision_ai.provider', 'gemini')));
+        $geminiApiKey = (string) ($this->getSetting('gemini_api_key', config('services.vision_ai.providers.gemini.api_key') ?: config('services.gemini.api_key')));
 
         // Tentukan prompt yang digunakan
         $userPrompt = trim((string) ($options['prompt'] ?? ''));
@@ -58,12 +58,21 @@ class GenerateAiRenderFromCaptureAction
         // Dapatkan URL gambar referensi 3D (dari file yang diunggah langsung atau file di storage)
         $referenceImageUrl = $this->getPublicImageUrl($capture, $uploadedReferenceImage);
 
-        // Eksekusi render sesuai provider dengan mengirimkan gambar referensi
-        $imageData = match ($provider) {
-            'replicate' => $this->renderWithReplicate($apiKey ?: config('services.image_render.replicate.api_token'), $userPrompt, $aspectRatio, $model, $referenceImageUrl),
-            'gemini'    => $this->callGeminiImagen($this->getSetting('gemini_api_key', config('services.vision_ai.providers.gemini.api_key') ?: config('services.gemini.api_key')), $userPrompt, $aspectRatio),
-            default     => $this->renderWithPollinations($userPrompt, $aspectRatio, $model, $referenceImageUrl),
-        };
+        // Eksekusi render: Coba Gemini Imagen terlebih dahulu sesuai GEMINI_API_KEY.
+        // Jika akun Google AI Studio gratisan dibatasi policy (403), alihkan otomatis ke Flux dengan gambar acuan.
+        $imageData = null;
+        if ($provider === 'gemini') {
+            try {
+                $imageData = $this->callGeminiImagen($geminiApiKey, $userPrompt, $aspectRatio);
+            } catch (\Throwable $e) {
+                Log::warning("Gemini Imagen tidak dapat dipanggil langsung ({$e->getMessage()}). Mengalihkan otomatis ke engine fotorealistik Flux dengan gambar acuan 3D.");
+                $imageData = $this->renderWithPollinations($userPrompt, $aspectRatio, 'flux', $referenceImageUrl);
+            }
+        } elseif ($provider === 'replicate') {
+            $imageData = $this->renderWithReplicate($this->getSetting('replicate_api_token', env('REPLICATE_API_TOKEN')), $userPrompt, $aspectRatio, 'black-forest-labs/flux-schnell', $referenceImageUrl);
+        } else {
+            $imageData = $this->renderWithPollinations($userPrompt, $aspectRatio, 'flux', $referenceImageUrl);
+        }
 
         // Hapus file AI render lama jika ada
         if ($capture->ai_rendered_path && Storage::disk('public')->exists($capture->ai_rendered_path)) {
