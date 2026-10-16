@@ -18,6 +18,8 @@ import {
     Upload,
     RefreshCw,
     X,
+    Menu,
+    SlidersHorizontal,
 } from '@lucide/vue';
 
 interface ProjectUser {
@@ -151,6 +153,7 @@ const drawnBy = ref(props.architect.name || 'FADIL');
 const sheetNote = ref('');
 const isEditingKop = ref(false);
 const isSavingKop = ref(false);
+const isMobileMenuOpen = ref(false);
 
 async function saveKopInfo() {
     isSavingKop.value = true;
@@ -412,29 +415,30 @@ async function handleGenerateRabFromWorksheet() {
     <div class="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans select-none print:bg-white print:text-black">
         
         <!-- TOP TOOLBAR CONTROLS (Hidden saat print) -->
-        <header class="no-print sticky top-0 z-50 bg-slate-900/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
+        <header class="no-print sticky top-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-800 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
                 <Link
                     :href="`/projects/${project.id}/viewer`"
-                    class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1.5 text-xs font-medium"
+                    class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1.5 text-xs font-medium shrink-0"
+                    title="Kembali ke 3D Viewer"
                 >
                     <ArrowLeft class="w-4 h-4" />
-                    <span>Kembali ke 3D</span>
+                    <span class="hidden sm:inline">Kembali ke 3D</span>
                 </Link>
-                <div class="h-5 w-px bg-slate-700"></div>
-                <div>
-                    <h1 class="text-sm font-bold text-white flex items-center gap-2">
-                        <Layers class="w-4 h-4 text-orange-500" />
-                        Architectural Working Booklet
+                <div class="h-5 w-px bg-slate-700 hidden sm:block"></div>
+                <div class="min-w-0">
+                    <h1 class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5 sm:gap-2 truncate">
+                        <Layers class="w-4 h-4 text-orange-500 shrink-0" />
+                        <span class="truncate">Architectural Working Booklet</span>
                     </h1>
-                    <p class="text-[11px] text-slate-400">
+                    <p class="text-[10px] sm:text-[11px] text-slate-400 truncate hidden md:block">
                         {{ project.title }} • {{ architect.company_name }}
                     </p>
                 </div>
             </div>
 
-            <!-- Action Controls -->
-            <div class="flex items-center flex-wrap gap-2.5">
+            <!-- Action Controls Desktop (Tampil pada layar lebar xl ke atas) -->
+            <div class="hidden xl:flex items-center flex-wrap gap-2.5">
                 <!-- Pilih Gambar Cover -->
                 <div class="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs">
                     <span class="text-slate-400 font-medium shrink-0">Cover:</span>
@@ -555,7 +559,224 @@ async function handleGenerateRabFromWorksheet() {
                     <span>Cetak / Download PDF</span>
                 </button>
             </div>
+
+            <!-- Mobile & Tablet Controls (< xl) -->
+            <div class="flex xl:hidden items-center gap-2 shrink-0">
+                <!-- Quick Print Button di mobile -->
+                <button
+                    @click="handlePrintPdf"
+                    class="p-2 sm:px-3 sm:py-1.5 rounded-lg bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold shadow-md shadow-orange-950/40 transition flex items-center gap-1.5"
+                    title="Cetak / Download PDF"
+                >
+                    <Printer class="w-4 h-4" />
+                    <span class="hidden sm:inline">Cetak PDF</span>
+                </button>
+
+                <!-- Toggle Hamburger / Pengaturan Menu -->
+                <button
+                    @click="isMobileMenuOpen = true"
+                    class="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition flex items-center gap-1.5 text-xs font-medium"
+                    aria-label="Buka Menu Booklet"
+                >
+                    <SlidersHorizontal class="w-4 h-4 text-orange-400" />
+                    <span class="hidden sm:inline text-xs font-medium">Menu</span>
+                </button>
+            </div>
         </header>
+
+        <!-- MOBILE & TABLET SLIDE-OVER DRAWER MENU (Hidden saat print) -->
+        <div
+            v-if="isMobileMenuOpen"
+            class="no-print fixed inset-0 z-50 xl:hidden flex justify-end"
+            role="dialog"
+            aria-modal="true"
+        >
+            <!-- Backdrop Overlay -->
+            <div
+                class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+                @click="isMobileMenuOpen = false"
+            ></div>
+
+            <!-- Drawer Container -->
+            <div class="relative w-full max-w-sm bg-slate-900 border-l border-slate-800 shadow-2xl flex flex-col h-full z-10">
+                <!-- Drawer Header -->
+                <div class="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/95 sticky top-0">
+                    <div class="flex items-center gap-2.5">
+                        <div class="p-2 rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                            <SlidersHorizontal class="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h2 class="text-sm font-bold text-white">Menu & Pengaturan</h2>
+                            <p class="text-[11px] text-slate-400 truncate max-w-[190px]">{{ project.title }}</p>
+                        </div>
+                    </div>
+                    <button
+                        @click="isMobileMenuOpen = false"
+                        class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                        title="Tutup Menu"
+                    >
+                        <X class="w-5 h-5" />
+                    </button>
+                </div>
+
+                <!-- Drawer Body (Scrollable) -->
+                <div class="flex-1 overflow-y-auto p-4 space-y-5 text-xs">
+                    <!-- Aksi Dokumen Utama -->
+                    <div class="space-y-2.5">
+                        <span class="text-[10px] font-bold tracking-wider text-slate-400 uppercase block">Aksi Dokumen</span>
+                        
+                        <button
+                            @click="handlePrintPdf(); isMobileMenuOpen = false"
+                            class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold shadow-lg shadow-orange-950/40 transition flex items-center justify-center gap-2"
+                        >
+                            <Printer class="w-4 h-4" />
+                            <span>Cetak / Download PDF</span>
+                        </button>
+
+                        <button
+                            @click="handleGenerateRabFromWorksheet(); isMobileMenuOpen = false"
+                            :disabled="isGeneratingRab"
+                            class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-sm transition flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            <Calculator class="w-4 h-4" />
+                            <span>{{ isGeneratingRab ? 'Menghitung...' : '🧮 Generate Draf RAB' }}</span>
+                        </button>
+                    </div>
+
+                    <!-- Format Lembar & Kertas -->
+                    <div class="border-t border-slate-800 pt-4 space-y-3.5">
+                        <span class="text-[10px] font-bold tracking-wider text-slate-400 uppercase block">Format Lembar & Tampilan</span>
+
+                        <!-- Selector Denah Acuan jika > 1 -->
+                        <div v-if="planSheets && planSheets.length > 1" class="space-y-1.5">
+                            <label class="text-slate-300 font-medium block">Pilih Lembar Acuan:</label>
+                            <select
+                                :value="currentSelectedSheetId"
+                                @change="handlePlanSheetChange"
+                                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-amber-300 font-semibold focus:outline-none"
+                            >
+                                <option
+                                    v-for="s in planSheets"
+                                    :key="s.id"
+                                    :value="s.id"
+                                    class="bg-neutral-900 text-white"
+                                >
+                                    {{ s.title }} ({{ s.scale || '1:100' }})
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Ukuran Kertas -->
+                        <div class="space-y-1.5">
+                            <label class="text-slate-300 font-medium block">Ukuran Kertas:</label>
+                            <div class="grid grid-cols-2 gap-1.5 bg-slate-800 p-1 border border-slate-700 rounded-lg">
+                                <button
+                                    @click="paperSize = 'A3'"
+                                    class="py-1.5 text-center rounded transition font-mono"
+                                    :class="paperSize === 'A3' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                                >
+                                    A3 Landscape
+                                </button>
+                                <button
+                                    @click="paperSize = 'A4'"
+                                    class="py-1.5 text-center rounded transition font-mono"
+                                    :class="paperSize === 'A4' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                                >
+                                    A4 Landscape
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Prioritas AI vs 3D -->
+                        <div class="space-y-1.5">
+                            <label class="text-slate-300 font-medium block">Prioritas Visual Render:</label>
+                            <button
+                                @click="preferAiRender = !preferAiRender"
+                                class="w-full py-2 px-3 rounded-lg border font-medium transition flex items-center justify-between"
+                                :class="preferAiRender
+                                    ? 'bg-orange-500/15 border-orange-500/40 text-orange-400'
+                                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'"
+                            >
+                                <span class="flex items-center gap-2">
+                                    <Sparkles class="w-4 h-4" />
+                                    <span>{{ preferAiRender ? 'Prioritas: Render AI' : 'Prioritas: 3D Asli' }}</span>
+                                </span>
+                                <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Ganti</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Gambar Cover & Filter Visual -->
+                    <div class="border-t border-slate-800 pt-4 space-y-3.5">
+                        <span class="text-[10px] font-bold tracking-wider text-slate-400 uppercase block">Konten Visual & Cover</span>
+
+                        <!-- Pilih Gambar Cover -->
+                        <div class="space-y-1.5">
+                            <label class="text-slate-300 font-medium block">Gambar Cover Depan:</label>
+                            <select
+                                v-model="selectedCoverCaptureId"
+                                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-semibold focus:outline-none"
+                            >
+                                <option value="auto" class="bg-neutral-900 text-white">Otomatis (Fasad / Eksterior)</option>
+                                <option
+                                    v-for="cap in captures"
+                                    :key="cap.id"
+                                    :value="cap.id"
+                                    class="bg-neutral-900 text-white"
+                                >
+                                    {{ cap.code ? `[${cap.code}] ` : '' }}{{ cap.room_name }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Filter Ruangan: Khusus Lembar Ini vs Semua Proyek -->
+                        <div v-if="hasSheetCaptures && captures.length > 0" class="space-y-1.5">
+                            <label class="text-slate-300 font-medium block">Visual Ruangan Tampil:</label>
+                            <div class="grid grid-cols-2 gap-1.5 bg-slate-800 p-1 border border-slate-700 rounded-lg">
+                                <button
+                                    @click="filterMode = 'sheet'"
+                                    class="py-1.5 text-center rounded transition"
+                                    :class="filterMode === 'sheet' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                                >
+                                    Khusus Lembar Ini
+                                </button>
+                                <button
+                                    @click="filterMode = 'all'"
+                                    class="py-1.5 text-center rounded transition"
+                                    :class="filterMode === 'all' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                                >
+                                    Semua ({{ captures.length }})
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Edit Kop Gambar Trigger -->
+                        <div class="pt-1">
+                            <button
+                                @click="isEditingKop = true; isMobileMenuOpen = false"
+                                class="w-full py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition flex items-center justify-between"
+                            >
+                                <span class="flex items-center gap-2">
+                                    <FileText class="w-4 h-4 text-orange-400" />
+                                    <span>Kop Info (Client & Proyek)</span>
+                                </span>
+                                <span class="text-slate-400 text-xs font-mono">Ubah →</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Drawer Footer -->
+                <div class="p-3 border-t border-slate-800 bg-slate-900/95 text-center">
+                    <button
+                        @click="isMobileMenuOpen = false"
+                        class="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
+                    >
+                        Tutup Menu
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <!-- Modal Edit Kop Gambar -->
         <div v-if="isEditingKop" class="no-print fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
