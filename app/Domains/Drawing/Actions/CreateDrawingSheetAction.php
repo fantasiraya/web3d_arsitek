@@ -20,6 +20,17 @@ class CreateDrawingSheetAction
     {
         $this->accessService->authorizeEdit($user, $project);
 
+        $projectUpdates = [];
+        if (array_key_exists('client_name', $data) && $data['client_name'] !== null) {
+            $projectUpdates['client_name'] = $data['client_name'];
+        }
+        if (array_key_exists('client_address', $data) && $data['client_address'] !== null) {
+            $projectUpdates['client_address'] = $data['client_address'];
+        }
+        if (! empty($projectUpdates)) {
+            $project->update($projectUpdates);
+        }
+
         $nextSortOrder = (int) DrawingSheet::where('project_id', $project->id)->max('sort_order') + 1;
 
         return DrawingSheet::create([

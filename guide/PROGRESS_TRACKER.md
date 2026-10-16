@@ -288,6 +288,7 @@
   3. **Pencarian Referensi Visual 3D (Select2 / Combobox) di CAD Editor (`Drawing/Editor.vue`):** Pada panel Inspector properti elemen saat label ruangan (`room_label`) atau objek denah dipilih, disediakan input pencarian live combobox (default menampilkan 5 referensi teratas lengkap dengan thumbnail, badge kode, nama ruangan, dan jam). Item yang sudah tertaut otomatis diberi penanda status: badge **"Sudah Digunakan"** (disertai nama ruangan tempat visual tersebut terpasang) atau **"Sedang Dipakai"** untuk elemen yang sedang aktif, sehingga arsitek terhindar dari duplikasi penautan.
   4. **Badge Visual pada Kanvas CAD Konva:** Elemen label ruangan yang terhubung ke snapshot 3D menampilkan badge oranye elegan `📷 R-01` langsung di atas label denah untuk kejelasan visual instan.
   5. **Indikator Referensi pada Daftar Lembar Kerja (`Drawing/Index.vue`):** Kartu denah menampilkan badge jumlah visual 3D terhubung (`📷 {count} 3D`) dan tombol akses cepat langsung ke Booklet PDF. Build Vite (3767 modules) sukses, 146 Pest tests lulus 100%.
+  6. **Penentuan Cover Booklet & Integrasi Key Plan (`Booklet.vue` & `KeyPlanCanvas.vue`):** Penambahan pemilih gambar Cover di toolbar & floating cover preview (arsitek bebas memilih gambar spesifik atau default otomatis memprioritaskan kode `EXT-*` / tampak depan). Pada halaman interior per ruangan, badge kode (`R-01`) ditampilkan tebal di samping nama ruangan dan dihubungkan secara akurat ke Key Plan mini locator denah via `activeCode` dan `activeElementId`.
 
 
 

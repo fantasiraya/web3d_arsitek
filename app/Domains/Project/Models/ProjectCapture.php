@@ -96,6 +96,12 @@ class ProjectCapture extends Model
         return $this->belongsTo(\App\Domains\Drawing\Models\DrawingSheet::class, 'drawing_sheet_id');
     }
 
+    public function roomElement(): BelongsTo
+    {
+        return $this->belongsTo(\App\Domains\Drawing\Models\DrawingElement::class, 'room_element_id');
+    }
+
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');

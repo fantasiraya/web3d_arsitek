@@ -61,6 +61,8 @@ class ProjectController extends Controller
         $validated = $request->validate([
             'title'                => ['required', 'string', 'max:255'],
             'description'          => ['nullable', 'string', 'max:1000'],
+            'client_name'          => ['nullable', 'string', 'max:255'],
+            'client_address'       => ['nullable', 'string', 'max:1000'],
             'max_revisions_allowed' => ['nullable', 'integer', 'min:1', 'max:20'],
             'file'                 => ['required', 'file', 'mimes:glb,gltf', "max:{$maxKilobytes}"],
         ], [
@@ -75,11 +77,14 @@ class ProjectController extends Controller
         $project = $this->createProjectAction->execute($user, [
             'title'                => $validated['title'],
             'description'          => $validated['description'] ?? null,
+            'client_name'          => $validated['client_name'] ?? null,
+            'client_address'       => $validated['client_address'] ?? null,
             'file_path'            => $path,
             'file_size_bytes'      => $fileSizeBytes,
             'is_draco_compressed'  => false,
             'max_revisions_allowed' => $validated['max_revisions_allowed'] ?? 3,
         ]);
+
 
         // ── 5. Simpan version record + queue Draco compression ─
         $this->uploadProjectFileAction->execute($project, $user, $file);
@@ -103,6 +108,8 @@ class ProjectController extends Controller
         $validated = $request->validate([
             'title'                => ['sometimes', 'string', 'max:255'],
             'description'          => ['nullable', 'string', 'max:1000'],
+            'client_name'          => ['nullable', 'string', 'max:255'],
+            'client_address'       => ['nullable', 'string', 'max:1000'],
             'max_revisions_allowed' => ['sometimes', 'integer', 'min:1', 'max:50'],
             'file'                 => ['nullable', 'file', "max:{$maxKilobytes}"],
         ], [
@@ -118,6 +125,15 @@ class ProjectController extends Controller
         if (array_key_exists('description', $validated)) {
             $updateData['description'] = $validated['description'];
         }
+
+        if (array_key_exists('client_name', $validated)) {
+            $updateData['client_name'] = $validated['client_name'];
+        }
+
+        if (array_key_exists('client_address', $validated)) {
+            $updateData['client_address'] = $validated['client_address'];
+        }
+
 
         if (isset($validated['max_revisions_allowed'])) {
             $updateData['max_revisions_allowed'] = $validated['max_revisions_allowed'];

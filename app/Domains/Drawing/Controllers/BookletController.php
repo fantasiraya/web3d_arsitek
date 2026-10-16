@@ -40,12 +40,39 @@ class BookletController extends Controller
         }
 
         // Ambil Denah 2D aktif (type = 'plan') beserta elemen-elemennya
-        $planSheet = DrawingSheet::where('project_id', $project->id)
+        $selectedSheetId = $request->query('sheet_id');
+
+        $planSheets = DrawingSheet::where('project_id', $project->id)
             ->where('type', DrawingSheet::TYPE_PLAN)
-            ->with(['elements' => function ($q) {
-                $q->orderBy('sort_order');
-            }])
-            ->first();
+            ->select('id', 'title', 'scale', 'unit', 'type')
+            ->orderBy('sort_order')
+            ->orderBy('created_at')
+            ->get();
+
+        $planSheet = null;
+        if ($selectedSheetId) {
+            $planSheet = DrawingSheet::where('project_id', $project->id)
+                ->where('id', $selectedSheetId)
+                ->with(['elements' => function ($q) {
+                    $q->orderBy('sort_order');
+                }])
+                ->first();
+        }
+
+        if (! $planSheet) {
+            $planSheet = DrawingSheet::where('project_id', $project->id)
+                ->where('type', DrawingSheet::TYPE_PLAN)
+                ->where('title', 'like', '%DENAH%')
+                ->with(['elements' => function ($q) {
+                    $q->orderBy('sort_order');
+                }])
+                ->first() ?? DrawingSheet::where('project_id', $project->id)
+                ->where('type', DrawingSheet::TYPE_PLAN)
+                ->with(['elements' => function ($q) {
+                    $q->orderBy('sort_order');
+                }])
+                ->first();
+        }
 
         // Ambil Captures proyek
         $capturesQuery = ProjectCapture::where('project_id', $project->id)
@@ -75,6 +102,7 @@ class BookletController extends Controller
         return Inertia::render('Drawing/Booklet', [
             'project'      => $project,
             'planSheet'    => $planSheet,
+            'planSheets'   => $planSheets,
             'captures'     => $captures,
             'rabDocuments' => $rabDocuments,
             'isOwner'      => $isOwner,

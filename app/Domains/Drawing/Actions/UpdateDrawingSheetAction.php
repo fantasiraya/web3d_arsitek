@@ -19,7 +19,28 @@ class UpdateDrawingSheetAction
     {
         $this->accessService->authorizeEdit($user, $sheet->project);
 
+        if (! empty($data['project_id']) && $data['project_id'] !== $sheet->project_id) {
+            $newProject = \App\Domains\Project\Models\Project::findOrFail($data['project_id']);
+            $this->accessService->authorizeEdit($user, $newProject);
+            $sheet->project_id = $newProject->id;
+        }
+
+        $targetProject = $sheet->project;
+        if ($targetProject) {
+            $projectUpdates = [];
+            if (array_key_exists('client_name', $data)) {
+                $projectUpdates['client_name'] = $data['client_name'];
+            }
+            if (array_key_exists('client_address', $data)) {
+                $projectUpdates['client_address'] = $data['client_address'];
+            }
+            if (! empty($projectUpdates)) {
+                $targetProject->update($projectUpdates);
+            }
+        }
+
         $sheet->update(array_filter([
+            'project_id'   => $sheet->project_id,
             'title'        => $data['title'] ?? null,
             'type'         => $data['type'] ?? null,
             'scale'        => $data['scale'] ?? null,

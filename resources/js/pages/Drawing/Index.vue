@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import UnifiedLayout from '@/layouts/UnifiedLayout.vue';
+import KeyPlanCanvas from '@/components/drawing/KeyPlanCanvas.vue';
 import {
     DraftingCompass,
     Plus,
@@ -20,6 +21,12 @@ import {
     Sparkles,
     Lock,
     Camera,
+    BookOpen,
+    Box,
+    LayoutGrid,
+    Settings,
+    X,
+    Loader2,
 } from '@lucide/vue';
 
 defineOptions({ layout: UnifiedLayout });
@@ -27,6 +34,22 @@ defineOptions({ layout: UnifiedLayout });
 interface ProjectOption {
     id: string;
     title: string;
+    client_name?: string | null;
+    client_address?: string | null;
+}
+
+interface ProjectCaptureItem {
+    id: string;
+    project_id: string;
+    drawing_sheet_id?: string | null;
+    room_element_id?: string | null;
+    code?: string | null;
+    room_name: string;
+    captured_hour?: string | null;
+    file_path: string;
+    ai_rendered_path?: string | null;
+    url?: string;
+    ai_rendered_url?: string | null;
 }
 
 interface DrawingSheetItem {
@@ -42,11 +65,16 @@ interface DrawingSheetItem {
     unit: string;
     sort_order: number;
     captures_count?: number;
+    captures?: ProjectCaptureItem[];
+    elements?: any[];
     created_at: string;
     updated_at: string;
     project?: {
         id: string;
         title: string;
+        description?: string;
+        client_name?: string | null;
+        client_address?: string | null;
     };
 }
 
@@ -58,6 +86,7 @@ const props = defineProps<{
         total: number;
     };
     projects: ProjectOption[];
+    allProjectCaptures?: ProjectCaptureItem[];
     selectedProjectId?: string | null;
     hasAccess: boolean;
 }>();
@@ -74,10 +103,129 @@ const form = useForm({
     orientation: 'landscape',
     grid_spacing: 20,
     unit: 'm',
+    client_name: '',
+    client_address: '',
 });
+
+// Auto-fill nama dan alamat klien saat proyek dipilih di modal buat baru
+watch(() => form.project_id, (newId) => {
+    const sel = props.projects.find(p => p.id === newId);
+    if (sel) {
+        form.client_name = sel.client_name || '';
+        form.client_address = sel.client_address || '';
+    }
+}, { immediate: true });
+
+// Modal Edit Pengaturan Lembar Kerja
+const showEditModal = ref(false);
+const editingSheet = ref<DrawingSheetItem | null>(null);
+const editForm = useForm({
+    project_id: '',
+    title: '',
+    type: 'plan' as 'plan' | 'elevation' | 'section',
+    scale: '1:100',
+    unit: 'm',
+    paper_size: 'A3',
+    client_name: '',
+    client_address: '',
+});
+
+function openEditSheetModal(sheet: DrawingSheetItem) {
+    editingSheet.value = sheet;
+    editForm.project_id = sheet.project_id;
+    editForm.title = sheet.title;
+    editForm.type = sheet.type;
+    editForm.scale = sheet.scale || '1:100';
+    editForm.unit = sheet.unit || 'm';
+    editForm.paper_size = sheet.paper_size || 'A3';
+    editForm.client_name = sheet.project?.client_name || '';
+    editForm.client_address = sheet.project?.client_address || '';
+    showEditModal.value = true;
+}
+
+// Update client info saat project diganti di modal edit
+watch(() => editForm.project_id, (newId) => {
+    if (!editingSheet.value) return;
+    if (newId === editingSheet.value.project_id) {
+        editForm.client_name = editingSheet.value.project?.client_name || '';
+        editForm.client_address = editingSheet.value.project?.client_address || '';
+    } else {
+        const sel = props.projects.find(p => p.id === newId);
+        if (sel) {
+            editForm.client_name = sel.client_name || '';
+            editForm.client_address = sel.client_address || '';
+        }
+    }
+});
+
+function submitEditSheet() {
+    if (!editingSheet.value) return;
+    editForm.patch(`/drawings/${editingSheet.value.id}`, {
+        onSuccess: () => {
+            showEditModal.value = false;
+            editingSheet.value = null;
+        },
+    });
+}
+
+// Modal Hubungkan Gambar 3D ke Lembar Kerja
+const showLinkCapturesModal = ref(false);
+const selectedSheetForLinking = ref<DrawingSheetItem | null>(null);
+const selectedCaptureIds = ref<string[]>([]);
+const isSavingLinkedCaptures = ref(false);
+
+const availableCapturesForSelectedSheet = computed(() => {
+    if (!selectedSheetForLinking.value) return [];
+    const projId = selectedSheetForLinking.value.project_id;
+    return (props.allProjectCaptures || []).filter(c => c.project_id === projId);
+});
+
+function openLinkCapturesModal(sheet: DrawingSheetItem) {
+    selectedSheetForLinking.value = sheet;
+    selectedCaptureIds.value = (sheet.captures || []).map(c => c.id);
+    showLinkCapturesModal.value = true;
+}
+
+function toggleCaptureSelection(capId: string) {
+    const idx = selectedCaptureIds.value.indexOf(capId);
+    if (idx > -1) {
+        selectedCaptureIds.value.splice(idx, 1);
+    } else {
+        selectedCaptureIds.value.push(capId);
+    }
+}
+
+async function saveLinkedCaptures() {
+    if (!selectedSheetForLinking.value || isSavingLinkedCaptures.value) return;
+    isSavingLinkedCaptures.value = true;
+    try {
+        const response = await fetch(`/drawings/${selectedSheetForLinking.value.id}/sync-captures`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+                capture_ids: selectedCaptureIds.value,
+            }),
+        });
+
+        if (response.ok) {
+            showLinkCapturesModal.value = false;
+            router.reload({ preserveScroll: true });
+        }
+    } catch (err) {
+        console.error('Failed to link captures:', err);
+    } finally {
+        isSavingLinkedCaptures.value = false;
+    }
+}
 
 const searchQuery = ref('');
 const filterType = ref<'all' | 'plan' | 'elevation' | 'section'>('all');
+const groupByProject = ref(false);
 
 const filteredSheets = computed(() => {
     return props.sheets.data.filter((sheet) => {
@@ -87,6 +235,37 @@ const filteredSheets = computed(() => {
         return matchTitle && matchType;
     });
 });
+
+function getSheetRooms(sheet: DrawingSheetItem): string[] {
+    if (!sheet.elements) return [];
+    const rooms = sheet.elements
+        .filter(e => e.type === 'room_label' && e.data?.text)
+        .map(e => (e.data.text || '').split('\n')[0].trim())
+        .filter(Boolean);
+    return Array.from(new Set(rooms)).slice(0, 4);
+}
+
+const sheetsByProject = computed(() => {
+    const map = new Map<string, { projectTitle: string; clientName?: string; clientAddress?: string; sheets: DrawingSheetItem[] }>();
+    for (const sheet of filteredSheets.value) {
+        const pId = sheet.project_id || 'unassigned';
+        const pTitle = sheet.project?.title || 'Proyek Tanpa Judul';
+        const cName = sheet.project?.client_name || undefined;
+        const cAddress = sheet.project?.client_address || undefined;
+        if (!map.has(pId)) {
+            map.set(pId, { projectTitle: pTitle, clientName: cName, clientAddress: cAddress, sheets: [] });
+        }
+        map.get(pId)!.sheets.push(sheet);
+    }
+    return Array.from(map.entries()).map(([projectId, data]) => ({
+        projectId,
+        projectTitle: data.projectTitle,
+        clientName: data.clientName,
+        clientAddress: data.clientAddress,
+        sheets: data.sheets,
+    }));
+});
+
 
 const submitCreate = () => {
     if (!props.hasAccess) {
@@ -219,6 +398,21 @@ const getTypeColor = (type: string) => {
                         </option>
                     </select>
 
+                    <!-- Toggle Mode Grup Proyek -->
+                    <button
+                        @click="groupByProject = !groupByProject"
+                        :class="[
+                            'px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer',
+                            groupByProject
+                                ? 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400'
+                                : 'bg-slate-50 dark:bg-white/[0.04] border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300'
+                        ]"
+                        title="Kelompokkan lembar kerja berdasarkan proyek"
+                    >
+                        <FolderKanban class="w-3.5 h-3.5" />
+                        <span>{{ groupByProject ? 'Per Proyek' : 'Semua Lembar' }}</span>
+                    </button>
+
                     <!-- Type Filter Tabs -->
                     <div class="inline-flex rounded-xl p-1 bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 text-xs">
                         <button
@@ -243,54 +437,276 @@ const getTypeColor = (type: string) => {
                 </div>
             </div>
 
-            <!-- Sheets Grid -->
-            <div v-if="filteredSheets.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- TAMPILAN 1: KELOMPOK PER PROYEK -->
+            <div v-if="filteredSheets.length > 0 && groupByProject" class="space-y-10">
+                <div
+                    v-for="grp in sheetsByProject"
+                    :key="grp.projectId"
+                    class="space-y-4"
+                >
+                    <!-- Project Section Header Banner -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-[#12131a] border border-slate-200 dark:border-white/5 shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-500">
+                                <FolderKanban class="w-5 h-5" />
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+                                    <span class="break-words leading-tight">{{ grp.projectTitle }}</span>
+                                    <span class="text-xs font-mono font-normal px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 shrink-0">
+                                        {{ grp.sheets.length }} Lembar Kerja
+                                    </span>
+                                </h2>
+                                <p v-if="grp.clientName" class="text-xs text-orange-500 font-medium mt-1 flex items-center gap-2 flex-wrap">
+                                    <span>👤 Klien: <strong class="break-words font-semibold">{{ grp.clientName }}</strong></span>
+                                    <span v-if="grp.clientAddress" class="text-slate-400 font-normal break-words text-[11px]">📍 {{ grp.clientAddress }}</span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <Link
+                                :href="`/projects/${grp.projectId}/viewer`"
+                                class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5"
+                            >
+                                <Box class="w-3.5 h-3.5" />
+                                <span>3D Viewer</span>
+                            </Link>
+                            <Link
+                                :href="`/projects/${grp.projectId}/booklet`"
+                                class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-orange-600 hover:bg-orange-500 text-white transition flex items-center gap-1.5 shadow-sm"
+                            >
+                                <BookOpen class="w-3.5 h-3.5" />
+                                <span>Buka Booklet PDF</span>
+                            </Link>
+                        </div>
+                    </div>
+
+                    <!-- Grid Lembar Kerja di Bawah Proyek Ini -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div
+                            v-for="sheet in grp.sheets"
+                            :key="sheet.id"
+                            class="group relative bg-white dark:bg-[#12131a] rounded-2xl border border-slate-200 dark:border-white/5 overflow-hidden shadow-sm hover:border-violet-500/40 hover:shadow-lg transition-all flex flex-col justify-between"
+                        >
+                            <!-- Mini KeyPlan Canvas Preview -->
+                            <div class="h-44 bg-slate-100 dark:bg-[#0a0b10] border-b border-slate-200 dark:border-white/5 p-2 flex flex-col justify-between relative overflow-hidden">
+                                <div class="w-full h-full relative flex items-center justify-center">
+                                    <KeyPlanCanvas
+                                        v-if="sheet.elements && sheet.elements.length > 0"
+                                        :elements="sheet.elements"
+                                        width="100%"
+                                        height="100%"
+                                        className="w-full h-full border-none shadow-none bg-transparent"
+                                    />
+                                    <div v-else class="w-32 h-20 rounded border border-dashed border-violet-400/40 flex flex-col items-center justify-center bg-violet-500/5 text-slate-400 text-xs">
+                                        <DraftingCompass class="w-6 h-6 text-violet-400/60 mb-1" />
+                                        <span>Belum ada gambar</span>
+                                    </div>
+                                </div>
+                                <div class="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none z-10">
+                                    <span :class="['px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-sm shadow-sm', getTypeColor(sheet.type)]">
+                                        {{ getTypeLabel(sheet.type) }}
+                                    </span>
+                                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900/80 text-white backdrop-blur-sm shadow-sm">
+                                        {{ sheet.scale }} • {{ sheet.paper_size }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Card Body -->
+                            <div class="p-5 flex-1 flex flex-col justify-between space-y-3">
+                                <div>
+                                    <h3 class="font-bold text-slate-900 dark:text-white text-base group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+                                        {{ sheet.title }}
+                                    </h3>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
+                                        <Calendar class="w-3.5 h-3.5" />
+                                        Diperbarui {{ new Date(sheet.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) }}
+                                    </p>
+                                </div>
+
+                                <!-- Room Tags -->
+                                <div v-if="getSheetRooms(sheet).length > 0" class="space-y-1">
+                                    <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Ruangan:</span>
+                                    <div class="flex flex-wrap gap-1">
+                                        <span
+                                            v-for="r in getSheetRooms(sheet)"
+                                            :key="r"
+                                            class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/10"
+                                        >
+                                            🏷️ {{ r }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Connected 3D Visual Thumbnails & Action -->
+                                <div class="pt-2">
+                                    <div class="flex items-center justify-between text-xs mb-1.5">
+                                        <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                            <Camera class="w-3.5 h-3.5 text-amber-500" />
+                                            <span>Visual 3D Terhubung</span>
+                                            <span class="font-mono text-[10px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold">
+                                                {{ (sheet.captures || []).length }}
+                                            </span>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            @click="openLinkCapturesModal(sheet)"
+                                            class="text-[10px] text-violet-600 dark:text-violet-400 hover:underline font-semibold cursor-pointer"
+                                        >
+                                            + Hubungkan 3D
+                                        </button>
+                                    </div>
+
+                                    <!-- Thumbnail bar -->
+                                    <div v-if="sheet.captures && sheet.captures.length > 0" class="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
+                                        <div
+                                            v-for="cap in sheet.captures.slice(0, 4)"
+                                            :key="cap.id"
+                                            class="relative group/thumb shrink-0 rounded-lg overflow-hidden border border-amber-500/30 bg-black/40 w-14 h-10 cursor-pointer"
+                                            :title="`${cap.code ? '[' + cap.code + '] ' : ''}${cap.room_name}`"
+                                            @click="openLinkCapturesModal(sheet)"
+                                        >
+                                            <img
+                                                :src="cap.ai_rendered_url || cap.url"
+                                                :alt="cap.room_name"
+                                                class="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
+                                            />
+                                            <span v-if="cap.code" class="absolute bottom-0 left-0 right-0 bg-black/75 text-[8px] font-mono font-bold text-amber-300 text-center truncate px-0.5">
+                                                {{ cap.code }}
+                                            </span>
+                                        </div>
+                                        <button
+                                            v-if="sheet.captures.length > 4"
+                                            type="button"
+                                            @click="openLinkCapturesModal(sheet)"
+                                            class="w-8 h-10 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center text-[10px] font-bold text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                                        >
+                                            +{{ sheet.captures.length - 4 }}
+                                        </button>
+                                    </div>
+                                    <div v-else class="text-[11px] text-slate-400 italic py-1 flex items-center justify-between">
+                                        <span>Belum ada visual 3D yang ditautkan</span>
+                                        <button
+                                            type="button"
+                                            @click="openLinkCapturesModal(sheet)"
+                                            class="text-[10px] px-2 py-0.5 rounded bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-300 border border-violet-500/20 font-medium cursor-pointer"
+                                        >
+                                            + Pilih Gambar
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Action Bar -->
+                                <div class="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-2">
+                                    <Link
+                                        :href="`/drawings/${sheet.id}`"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-violet-50 dark:bg-violet-400/10 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-400/20 hover:bg-violet-100 dark:hover:bg-violet-400/20 transition-colors"
+                                    >
+                                        <DraftingCompass class="w-3.5 h-3.5" />
+                                        <span>Buka CAD</span>
+                                    </Link>
+
+                                    <div class="flex items-center gap-1">
+                                        <button
+                                            type="button"
+                                            @click="openEditSheetModal(sheet)"
+                                            title="Pengaturan Lembar Kerja (Judul, Kategori, Unit, Skala)"
+                                            class="p-2 rounded-xl text-slate-400 hover:text-violet-600 dark:hover:text-violet-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                                        >
+                                            <Settings class="w-4 h-4" />
+                                        </button>
+                                        <Link
+                                            :href="`/projects/${sheet.project_id}/booklet?sheet_id=${sheet.id}`"
+                                            title="Lihat Lembar Kerja & Booklet PDF"
+                                            class="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-colors flex items-center gap-1"
+                                        >
+                                            <BookOpen class="w-3.5 h-3.5" />
+                                            <span>Booklet</span>
+                                        </Link>
+                                        <Link
+                                            :href="`/projects/${sheet.project_id}/viewer?sheet_id=${sheet.id}`"
+                                            title="Buka Model 3D di Viewer (Fokus ke Lembar Ini)"
+                                            class="p-2 rounded-xl text-slate-500 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                                        >
+                                            <Box class="w-4 h-4" />
+                                        </Link>
+                                        <a
+                                            :href="`/drawings/${sheet.id}/export-dxf`"
+                                            title="Unduh AutoCAD DXF"
+                                            class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                                        >
+                                            <Download class="w-4 h-4" />
+                                        </a>
+                                        <button
+                                            @click="deleteSheet(sheet)"
+                                            title="Hapus Lembar Kerja"
+                                            class="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
+                                        >
+                                            <Trash2 class="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAMPILAN 2: GRID REGULER (DENGAN BANNER PROYEK JELAS) -->
+            <div v-else-if="filteredSheets.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div
                     v-for="sheet in filteredSheets"
                     :key="sheet.id"
                     class="group relative bg-white dark:bg-[#12131a] rounded-2xl border border-slate-200 dark:border-white/5 overflow-hidden shadow-sm hover:border-violet-500/40 hover:shadow-lg transition-all flex flex-col justify-between"
                 >
-                    <!-- Preview Canvas Area -->
-                    <div class="h-44 bg-slate-100 dark:bg-[#0a0b10] border-b border-slate-200 dark:border-white/5 p-4 flex flex-col justify-between relative overflow-hidden">
-                        <!-- Grid visual pattern background -->
-                        <div class="absolute inset-0 bg-[linear-gradient(to_right,#cbd5e115_1px,transparent_1px),linear-gradient(to_bottom,#cbd5e115_1px,transparent_1px)] bg-[size:16px_16px]"></div>
-                        
-                        <!-- Top badges -->
-                        <div class="relative z-10 flex items-center justify-between">
-                            <div class="flex items-center gap-1.5">
-                                <span :class="['px-2.5 py-0.5 rounded-full text-[10px] font-semibold border', getTypeColor(sheet.type)]">
-                                    {{ getTypeLabel(sheet.type) }}
-                                </span>
-                                <span
-                                    v-if="sheet.captures_count && sheet.captures_count > 0"
-                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
-                                    title="Visual 3D snapshot terhubung ke denah ini"
-                                >
-                                    <Camera class="w-3 h-3" />
-                                    {{ sheet.captures_count }} 3D
+                    <!-- Header Banner: Nama Proyek & Klien (Teks Penuh, Tidak Dipotong/Truncate) -->
+                    <div class="px-3.5 py-2.5 bg-slate-900 border-b border-slate-800 text-white flex flex-col gap-1 text-xs">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex items-center gap-2 min-w-0 flex-1">
+                                <span class="w-2 h-2 rounded-full bg-orange-500 shrink-0 mt-0.5"></span>
+                                <span class="font-bold text-slate-100 break-words leading-tight" :title="sheet.project?.title">
+                                    {{ sheet.project?.title || 'Proyek Tanpa Judul' }}
                                 </span>
                             </div>
-                            <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-200/60 dark:bg-white/10 text-slate-700 dark:text-slate-300">
-                                {{ sheet.scale }} • {{ sheet.paper_size }}
+                            <span v-if="sheet.project?.client_name" class="text-[10px] text-orange-400 font-mono font-medium shrink-0 ml-auto flex items-center gap-1 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20" :title="sheet.project.client_name">
+                                👤 <span class="break-words">{{ sheet.project.client_name }}</span>
                             </span>
                         </div>
+                        <p v-if="sheet.project?.client_address" class="text-[10px] text-slate-400 pl-4 break-words">
+                            📍 {{ sheet.project.client_address }}
+                        </p>
+                    </div>
 
-                        <!-- Miniature CAD vector preview simulation -->
-                        <div class="relative z-10 flex items-center justify-center py-4">
-                            <div class="w-32 h-20 rounded border border-dashed border-violet-400/40 flex items-center justify-center bg-violet-500/5 group-hover:scale-105 transition-transform">
-                                <DraftingCompass class="w-8 h-8 text-violet-400/60" />
+                    <!-- Preview Canvas Area (Live KeyPlan Canvas) -->
+                    <div class="h-44 bg-slate-100 dark:bg-[#0a0b10] border-b border-slate-200 dark:border-white/5 p-2 flex flex-col justify-between relative overflow-hidden">
+                        <div class="w-full h-full relative flex items-center justify-center">
+                            <KeyPlanCanvas
+                                v-if="sheet.elements && sheet.elements.length > 0"
+                                :elements="sheet.elements"
+                                width="100%"
+                                height="100%"
+                                className="w-full h-full border-none shadow-none bg-transparent"
+                            />
+                            <div v-else class="w-32 h-20 rounded border border-dashed border-violet-400/40 flex flex-col items-center justify-center bg-violet-500/5 text-slate-400 text-xs">
+                                <DraftingCompass class="w-6 h-6 text-violet-400/60 mb-1" />
+                                <span>Belum ada gambar</span>
                             </div>
                         </div>
 
-                        <!-- Footer metadata inside preview -->
-                        <div class="relative z-10 flex items-center justify-between text-[11px] text-slate-400">
-                            <span class="truncate max-w-[180px]">{{ sheet.project?.title || 'Proyek Tanpa Judul' }}</span>
-                            <span class="uppercase font-mono">{{ sheet.orientation }}</span>
+                        <!-- Floating Top Badges -->
+                        <div class="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none z-10">
+                            <span :class="['px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-sm shadow-sm', getTypeColor(sheet.type)]">
+                                {{ getTypeLabel(sheet.type) }}
+                            </span>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900/80 text-white backdrop-blur-sm shadow-sm">
+                                {{ sheet.scale }} • {{ sheet.paper_size }}
+                            </span>
                         </div>
                     </div>
 
                     <!-- Card Body -->
-                    <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
+                    <div class="p-5 flex-1 flex flex-col justify-between space-y-3">
                         <div>
                             <h3 class="font-bold text-slate-900 dark:text-white text-base group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
                                 {{ sheet.title }}
@@ -301,6 +717,78 @@ const getTypeColor = (type: string) => {
                             </p>
                         </div>
 
+                        <!-- Room Badges Included in Sheet -->
+                        <div v-if="getSheetRooms(sheet).length > 0" class="space-y-1">
+                            <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Ruangan:</span>
+                            <div class="flex flex-wrap gap-1">
+                                <span
+                                    v-for="r in getSheetRooms(sheet)"
+                                    :key="r"
+                                    class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/10"
+                                >
+                                    🏷️ {{ r }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Connected 3D Visual Thumbnails & Action -->
+                        <div class="pt-2">
+                            <div class="flex items-center justify-between text-xs mb-1.5">
+                                <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                    <Camera class="w-3.5 h-3.5 text-amber-500" />
+                                    <span>Visual 3D Terhubung</span>
+                                    <span class="font-mono text-[10px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold">
+                                        {{ (sheet.captures || []).length }}
+                                    </span>
+                                </span>
+                                <button
+                                    type="button"
+                                    @click="openLinkCapturesModal(sheet)"
+                                    class="text-[10px] text-violet-600 dark:text-violet-400 hover:underline font-semibold cursor-pointer"
+                                >
+                                    + Hubungkan 3D
+                                </button>
+                            </div>
+
+                            <!-- Thumbnail bar -->
+                            <div v-if="sheet.captures && sheet.captures.length > 0" class="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
+                                <div
+                                    v-for="cap in sheet.captures.slice(0, 4)"
+                                    :key="cap.id"
+                                    class="relative group/thumb shrink-0 rounded-lg overflow-hidden border border-amber-500/30 bg-black/40 w-14 h-10 cursor-pointer"
+                                    :title="`${cap.code ? '[' + cap.code + '] ' : ''}${cap.room_name}`"
+                                    @click="openLinkCapturesModal(sheet)"
+                                >
+                                    <img
+                                        :src="cap.ai_rendered_url || cap.url"
+                                        :alt="cap.room_name"
+                                        class="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
+                                    />
+                                    <span v-if="cap.code" class="absolute bottom-0 left-0 right-0 bg-black/75 text-[8px] font-mono font-bold text-amber-300 text-center truncate px-0.5">
+                                        {{ cap.code }}
+                                    </span>
+                                </div>
+                                <button
+                                    v-if="sheet.captures.length > 4"
+                                    type="button"
+                                    @click="openLinkCapturesModal(sheet)"
+                                    class="w-8 h-10 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center text-[10px] font-bold text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                                >
+                                    +{{ sheet.captures.length - 4 }}
+                                </button>
+                            </div>
+                            <div v-else class="text-[11px] text-slate-400 italic py-1 flex items-center justify-between">
+                                <span>Belum ada visual 3D yang ditautkan</span>
+                                <button
+                                    type="button"
+                                    @click="openLinkCapturesModal(sheet)"
+                                    class="text-[10px] px-2 py-0.5 rounded bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-300 border border-violet-500/20 font-medium cursor-pointer"
+                                >
+                                    + Pilih Gambar
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Action Bar -->
                         <div class="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-2">
                             <Link
@@ -308,16 +796,32 @@ const getTypeColor = (type: string) => {
                                 class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-violet-50 dark:bg-violet-400/10 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-400/20 hover:bg-violet-100 dark:hover:bg-violet-400/20 transition-colors"
                             >
                                 <DraftingCompass class="w-3.5 h-3.5" />
-                                Buka CAD Editor
+                                <span>Buka CAD</span>
                             </Link>
 
                             <div class="flex items-center gap-1">
-                                <Link
-                                    :href="`/projects/${sheet.project_id}/booklet`"
-                                    title="Lihat Lembar Kerja & Booklet PDF"
-                                    class="p-2 rounded-xl text-amber-500 hover:text-amber-600 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-400/10 transition-colors"
+                                <button
+                                    type="button"
+                                    @click="openEditSheetModal(sheet)"
+                                    title="Pengaturan Lembar Kerja (Judul, Kategori, Unit, Skala)"
+                                    class="p-2 rounded-xl text-slate-400 hover:text-violet-600 dark:hover:text-violet-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
                                 >
-                                    <Sparkles class="w-4 h-4" />
+                                    <Settings class="w-4 h-4" />
+                                </button>
+                                <Link
+                                    :href="`/projects/${sheet.project_id}/booklet?sheet_id=${sheet.id}`"
+                                    title="Lihat Lembar Kerja & Booklet PDF"
+                                    class="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-colors flex items-center gap-1"
+                                >
+                                    <BookOpen class="w-3.5 h-3.5" />
+                                    <span>Booklet</span>
+                                </Link>
+                                <Link
+                                    :href="`/projects/${sheet.project_id}/viewer?sheet_id=${sheet.id}`"
+                                    title="Buka Model 3D di Viewer (Fokus ke Lembar Ini)"
+                                    class="p-2 rounded-xl text-slate-500 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                                >
+                                    <Box class="w-4 h-4" />
                                 </Link>
                                 <a
                                     :href="`/drawings/${sheet.id}/export-dxf`"
@@ -331,13 +835,15 @@ const getTypeColor = (type: string) => {
                                     title="Hapus Lembar Kerja"
                                     class="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
                                 >
-                                    <Trash2 class="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+
+
 
             <!-- Empty State -->
             <div
@@ -388,13 +894,39 @@ const getTypeColor = (type: string) => {
                         <select
                             v-model="form.project_id"
                             required
-                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white font-medium"
                         >
-                            <option v-for="p in projects" :key="p.id" :value="p.id">
+                            <option v-for="p in projects" :key="p.id" :value="p.id" class="bg-slate-900 text-white">
                                 {{ p.title }}
                             </option>
                         </select>
                         <p v-if="form.errors.project_id" class="text-xs text-red-500 mt-1">{{ form.errors.project_id }}</p>
+                    </div>
+
+                    <!-- Client Information (Name & Address) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/5">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                                Nama Klien
+                            </label>
+                            <input
+                                v-model="form.client_name"
+                                type="text"
+                                placeholder="Contoh: Bpk. Hendra, Mr. Jerry"
+                                class="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                                Alamat Proyek / Klien
+                            </label>
+                            <input
+                                v-model="form.client_address"
+                                type="text"
+                                placeholder="Contoh: Jl. Sentot Prawirodirdjo, Jember"
+                                class="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                            />
+                        </div>
                     </div>
 
                     <!-- Title -->
@@ -447,11 +979,11 @@ const getTypeColor = (type: string) => {
                             </label>
                             <select
                                 v-model="form.scale"
-                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white font-mono"
                             >
-                                <option value="1:50">1:50 (Detail)</option>
-                                <option value="1:100">1:100 (Standar)</option>
-                                <option value="1:200">1:200 (Site Plan)</option>
+                                <option value="1:50" class="bg-slate-900 text-white">1:50 (Detail)</option>
+                                <option value="1:100" class="bg-slate-900 text-white">1:100 (Standar)</option>
+                                <option value="1:200" class="bg-slate-900 text-white">1:200 (Site Plan)</option>
                             </select>
                         </div>
 
@@ -461,12 +993,12 @@ const getTypeColor = (type: string) => {
                             </label>
                             <select
                                 v-model="form.paper_size"
-                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white font-mono"
                             >
-                                <option value="A1">A1 (841 x 594 mm)</option>
-                                <option value="A2">A2 (594 x 420 mm)</option>
-                                <option value="A3">A3 (420 x 297 mm)</option>
-                                <option value="A4">A4 (297 x 210 mm)</option>
+                                <option value="A1" class="bg-slate-900 text-white">A1 (841 x 594 mm)</option>
+                                <option value="A2" class="bg-slate-900 text-white">A2 (594 x 420 mm)</option>
+                                <option value="A3" class="bg-slate-900 text-white">A3 (420 x 297 mm)</option>
+                                <option value="A4" class="bg-slate-900 text-white">A4 (297 x 210 mm)</option>
                             </select>
                         </div>
                     </div>
@@ -479,10 +1011,10 @@ const getTypeColor = (type: string) => {
                             </label>
                             <select
                                 v-model="form.orientation"
-                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white font-mono"
                             >
-                                <option value="landscape">Landscape</option>
-                                <option value="portrait">Portrait</option>
+                                <option value="landscape" class="bg-slate-900 text-white">Landscape</option>
+                                <option value="portrait" class="bg-slate-900 text-white">Portrait</option>
                             </select>
                         </div>
 
@@ -492,11 +1024,11 @@ const getTypeColor = (type: string) => {
                             </label>
                             <select
                                 v-model="form.unit"
-                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-amber-400 font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
                             >
-                                <option value="m">Meter (m)</option>
-                                <option value="cm">Sentimeter (cm)</option>
-                                <option value="mm">Milimeter (mm)</option>
+                                <option value="m" class="bg-slate-900 text-white">Meter (m)</option>
+                                <option value="cm" class="bg-slate-900 text-white">Sentimeter (cm)</option>
+                                <option value="mm" class="bg-slate-900 text-white">Milimeter (mm)</option>
                             </select>
                         </div>
                     </div>
@@ -520,6 +1052,285 @@ const getTypeColor = (type: string) => {
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- MODAL EDIT PENGATURAN LEMBAR KERJA -->
+        <div
+            v-if="showEditModal && editingSheet"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        >
+            <div class="w-full max-w-lg bg-white dark:bg-[#12131a] rounded-3xl border border-slate-200 dark:border-white/10 p-6 shadow-2xl">
+                <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-white/10">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <Settings class="w-4 h-4 text-violet-500" />
+                            Pengaturan Lembar Kerja CAD
+                        </h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Proyek: {{ editingSheet.project?.title || 'Proyek' }}
+                        </p>
+                    </div>
+                    <button
+                        @click="showEditModal = false; editingSheet = null"
+                        class="p-1 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                    >
+                        <X class="w-5 h-5" />
+                    </button>
+                </div>
+
+                <form @submit.prevent="submitEditSheet" class="mt-4 space-y-4">
+                    <!-- Project Selection in Edit Modal -->
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                            Pilih Proyek
+                        </label>
+                        <select
+                            v-model="editForm.project_id"
+                            required
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white font-medium"
+                        >
+                            <option v-for="p in projects" :key="p.id" :value="p.id" class="bg-slate-900 text-white">
+                                {{ p.title }}
+                            </option>
+                        </select>
+                        <p v-if="editForm.errors.project_id" class="text-xs text-red-500 mt-1">{{ editForm.errors.project_id }}</p>
+                    </div>
+
+                    <!-- Client Information (Name & Address) in Edit Modal -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/5">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                                Nama Klien
+                            </label>
+                            <input
+                                v-model="editForm.client_name"
+                                type="text"
+                                placeholder="Contoh: Bpk. Hendra, Mr. Jerry"
+                                class="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                                Alamat Proyek / Klien
+                            </label>
+                            <input
+                                v-model="editForm.client_address"
+                                type="text"
+                                placeholder="Contoh: Jl. Sentot Prawirodirdjo, Jember"
+                                class="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                            Judul Lembar Kerja
+                        </label>
+                        <input
+                            v-model="editForm.title"
+                            type="text"
+                            required
+                            placeholder="Contoh: DENAH LANTAI 1"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                        />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                                Kategori Gambar
+                            </label>
+                            <select
+                                v-model="editForm.type"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                            >
+                                <option value="plan" class="bg-slate-900 text-white">Denah (Floor Plan)</option>
+                                <option value="elevation" class="bg-slate-900 text-white">Tampak (Elevation)</option>
+                                <option value="section" class="bg-slate-900 text-white">Potongan (Section)</option>
+                            </select>
+                            <span class="text-[10px] text-slate-400 mt-1 block">Denah otomatis menjadi acuan Booklet</span>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                                Satuan Ukuran (Unit)
+                            </label>
+                            <select
+                                v-model="editForm.unit"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-amber-500/30 text-sm text-amber-400 font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                            >
+                                <option value="m" class="bg-slate-900 text-white">Meter (m) - Standar Arsitek</option>
+                                <option value="cm" class="bg-slate-900 text-white">Sentimeter (cm) - Standar Sipil</option>
+                                <option value="mm" class="bg-slate-900 text-white">Milimeter (mm) - Detail Teknis</option>
+                            </select>
+                            <span class="text-[10px] text-amber-500/80 mt-1 block">Satuan penggaris pengukur</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                                Skala Gambar
+                            </label>
+                            <select
+                                v-model="editForm.scale"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 font-mono cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                            >
+                                <option value="1:20" class="bg-slate-900 text-white">1:20 (Detail Khusus)</option>
+                                <option value="1:50" class="bg-slate-900 text-white">1:50 (Detail Ruang)</option>
+                                <option value="1:100" class="bg-slate-900 text-white">1:100 (Standar Denah)</option>
+                                <option value="1:200" class="bg-slate-900 text-white">1:200 (Site Plan)</option>
+                                <option value="1:500" class="bg-slate-900 text-white">1:500 (Master Plan)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                                Ukuran Kertas
+                            </label>
+                            <select
+                                v-model="editForm.paper_size"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 font-mono cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                            >
+                                <option value="A4" class="bg-slate-900 text-white">A4 (297 × 210 mm)</option>
+                                <option value="A3" class="bg-slate-900 text-white">A3 (420 × 297 mm)</option>
+                                <option value="A2" class="bg-slate-900 text-white">A2 (594 × 420 mm)</option>
+                                <option value="A1" class="bg-slate-900 text-white">A1 (841 × 594 mm)</option>
+                                <option value="A0" class="bg-slate-900 text-white">A0 (1189 × 841 mm)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-between">
+                        <span class="text-xs text-slate-400">Data otomatis tersimpan ke server</span>
+                        <div class="flex items-center gap-2">
+                            <button
+                                type="button"
+                                @click="showEditModal = false; editingSheet = null"
+                                class="px-4 py-2.5 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="editForm.processing"
+                                class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 transition-all cursor-pointer shadow-md shadow-violet-600/20"
+                            >
+                                <span v-if="editForm.processing">Menyimpan...</span>
+                                <span v-else>Simpan Perubahan</span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- MODAL HUBUNGKAN GAMBAR 3D KE LEMBAR KERJA -->
+        <div
+            v-if="showLinkCapturesModal && selectedSheetForLinking"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+        >
+            <div class="w-full max-w-2xl bg-white dark:bg-[#12131a] rounded-3xl border border-slate-200 dark:border-white/10 p-6 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+                <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-white/10 shrink-0">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <Camera class="w-4 h-4 text-amber-500" />
+                            Hubungkan Visual 3D ke Lembar Kerja
+                        </h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Lembar: <strong class="text-violet-600 dark:text-violet-400">{{ selectedSheetForLinking.title }}</strong> ({{ selectedSheetForLinking.project?.title }})
+                        </p>
+                    </div>
+                    <button
+                        @click="showLinkCapturesModal = false; selectedSheetForLinking = null"
+                        class="p-1 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                    >
+                        <X class="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div class="py-3 text-xs text-slate-500 dark:text-slate-400 shrink-0">
+                    Pilih gambar hasil ambil 3D yang mewakili atau berkaitan dengan lembar kerja ini. Gambar yang dipilih akan otomatis terkoneksi ke denah dan booklet PDF.
+                </div>
+
+                <!-- Daftar Galeri Gambar 3D Proyek -->
+                <div class="flex-1 overflow-y-auto space-y-3 pr-1 py-1">
+                    <div
+                        v-if="availableCapturesForSelectedSheet.length === 0"
+                        class="p-8 text-center text-xs text-slate-400 bg-slate-50 dark:bg-white/[0.02] rounded-2xl border border-dashed border-slate-200 dark:border-white/10"
+                    >
+                        Belum ada gambar yang diambil dari 3D Viewer untuk proyek ini.
+                    </div>
+                    <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div
+                            v-for="cap in availableCapturesForSelectedSheet"
+                            :key="cap.id"
+                            @click="toggleCaptureSelection(cap.id)"
+                            :class="[
+                                'relative rounded-2xl border p-2 cursor-pointer transition-all flex flex-col justify-between overflow-hidden group',
+                                selectedCaptureIds.includes(cap.id)
+                                    ? 'bg-amber-500/10 border-amber-500/50 shadow-md ring-2 ring-amber-500/30'
+                                    : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                            ]"
+                        >
+                            <!-- Thumbnail Gambar -->
+                            <div class="aspect-video w-full rounded-xl overflow-hidden bg-black/40 relative mb-2">
+                                <img
+                                    :src="cap.ai_rendered_url || cap.url"
+                                    :alt="cap.room_name"
+                                    class="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                />
+                                <span
+                                    v-if="selectedCaptureIds.includes(cap.id)"
+                                    class="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-amber-500 text-black flex items-center justify-center font-bold text-xs shadow-md"
+                                >
+                                    ✓
+                                </span>
+                                <span v-if="cap.code" class="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/80 font-mono text-[9px] font-bold text-amber-300">
+                                    {{ cap.code }}
+                                </span>
+                            </div>
+
+                            <div>
+                                <div class="font-semibold text-xs text-slate-800 dark:text-white truncate" :title="cap.room_name">
+                                    {{ cap.room_name }}
+                                </div>
+                                <div class="text-[10px] text-slate-400 font-mono mt-0.5 flex items-center justify-between">
+                                    <span>{{ cap.captured_hour || '12:00' }}</span>
+                                    <span v-if="cap.drawing_sheet_id && cap.drawing_sheet_id !== selectedSheetForLinking.id" class="text-orange-400 text-[9px]">
+                                        (Pindah Tautan)
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Modal -->
+                <div class="pt-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-between shrink-0">
+                    <span class="text-xs text-slate-500 dark:text-slate-400">
+                        {{ selectedCaptureIds.length }} gambar 3D dipilih
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            @click="showLinkCapturesModal = false; selectedSheetForLinking = null"
+                            class="px-4 py-2.5 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            type="button"
+                            @click="saveLinkedCaptures"
+                            :disabled="isSavingLinkedCaptures"
+                            class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 disabled:opacity-50 transition-all cursor-pointer shadow-md shadow-amber-600/20 flex items-center gap-1.5"
+                        >
+                            <Loader2 v-if="isSavingLinkedCaptures" class="w-3.5 h-3.5 animate-spin" />
+                            <span>{{ isSavingLinkedCaptures ? 'Menyimpan...' : 'Simpan Koneksi 3D' }}</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

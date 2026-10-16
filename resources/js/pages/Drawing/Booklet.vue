@@ -36,11 +36,15 @@ interface ProjectData {
     title: string;
     slug?: string;
     description?: string;
+    client_name?: string;
+    client_address?: string;
     user?: ProjectUser;
 }
 
+
 interface ProjectCapture {
     id: string;
+    code?: string;
     project_id: string;
     drawing_sheet_id?: string;
     room_element_id?: string;
@@ -95,9 +99,18 @@ interface RabDocument {
     items?: RabItem[];
 }
 
+interface PlanSheetSummary {
+    id: string;
+    title: string;
+    scale?: string;
+    unit?: string;
+    type: string;
+}
+
 const props = defineProps<{
     project: ProjectData;
     planSheet?: DrawingSheet | null;
+    planSheets?: PlanSheetSummary[];
     captures: ProjectCapture[];
     rabDocuments: RabDocument[];
     isOwner: boolean;
@@ -111,17 +124,57 @@ const props = defineProps<{
     };
 }>();
 
+const currentSelectedSheetId = ref(props.planSheet?.id || (props.planSheets?.[0]?.id ?? ''));
+
+function handlePlanSheetChange(e: Event) {
+    const target = e.target as HTMLSelectElement;
+    if (!target) return;
+    const newId = target.value;
+    currentSelectedSheetId.value = newId;
+    router.visit(`/projects/${props.project.id}/booklet?sheet_id=${newId}`, {
+        preserveState: false,
+    });
+}
+
 // Pengaturan Tampilan Lembar Kerja
 const paperSize = ref<'A3' | 'A4'>('A3');
 const preferAiRender = ref(true);
 const includeRabAppendix = ref(false);
 
 // State Title Block (Kop Gambar) Dinamis
-const clientName = ref('Mr. Client');
-const clientAddress = ref(props.project.description || 'Lokasi Proyek');
-const documentDate = ref(new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }));
+const clientName = ref(props.project.client_name || 'Mr. Jerry');
+const clientAddress = ref(props.project.client_address || props.project.description || 'JL. Sentot Prawirodirdjo, Kaliwates, Jember');
+const documentDate = ref('September 15, 2026');
 const drawnBy = ref(props.architect.name || 'FADIL');
 const sheetNote = ref('');
+const isEditingKop = ref(false);
+const isSavingKop = ref(false);
+
+async function saveKopInfo() {
+    isSavingKop.value = true;
+    try {
+        await fetch(`/projects/${props.project.id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({
+                client_name: clientName.value,
+                client_address: clientAddress.value,
+            }),
+        });
+    } catch (err) {
+        console.error('Failed to save kop info:', err);
+    } finally {
+        isSavingKop.value = false;
+        isEditingKop.value = false;
+    }
+}
+
+
 
 // State Upload AI Render
 const isUploadingAi = ref<string | null>(null);
@@ -132,9 +185,14 @@ const activeUploadCaptureId = ref<string | null>(null);
 const isGeneratingRab = ref(false);
 const rabMessage = ref('');
 
+// Pilihan Gambar Cover Booklet (Dapat dipilih arsitek atau auto)
+const selectedCoverCaptureId = ref<string>('auto');
+
 // Filter & susun halaman lembar kerja
 const exteriorCaptures = computed(() => {
     return props.captures.filter(c => {
+        const code = (c.code || '').toUpperCase();
+        if (code.startsWith('EXT')) return true;
         const name = (c.room_name || '').toUpperCase();
         return name.includes('TAMPAK') || name.includes('DEPAN') || name.includes('FASAD') || name.includes('EKSTERIOR');
     });
@@ -142,20 +200,35 @@ const exteriorCaptures = computed(() => {
 
 const interiorCaptures = computed(() => {
     return props.captures.filter(c => {
+        const code = (c.code || '').toUpperCase();
+        if (code.startsWith('EXT')) return false;
         const name = (c.room_name || '').toUpperCase();
         return !name.includes('TAMPAK') && !name.includes('DEPAN') && !name.includes('FASAD') && !name.includes('EKSTERIOR');
     });
 });
 
-// Gambar yang dipilih untuk Cover (prioritaskan eksterior, atau capture pertama)
-const coverImage = computed(() => {
+// Capture yang dipilih untuk Cover
+const selectedCoverCapture = computed(() => {
+    if (selectedCoverCaptureId.value !== 'auto') {
+        const found = props.captures.find(c => c.id === selectedCoverCaptureId.value);
+        if (found) return found;
+    }
+    // Default otomatis: prioritaskan eksterior, lalu capture pertama
     if (exteriorCaptures.value.length > 0) {
-        const c = exteriorCaptures.value[0];
-        return (preferAiRender.value && c.ai_rendered_url) ? c.ai_rendered_url : c.url;
+        return exteriorCaptures.value[0];
     }
     if (props.captures.length > 0) {
-        const c = props.captures[0];
-        return (preferAiRender.value && c.ai_rendered_url) ? c.ai_rendered_url : c.url;
+        return props.captures[0];
+    }
+    return null;
+});
+
+// URL Gambar Cover aktif
+const coverImage = computed(() => {
+    if (selectedCoverCapture.value) {
+        return (preferAiRender.value && selectedCoverCapture.value.ai_rendered_url)
+            ? selectedCoverCapture.value.ai_rendered_url
+            : selectedCoverCapture.value.url;
     }
     return '/images/villa_orbit_360.jpg';
 });
@@ -337,6 +410,56 @@ async function handleGenerateRabFromWorksheet() {
 
             <!-- Action Controls -->
             <div class="flex items-center flex-wrap gap-2.5">
+                <!-- Pilih Gambar Cover -->
+                <div class="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs">
+                    <span class="text-slate-400 font-medium shrink-0">Cover:</span>
+                    <select
+                        v-model="selectedCoverCaptureId"
+                        class="bg-transparent text-white text-xs font-semibold focus:outline-none cursor-pointer max-w-[140px] truncate"
+                        title="Pilih gambar yang dijadikan cover booklet"
+                    >
+                        <option value="auto" class="bg-neutral-900 text-white">Otomatis (Fasad / Eksterior)</option>
+                        <option
+                            v-for="cap in captures"
+                            :key="cap.id"
+                            :value="cap.id"
+                            class="bg-neutral-900 text-white"
+                        >
+                            {{ cap.code ? `[${cap.code}] ` : '' }}{{ cap.room_name }}
+                        </option>
+                    </select>
+                </div>
+
+                <!-- Selector Denah Acuan jika ada lebih dari 1 denah -->
+                <div v-if="planSheets && planSheets.length > 1" class="flex items-center gap-1.5 px-2 py-1 bg-slate-800/80 border border-slate-700 rounded-lg text-xs">
+                    <span class="text-slate-400 font-medium shrink-0">Denah:</span>
+                    <select
+                        :value="currentSelectedSheetId"
+                        @change="handlePlanSheetChange"
+                        class="bg-transparent text-amber-300 text-xs font-semibold focus:outline-none cursor-pointer max-w-[150px] truncate"
+                        title="Pilih denah yang ditampilkan di halaman master plan"
+                    >
+                        <option
+                            v-for="s in planSheets"
+                            :key="s.id"
+                            :value="s.id"
+                            class="bg-neutral-900 text-white"
+                        >
+                            {{ s.title }} ({{ s.scale || '1:100' }})
+                        </option>
+                    </select>
+                </div>
+
+                <!-- Edit Kop Gambar Dialog Trigger -->
+                <button
+                    @click="isEditingKop = true"
+                    class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition flex items-center gap-1.5"
+                    title="Ubah info Kop Gambar (Client, Tanggal, Drafter)"
+                >
+                    <FileText class="w-3.5 h-3.5 text-orange-400" />
+                    <span>Kop Info</span>
+                </button>
+
                 <!-- Toggle AI Render vs 3D Asli -->
                 <button
                     @click="preferAiRender = !preferAiRender"
@@ -389,6 +512,56 @@ async function handleGenerateRabFromWorksheet() {
             </div>
         </header>
 
+        <!-- Modal Edit Kop Gambar -->
+        <div v-if="isEditingKop" class="no-print fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <FileText class="w-4 h-4 text-orange-500" />
+                        Kustomisasi Kop Gambar (Title Block)
+                    </h3>
+                    <button @click="isEditingKop = false" class="text-slate-400 hover:text-white">
+                        <X class="w-5 h-5" />
+                    </button>
+                </div>
+                <div class="space-y-3 text-xs">
+                    <div>
+                        <label class="block text-slate-400 font-mono mb-1">CLIENT NAME</label>
+                        <input v-model="clientName" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500" />
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-mono mb-1">CLIENT ADDRESS / LOCATION</label>
+                        <input v-model="clientAddress" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500" />
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-mono mb-1">DATE</label>
+                        <input v-model="documentDate" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500" />
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-mono mb-1">DRAWN BY</label>
+                        <input v-model="drawnBy" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500" />
+                    </div>
+                </div>
+                <div class="pt-3 flex items-center justify-between border-t border-slate-800">
+                    <span class="text-[11px] text-slate-400">Data akan tersimpan permanen pada proyek</span>
+                    <div class="flex items-center gap-2">
+                        <button @click="isEditingKop = false" class="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:text-white text-xs">
+                            Batal
+                        </button>
+                        <button
+                            @click="saveKopInfo"
+                            :disabled="isSavingKop"
+                            class="px-4 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                            <span>{{ isSavingKop ? 'Menyimpan...' : 'Simpan ke Proyek' }}</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+
         <!-- BOOKLET PAGES CONTAINER (Printable Area) -->
         <main class="flex-1 w-full flex flex-col items-center py-6 px-4 sm:px-6 space-y-10 print:p-0 print:m-0 print:space-y-0">
             
@@ -406,6 +579,26 @@ async function handleGenerateRabFromWorksheet() {
                     class="absolute inset-0 w-full h-full object-cover opacity-90"
                 />
                 <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
+
+                <!-- Floating Switch Cover di Halaman 1 Preview (Hidden saat print) -->
+                <div class="no-print absolute top-6 right-6 z-20 flex items-center gap-2 bg-black/75 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/20 text-xs shadow-lg">
+                    <ImageIcon class="w-4 h-4 text-orange-400" />
+                    <span class="text-neutral-300 font-medium">Gambar Cover:</span>
+                    <select
+                        v-model="selectedCoverCaptureId"
+                        class="bg-transparent text-white font-semibold focus:outline-none cursor-pointer"
+                    >
+                        <option value="auto" class="bg-neutral-900 text-white">Otomatis (Fasad / Eksterior)</option>
+                        <option
+                            v-for="cap in captures"
+                            :key="cap.id"
+                            :value="cap.id"
+                            class="bg-neutral-900 text-white"
+                        >
+                            {{ cap.code ? `[${cap.code}] ` : '' }}{{ cap.room_name }} ({{ cap.captured_hour }})
+                        </option>
+                    </select>
+                </div>
 
                 <!-- Header / Title Atas -->
                 <div class="relative z-10 p-8 sm:p-12 flex justify-between items-start">
@@ -556,10 +749,15 @@ async function handleGenerateRabFromWorksheet() {
 
                         <!-- Judul Bawah -->
                         <div class="pt-4">
-                            <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight uppercase">
-                                {{ ext.room_name || 'TAMPAK DEPAN' }}
-                            </h2>
-                            <p class="text-xs text-slate-500 font-mono">
+                            <div class="flex items-center gap-2">
+                                <span v-if="ext.code" class="px-2 py-0.5 rounded bg-orange-600 text-white font-mono text-xs font-bold shadow-sm">
+                                    {{ ext.code }}
+                                </span>
+                                <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight uppercase">
+                                    {{ ext.room_name || 'TAMPAK DEPAN' }}
+                                </h2>
+                            </div>
+                            <p class="text-xs text-slate-500 font-mono mt-0.5">
                                 PERSPEKTIF EKSTERIOR • JAM {{ ext.captured_hour }}
                             </p>
                         </div>
@@ -663,9 +861,14 @@ async function handleGenerateRabFromWorksheet() {
                         <div class="h-[30%] w-full pt-4 flex items-end justify-between gap-4">
                             <!-- Sisi Kiri Bawah: Nama Ruangan Kapital Tebal & Catatan -->
                             <div class="flex-1 pr-4">
-                                <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight uppercase">
-                                    {{ room.room_name }}
-                                </h2>
+                                <div class="flex items-center gap-2">
+                                    <span v-if="room.code" class="px-2 py-0.5 rounded bg-orange-600 text-white font-mono text-xs font-bold shadow-sm">
+                                        {{ room.code }}
+                                    </span>
+                                    <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight uppercase">
+                                        {{ room.room_name }}
+                                    </h2>
+                                </div>
                                 <p class="text-xs text-slate-500 font-mono mt-0.5">
                                     INTERIOR PERSPECTIVE • JAM {{ room.captured_hour }}
                                 </p>
@@ -682,6 +885,8 @@ async function handleGenerateRabFromWorksheet() {
                                 <KeyPlanCanvas
                                     :elements="planSheet?.elements || []"
                                     :activeRoomName="room.room_name"
+                                    :activeElementId="room.room_element_id"
+                                    :activeCode="room.code"
                                     width="100%"
                                     height="100%"
                                 />

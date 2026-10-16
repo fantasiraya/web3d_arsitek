@@ -69,9 +69,34 @@ class ViewerController extends Controller
 
         $rabDocuments = $rabQuery->latest()->get();
 
-        $planSheet = \App\Domains\Drawing\Models\DrawingSheet::where('project_id', $project->id)
-            ->where('type', 'plan')
-            ->first();
+        $selectedSheetId = $request->query('sheet_id');
+
+        $activeSheet = null;
+        if ($selectedSheetId) {
+            $sheet = \App\Domains\Drawing\Models\DrawingSheet::where('project_id', $project->id)
+                ->where('id', $selectedSheetId)
+                ->first();
+            if ($sheet) {
+                $activeSheet = [
+                    'id'    => $sheet->id,
+                    'title' => $sheet->title,
+                    'type'  => $sheet->type,
+                ];
+            }
+        }
+
+        // Plan sheet untuk referensi nama ruangan di form capture
+        $planSheet = null;
+        if ($selectedSheetId && $activeSheet) {
+            $planSheet = \App\Domains\Drawing\Models\DrawingSheet::find($selectedSheetId);
+        } else {
+            $planSheet = \App\Domains\Drawing\Models\DrawingSheet::where('project_id', $project->id)
+                ->where('type', 'plan')
+                ->where('title', 'like', '%DENAH%')
+                ->first() ?? \App\Domains\Drawing\Models\DrawingSheet::where('project_id', $project->id)
+                ->where('type', 'plan')
+                ->first();
+        }
 
         $drawingRooms = [];
         if ($planSheet) {
@@ -97,6 +122,7 @@ class ViewerController extends Controller
             'rabDocuments' => $rabDocuments,
             'drawingRooms' => $drawingRooms,
             'planSheetId'  => $planSheet?->id,
+            'activeSheet'  => $activeSheet,
             'isOwner'      => $isOwner,
         ]);
     }

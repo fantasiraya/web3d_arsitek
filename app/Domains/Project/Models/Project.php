@@ -44,6 +44,8 @@ class Project extends Model
         'title',
         'slug',
         'description',
+        'client_name',
+        'client_address',
         'file_path',
         'file_size_bytes',
         'is_draco_compressed',
@@ -178,6 +180,17 @@ class Project extends Model
     {
         return $this->hasMany(ProjectCameraPreset::class, 'project_id')->orderBy('sort_order', 'asc');
     }
+
+    /**
+     * Drawing sheets belonging to this project.
+     *
+     * @return HasMany<\App\Domains\Drawing\Models\DrawingSheet, $this>
+     */
+    public function drawingSheets(): HasMany
+    {
+        return $this->hasMany(\App\Domains\Drawing\Models\DrawingSheet::class, 'project_id')->orderBy('sort_order', 'asc');
+    }
+
 
     /**
      * Check if project revision limit has been reached or exceeded.

@@ -24,8 +24,10 @@ class CreateDrawingSheetRequest extends FormRequest
             'orientation'  => ['nullable', 'string', Rule::in(['landscape', 'portrait'])],
             'width'        => ['nullable', 'integer', 'min:100', 'max:20000'],
             'height'       => ['nullable', 'integer', 'min:100', 'max:20000'],
-            'grid_spacing' => ['nullable', 'integer', 'min:5', 'max:200'],
-            'unit'         => ['nullable', 'string', 'max:10'],
+            'grid_spacing'   => ['nullable', 'integer', 'min:5', 'max:200'],
+            'unit'           => ['nullable', 'string', 'max:10'],
+            'client_name'    => ['nullable', 'string', 'max:255'],
+            'client_address' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

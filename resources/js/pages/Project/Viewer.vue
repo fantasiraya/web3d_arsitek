@@ -14,14 +14,33 @@
 
                 <div class="h-4 w-px bg-white/10 hidden sm:block"></div>
 
-                <div class="flex items-center gap-2">
-                    <span class="text-sm font-semibold tracking-tight text-white line-clamp-1">{{ project.title || 'PitchArch Viewer' }}</span>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-sm font-semibold tracking-tight text-white break-words">{{ project.title || 'PitchArch Viewer' }}</span>
                     <span class="rounded bg-rose-500/20 border border-rose-500/30 px-2 py-0.5 text-[10px] font-mono text-rose-300 hidden sm:inline">
                         3D VIEWER
                     </span>
                     <span v-if="isAdminViewer" class="rounded bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-[10px] font-mono text-amber-300 hidden sm:inline">
                         ADMIN READ-ONLY
                     </span>
+                    <div v-if="activeSheet" class="hidden md:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                        <span class="text-neutral-400 text-[11px]">Lembar 2D:</span>
+                        <strong class="font-bold break-words">{{ activeSheet.title }}</strong>
+                        <a
+                            :href="`/drawings/${activeSheet.id}`"
+                            class="ml-1 px-1.5 py-0.5 rounded bg-violet-600 hover:bg-violet-500 text-white text-[10px] font-semibold transition"
+                            title="Buka Lembar Kerja CAD 2D"
+                        >
+                            CAD 2D
+                        </a>
+                        <Link
+                            :href="`/projects/${project.id}/viewer`"
+                            class="text-neutral-400 hover:text-white text-[10px] ml-0.5"
+                            title="Lepas fokus lembar kerja"
+                        >
+                            ✕
+                        </Link>
+                    </div>
                 </div>
             </div>
 
@@ -2205,6 +2224,40 @@
                         </span>
                     </div>
 
+                    <!-- Tab Filter Khusus Lembar Kerja ini vs Semua -->
+                    <div v-if="activeSheet" class="px-3 pt-2.5 pb-1 flex items-center gap-1.5 shrink-0 bg-white/[0.02] border-b border-white/5">
+                        <button
+                            type="button"
+                            @click="gallerySheetOnlyFilter = true"
+                            :class="[
+                                'flex-1 py-1.5 px-2 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer',
+                                gallerySheetOnlyFilter
+                                    ? 'bg-amber-500 text-black shadow-sm font-bold'
+                                    : 'bg-white/5 text-neutral-300 hover:text-white'
+                            ]"
+                        >
+                            <span>📍 Khusus Lembar Ini</span>
+                            <span class="font-mono text-[9px] px-1.5 py-0.2 rounded" :class="gallerySheetOnlyFilter ? 'bg-black/30 text-black' : 'bg-white/10 text-neutral-300'">
+                                {{ captures.filter(c => c.drawing_sheet_id === activeSheet?.id).length }}
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            @click="gallerySheetOnlyFilter = false"
+                            :class="[
+                                'flex-1 py-1.5 px-2 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer',
+                                !gallerySheetOnlyFilter
+                                    ? 'bg-amber-500 text-black shadow-sm font-bold'
+                                    : 'bg-white/5 text-neutral-300 hover:text-white'
+                            ]"
+                        >
+                            <span>Semua Gambar</span>
+                            <span class="font-mono text-[9px] px-1.5 py-0.2 rounded" :class="!gallerySheetOnlyFilter ? 'bg-black/30 text-black' : 'bg-white/10 text-neutral-300'">
+                                {{ captures.length }}
+                            </span>
+                        </button>
+                    </div>
+
                     <!-- Filter Bar -->
                     <div class="p-3 border-b border-white/5 grid grid-cols-3 gap-1.5 shrink-0">
                         <select
@@ -3772,6 +3825,11 @@ const filteredCaptures = computed(() => {
         if (galleryHourFilter.value !== 'all' && c.captured_hour !== galleryHourFilter.value) {
             return false;
         }
+        if (gallerySheetOnlyFilter.value && activeSheet.value) {
+            if (c.drawing_sheet_id !== activeSheet.value.id) {
+                return false;
+            }
+        }
         return true;
     });
 });
@@ -4217,8 +4275,8 @@ async function saveCaptureToGallery() {
         image: capturePreviewDataUrl.value,
         code: captureCode.value || null,
         room_name: captureRoomName.value || 'Sudut Bebas',
-        drawing_sheet_id: matchedRoom?.drawing_sheet_id || null,
-        room_element_id: matchedRoom?.id || null,
+        drawing_sheet_id: activeSheet.value ? activeSheet.value.id : null,
+        room_element_id: activeSheet.value ? (matchedRoom?.id || null) : null,
         captured_hour: captureHour.value || '12:00',
         title: captureTitle.value || null,
         width: captureResolution.value === '1080p' ? 1920 : (renderer?.domElement.width ?? 1280),
@@ -4426,6 +4484,14 @@ const hasVisibleRab = computed(() => rabDocuments.value.length > 0);
 const showRabPanel  = ref(false);
 
 const drawingRooms = computed(() => (page.props.drawingRooms ?? []) as Array<{ id: string; drawing_sheet_id: string; name: string; raw_text: string }>);
+const activeSheet = computed(() => (page.props.activeSheet ?? null) as { id: string; title: string; type: string } | null);
+const gallerySheetOnlyFilter = ref(false);
+
+watch(activeSheet, (val) => {
+    if (val) {
+        gallerySheetOnlyFilter.value = true;
+    }
+}, { immediate: true });
 
 // Lerp target — sama polanya dengan framing model
 let presetLerpTarget: { pos: THREE.Vector3; tgt: THREE.Vector3 } | null = null;

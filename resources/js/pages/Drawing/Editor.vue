@@ -57,6 +57,7 @@ import {
     Camera,
     Search,
     X,
+    Settings,
 } from '@lucide/vue';
 
 interface SheetData {
@@ -492,6 +493,116 @@ const saveSuccess = ref(false);
 const isAutoSaving = ref(false);
 const selectedNodeId = ref<string | null>(null);
 const selectedElementData = ref<Record<string, any> | null>(null);
+
+// ── Sheet Configuration & Settings State ─────────────────────────────────────
+const currentSheet = ref<SheetData>({ ...props.sheet });
+const showSheetSettingsModal = ref(false);
+const isSavingSheetSettings = ref(false);
+const sheetForm = ref({
+    title: props.sheet.title,
+    type: props.sheet.type,
+    scale: props.sheet.scale || '1:100',
+    unit: props.sheet.unit || 'm',
+    paper_size: props.sheet.paper_size || 'A3',
+});
+
+function calculateDimensionText(data: Record<string, any>, unit: string = currentSheet.value.unit || 'm'): string {
+    const x1 = data.x1 ?? 0;
+    const y1 = data.y1 ?? 0;
+    const x2 = data.x2 ?? 100;
+    const y2 = data.y2 ?? 0;
+    const distPx = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+
+    if (unit === 'cm') {
+        const val = Math.round((distPx / gridSpacing.value) * 50);
+        return `${val} cm`;
+    } else if (unit === 'mm') {
+        const val = Math.round((distPx / gridSpacing.value) * 500);
+        return `${val} mm`;
+    } else {
+        const val = ((distPx / gridSpacing.value) * 0.5).toFixed(2);
+        return `${val} m`;
+    }
+}
+
+function getAutoDimensionPlaceholder(data: Record<string, any>): string {
+    return calculateDimensionText(data, currentSheet.value.unit);
+}
+
+function updateDimensionCustomText(newVal: string) {
+    if (!selectedNodeId.value || !selectedElementData.value) return;
+    selectedElementData.value.text = newVal;
+
+    const el = elementList.value.find((x) => x.id === selectedNodeId.value);
+    if (el) {
+        el.data = { ...el.data, text: newVal };
+    }
+
+    if (mainLayer) {
+        const node = mainLayer.findOne('#' + selectedNodeId.value) as Konva.Group;
+        if (node) {
+            const textNode = (node.findOne('.dimText') || node.findOne('Text')) as Konva.Text;
+            if (textNode) {
+                const autoVal = calculateDimensionText(selectedElementData.value, currentSheet.value.unit);
+                textNode.text(newVal && newVal.trim() !== '' ? newVal : autoVal);
+                mainLayer.batchDraw();
+            }
+        }
+    }
+    triggerAutoSaveDebounced();
+}
+
+function resetDimensionToAuto() {
+    updateDimensionCustomText('');
+}
+
+async function saveSheetSettings() {
+    if (!props.canEdit || isSavingSheetSettings.value) return;
+    isSavingSheetSettings.value = true;
+    try {
+        const response = await fetch(`/drawings/${props.sheet.id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+                title: sheetForm.value.title,
+                type: sheetForm.value.type,
+                scale: sheetForm.value.scale,
+                unit: sheetForm.value.unit,
+                paper_size: sheetForm.value.paper_size,
+            }),
+        });
+
+        if (response.ok) {
+            const oldUnit = currentSheet.value.unit;
+            currentSheet.value = {
+                ...currentSheet.value,
+                title: sheetForm.value.title,
+                type: sheetForm.value.type as any,
+                scale: sheetForm.value.scale,
+                unit: sheetForm.value.unit,
+                paper_size: sheetForm.value.paper_size,
+            };
+            showSheetSettingsModal.value = false;
+            toast.success('Pengaturan lembar kerja berhasil diperbarui.');
+
+            if (oldUnit !== sheetForm.value.unit) {
+                restoreFromState(elementList.value, true);
+            }
+        } else {
+            toast.error('Gagal memperbarui pengaturan lembar kerja.');
+        }
+    } catch (err) {
+        console.error('[Editor] Failed to update sheet settings:', err);
+        toast.error('Terjadi kesalahan jaringan.');
+    } finally {
+        isSavingSheetSettings.value = false;
+    }
+}
 
 // ── 3D Capture Reference Synchronization ─────────────────────────────────────
 const localProjectCaptures = ref<ProjectCaptureProp[]>([...(props.projectCaptures || [])]);
@@ -2449,8 +2560,10 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
             const y1 = data.y1 ?? 0;
             const x2 = data.x2 ?? 100;
             const y2 = data.y2 ?? 0;
-            const distPx = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-            const distMeters = ((distPx / gridSpacing.value) * 0.5).toFixed(2);
+            const autoText = calculateDimensionText(data, currentSheet.value.unit);
+            const displayText = (data.text !== undefined && data.text !== null && String(data.text).trim() !== '')
+                ? String(data.text)
+                : autoText;
 
             const dimColor = isCad ? '#facc15' : '#d97706';
             const line = new Konva.Line({
@@ -2469,9 +2582,10 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                 strokeWidth: 2,
             });
             const text = new Konva.Text({
-                x: (x1 + x2) / 2 - 20,
+                name: 'dimText',
+                x: (x1 + x2) / 2 - 25,
                 y: (y1 + y2) / 2 - 16,
-                text: `${distMeters} m`,
+                text: displayText,
                 fontSize: 11,
                 fontFamily: 'monospace',
                 fill: isCad ? '#fef08a' : '#b45309',
@@ -4305,9 +4419,19 @@ onUnmounted(() => {
                     </div>
 
                     <div class="flex items-center gap-2 min-w-0">
-                        <h2 class="text-xs sm:text-sm font-bold text-white tracking-tight truncate max-w-[150px] sm:max-w-xs">{{ sheet.title }}</h2>
-                        <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30 shrink-0">
-                            {{ sheet.type.toUpperCase() }}
+                        <h2 class="text-xs sm:text-sm font-bold text-white tracking-tight truncate max-w-[150px] sm:max-w-xs">{{ currentSheet.title }}</h2>
+                        <button
+                            v-if="canEdit"
+                            type="button"
+                            @click="showSheetSettingsModal = true"
+                            class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30 hover:bg-violet-500/40 transition flex items-center gap-1 cursor-pointer shrink-0"
+                            title="Klik untuk ubah Kategori / Skala / Unit"
+                        >
+                            <span>{{ currentSheet.type.toUpperCase() }}</span>
+                            <Settings class="w-2.5 h-2.5 text-violet-300" />
+                        </button>
+                        <span v-else class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30 shrink-0">
+                            {{ currentSheet.type.toUpperCase() }}
                         </span>
                         <span class="hidden md:inline-block text-[11px] text-slate-400 truncate max-w-[180px]">
                             • {{ project.title }}
@@ -4733,8 +4857,18 @@ onUnmounted(() => {
                             <Layers class="w-3.5 h-3.5" />
                             <span>Layer</span>
                         </button>
-                        <span class="text-[11px] font-mono text-slate-400 pl-2">
-                            Skala <strong class="text-slate-200">{{ sheet.scale }}</strong> • Unit <strong class="text-slate-200">{{ sheet.unit }}</strong>
+                        <button
+                            v-if="canEdit"
+                            type="button"
+                            @click="showSheetSettingsModal = true"
+                            class="text-[11px] font-mono text-slate-400 hover:text-white px-2 py-0.5 rounded-lg hover:bg-white/5 border border-transparent hover:border-white/10 transition flex items-center gap-1.5 cursor-pointer"
+                            title="Pengaturan Lembar Kerja (Skala, Unit, Kategori)"
+                        >
+                            <span>Skala <strong class="text-slate-200">{{ currentSheet.scale }}</strong> • Unit <strong class="text-amber-300">{{ currentSheet.unit }}</strong></span>
+                            <Settings class="w-3 h-3 text-slate-400" />
+                        </button>
+                        <span v-else class="text-[11px] font-mono text-slate-400 pl-2">
+                            Skala <strong class="text-slate-200">{{ currentSheet.scale }}</strong> • Unit <strong class="text-slate-200">{{ currentSheet.unit }}</strong>
                         </span>
                     </div>
                 </div>
@@ -5215,7 +5349,44 @@ onUnmounted(() => {
                         <div>💡 <strong>Ctrl + Klik</strong> objek lain untuk menambah/melepas dari blok.</div>
                         <div>✨ <strong>Tarik (drag)</strong> objek untuk menggeser semuanya bersamaan.</div>
                     </div>
-                    <div v-if="selectedElementData?.text" class="space-y-1 pt-1">
+                    <!-- Input Khusus Dimensi (AutoCAD Dimension Custom Text) -->
+                    <div v-if="selectedElementData?.type === 'dimension'" class="space-y-1.5 pt-2 border-t border-white/10">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-semibold text-amber-300 flex items-center gap-1.5">
+                                <Ruler class="w-3.5 h-3.5 text-amber-400" />
+                                Ukuran Penggaris (AutoCAD)
+                            </span>
+                            <span v-if="selectedElementData.text" class="text-[9px] font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
+                                Custom
+                            </span>
+                            <span v-else class="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                                Auto
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <input
+                                :value="selectedElementData.text || ''"
+                                @input="updateDimensionCustomText(($event.target as HTMLInputElement).value)"
+                                :placeholder="getAutoDimensionPlaceholder(selectedElementData)"
+                                class="flex-1 text-xs px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                            />
+                            <button
+                                v-if="selectedElementData.text"
+                                type="button"
+                                @click="resetDimensionToAuto"
+                                class="px-2 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
+                                title="Reset ke ukuran otomatis"
+                            >
+                                Reset
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-slate-400 leading-tight">
+                            Bisa diedit manual (misal: <code>4.00 m</code> atau <code>AS 1-2</code>). Kosongkan untuk kembali ke hitungan otomatis.
+                        </p>
+                    </div>
+
+                    <!-- Input Teks Label untuk Ruangan / Label Teks Umum -->
+                    <div v-else-if="selectedElementData?.type === 'room_label' || selectedElementData?.text" class="space-y-1 pt-1">
                         <span class="text-slate-400 block">Teks Label:</span>
                         <textarea
                             v-model="selectedElementData.text"
@@ -5497,8 +5668,28 @@ onUnmounted(() => {
 
             <!-- Status Info CAD (Kanan) -->
             <div class="hidden md:flex items-center gap-3 font-mono text-[11px] text-slate-400 shrink-0 pl-3">
-                <span>Unit: <strong class="text-slate-200">{{ sheet.unit }}</strong></span>
-                <span>Skala: <strong class="text-slate-200">{{ sheet.scale }}</strong></span>
+                <button
+                    v-if="canEdit"
+                    type="button"
+                    @click="showSheetSettingsModal = true"
+                    class="hover:text-amber-300 transition flex items-center gap-1 cursor-pointer"
+                    title="Ubah Satuan Unit (m, cm, mm)"
+                >
+                    <span>Unit: <strong class="text-amber-300 underline underline-offset-2">{{ currentSheet.unit }}</strong></span>
+                </button>
+                <span v-else>Unit: <strong class="text-slate-200">{{ currentSheet.unit }}</strong></span>
+
+                <button
+                    v-if="canEdit"
+                    type="button"
+                    @click="showSheetSettingsModal = true"
+                    class="hover:text-white transition flex items-center gap-1 cursor-pointer"
+                    title="Ubah Skala Lembar Kerja"
+                >
+                    <span>Skala: <strong class="text-slate-200 underline underline-offset-2">{{ currentSheet.scale }}</strong></span>
+                </button>
+                <span v-else>Skala: <strong class="text-slate-200">{{ currentSheet.scale }}</strong></span>
+
                 <span>Zoom: <strong class="text-violet-300">{{ Math.round(zoomLevel * 100) }}%</strong></span>
                 <span v-if="canvasMode === 'sheet'">Kertas: <strong class="text-emerald-400">{{ paperSize }}</strong></span>
                 <span v-else class="text-amber-400 font-semibold">Mode Model (∞)</span>
@@ -6083,6 +6274,117 @@ onUnmounted(() => {
                         <span>Ya, Hapus Kertas</span>
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <!-- MODAL PENGATURAN LEMBAR KERJA (SHEET SETTINGS) -->
+        <div v-if="showSheetSettingsModal" class="no-print fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-slate-950 border border-white/10 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
+                <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <Settings class="w-4 h-4 text-violet-400" />
+                        Pengaturan Lembar Kerja CAD
+                    </h3>
+                    <button
+                        type="button"
+                        @click="showSheetSettingsModal = false"
+                        class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+                    >
+                        <X class="w-4 h-4" />
+                    </button>
+                </div>
+
+                <form @submit.prevent="saveSheetSettings" class="space-y-4 text-xs">
+                    <div>
+                        <label class="block text-slate-300 font-mono mb-1 font-semibold">JUDUL LEMBAR KERJA</label>
+                        <input
+                            v-model="sheetForm.title"
+                            type="text"
+                            required
+                            placeholder="Contoh: DENAH LT. 1, TAMPAK DEPAN, POTONGAN A-A"
+                            class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-violet-500 font-medium"
+                        />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-300 font-mono mb-1 font-semibold">KATEGORI GAMBAR</label>
+                            <select
+                                v-model="sheetForm.type"
+                                class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                            >
+                                <option value="plan" class="bg-slate-900 text-white">Denah (Floor Plan)</option>
+                                <option value="elevation" class="bg-slate-900 text-white">Tampak (Elevation)</option>
+                                <option value="section" class="bg-slate-900 text-white">Potongan (Section)</option>
+                            </select>
+                            <span class="text-[10px] text-slate-400 mt-1 block">Kategori 'Denah' otomatis jadi master plan Booklet</span>
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-300 font-mono mb-1 font-semibold">SATUAN UKURAN (UNIT)</label>
+                            <select
+                                v-model="sheetForm.unit"
+                                class="w-full bg-slate-900 border border-amber-500/40 rounded-xl px-3 py-2 text-amber-300 font-bold focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                            >
+                                <option value="m" class="bg-slate-900 text-white">Meter (m) - Arsitektur</option>
+                                <option value="cm" class="bg-slate-900 text-white">Centimeter (cm) - Sipil</option>
+                                <option value="mm" class="bg-slate-900 text-white">Milimeter (mm) - Detail</option>
+                            </select>
+                            <span class="text-[10px] text-amber-400/80 mt-1 block">Satuan penggaris dimensi</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-300 font-mono mb-1 font-semibold">SKALA GAMBAR</label>
+                            <select
+                                v-model="sheetForm.scale"
+                                class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer font-mono [&>option]:bg-slate-900 [&>option]:text-white"
+                            >
+                                <option value="1:20" class="bg-slate-900 text-white">1:20 (Detail Khusus)</option>
+                                <option value="1:50" class="bg-slate-900 text-white">1:50 (Detail Ruang)</option>
+                                <option value="1:100" class="bg-slate-900 text-white">1:100 (Standar Denah)</option>
+                                <option value="1:200" class="bg-slate-900 text-white">1:200 (Siteplan)</option>
+                                <option value="1:500" class="bg-slate-900 text-white">1:500 (Masterplan)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-300 font-mono mb-1 font-semibold">UKURAN KERTAS</label>
+                            <select
+                                v-model="sheetForm.paper_size"
+                                class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer font-mono [&>option]:bg-slate-900 [&>option]:text-white"
+                            >
+                                <option value="A4" class="bg-slate-900 text-white">A4 (297 × 210 mm)</option>
+                                <option value="A3" class="bg-slate-900 text-white">A3 (420 × 297 mm)</option>
+                                <option value="A2" class="bg-slate-900 text-white">A2 (594 × 420 mm)</option>
+                                <option value="A1" class="bg-slate-900 text-white">A1 (841 × 594 mm)</option>
+                                <option value="A0" class="bg-slate-900 text-white">A0 (1189 × 841 mm)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="pt-3 flex items-center justify-between border-t border-white/10">
+                        <span class="text-[11px] text-slate-400">Tersimpan ke database lembar kerja</span>
+                        <div class="flex items-center gap-2">
+                            <button
+                                type="button"
+                                @click="showSheetSettingsModal = false"
+                                class="px-3.5 py-1.5 rounded-xl border border-white/10 text-slate-300 hover:text-white text-xs cursor-pointer hover:bg-white/5 transition-colors"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="isSavingSheetSettings"
+                                class="px-4 py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-lg shadow-violet-600/30 transition-all"
+                            >
+                                <Loader2 v-if="isSavingSheetSettings" class="w-3.5 h-3.5 animate-spin" />
+                                <span>{{ isSavingSheetSettings ? 'Menyimpan...' : 'Simpan Pengaturan' }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

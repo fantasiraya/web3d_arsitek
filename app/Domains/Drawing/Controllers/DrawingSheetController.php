@@ -12,6 +12,7 @@ use App\Domains\Drawing\Requests\UpdateDrawingSheetRequest;
 use App\Domains\Drawing\Services\DrawingAccessService;
 use App\Domains\Project\Models\Project;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -34,14 +35,25 @@ class DrawingSheetController extends Controller
 
         // Ambil project yang dimiliki atau diundang
         $projects = Project::where('user_id', $user->id)
-            ->select(['id', 'title'])
+            ->select(['id', 'title', 'client_name', 'client_address'])
             ->orderBy('created_at', 'desc')
             ->get();
 
         $selectedProjectId = $request->query('project_id');
 
-        $query = DrawingSheet::with(['project:id,title'])
+        $query = DrawingSheet::with([
+            'project:id,title,description,client_name,client_address',
+            'elements' => function ($q) {
+                $q->orderBy('sort_order');
+            },
+            'captures' => function ($q) {
+                $q->select(['id', 'project_id', 'drawing_sheet_id', 'room_element_id', 'code', 'room_name', 'captured_hour', 'file_path', 'ai_rendered_path', 'sort_order'])
+                  ->orderBy('sort_order')
+                  ->orderBy('created_at');
+            },
+        ])
             ->withCount('captures')
+
             ->where(function ($q) use ($user) {
                 $q->where('user_id', $user->id)
                   ->orWhereHas('project.invitedClients', function ($clientQ) use ($user) {
@@ -56,11 +68,47 @@ class DrawingSheetController extends Controller
 
         $sheets = $query->orderBy('updated_at', 'desc')->paginate(12)->withQueryString();
 
+        // Ambil semua visual 3D dari proyek-proyek yang relevan untuk modal penautan
+        $allProjectCaptures = \App\Domains\Project\Models\ProjectCapture::whereIn('project_id', $projects->pluck('id'))
+            ->select(['id', 'project_id', 'drawing_sheet_id', 'room_element_id', 'code', 'room_name', 'captured_hour', 'file_path', 'ai_rendered_path', 'sort_order'])
+            ->orderBy('sort_order')
+            ->orderBy('created_at')
+            ->get();
+
         return Inertia::render('Drawing/Index', [
-            'sheets'            => $sheets,
-            'projects'          => $projects,
-            'selectedProjectId' => $selectedProjectId,
-            'hasAccess'         => $hasAccess,
+            'sheets'             => $sheets,
+            'projects'           => $projects,
+            'allProjectCaptures' => $allProjectCaptures,
+            'selectedProjectId'  => $selectedProjectId,
+            'hasAccess'          => $hasAccess,
+        ]);
+    }
+
+    /**
+     * Tautkan atau lepas visual 3D (captures) ke lembar kerja 2D.
+     */
+    public function syncCaptures(Request $request, DrawingSheet $sheet): JsonResponse
+    {
+        $user = $request->user();
+        $this->accessService->authorizeEdit($user, $sheet->project);
+
+        $captureIds = $request->input('capture_ids', []);
+
+        // Lepas tautan captures yang sebelumnya terhubung ke sheet ini tapi tidak dipilih lagi
+        \App\Domains\Project\Models\ProjectCapture::where('drawing_sheet_id', $sheet->id)
+            ->whereNotIn('id', $captureIds)
+            ->update(['drawing_sheet_id' => null, 'room_element_id' => null]);
+
+        // Hubungkan captures yang dipilih ke sheet ini
+        if (! empty($captureIds)) {
+            \App\Domains\Project\Models\ProjectCapture::whereIn('id', $captureIds)
+                ->where('project_id', $sheet->project_id)
+                ->update(['drawing_sheet_id' => $sheet->id]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Visual 3D berhasil dihubungkan ke lembar kerja.',
         ]);
     }
 
@@ -127,10 +175,18 @@ class DrawingSheetController extends Controller
     /**
      * Update metadata lembar kerja (nama, tipe, skala, ukuran kertas).
      */
-    public function update(UpdateDrawingSheetRequest $request, DrawingSheet $sheet, UpdateDrawingSheetAction $action): RedirectResponse
+    public function update(UpdateDrawingSheetRequest $request, DrawingSheet $sheet, UpdateDrawingSheetAction $action): JsonResponse|RedirectResponse
     {
         $user = $request->user();
         $action->execute($user, $sheet, $request->validated());
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Konfigurasi lembar kerja berhasil diperbarui.',
+                'sheet'   => $sheet->fresh(),
+            ]);
+        }
 
         return back()->with('success', 'Konfigurasi lembar kerja berhasil diperbarui.');
     }

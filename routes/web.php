@@ -177,6 +177,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/drawings/{sheet}', [DrawingSheetController::class, 'update'])->name('drawings.update');
     Route::delete('/drawings/{sheet}', [DrawingSheetController::class, 'destroy'])->name('drawings.destroy');
     Route::post('/drawings/{sheet}/sync', [DrawingElementController::class, 'sync'])->name('drawings.sync');
+    Route::post('/drawings/{sheet}/sync-captures', [DrawingSheetController::class, 'syncCaptures'])->name('drawings.sync-captures');
     Route::get('/drawings/{sheet}/export-dxf', [DrawingSheetController::class, 'exportDxf'])->name('drawings.export-dxf');
     Route::match(['get', 'post'], '/drawings/{sheet}/export-svg', [DrawingSheetController::class, 'exportSvg'])->name('drawings.export-svg');
     Route::get('/projects/{project}/booklet', [\App\Domains\Drawing\Controllers\BookletController::class, 'show'])->name('projects.booklet');
