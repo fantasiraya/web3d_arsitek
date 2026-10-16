@@ -1,8 +1,9 @@
 # 🤖 System Prompt & AI Coding Instructions — PitchArch
 
 > **PENTING UNTUK AI:** Sebelum menulis atau memodifikasi kode apa pun di project ini, kamu WAJIB membaca dan mematuhi seluruh panduan yang ada di dalam folder `guide/`. Dilarang keras membuat asumsi, halusinasi arsitektur, atau mengubah konvensi tanpa persetujuan.
+> **v2.8:** Modul Drawing 2D (`Domains/Drawing`) telah diimplementasikan penuh (Section O: multi-paper canvas, Figma-style paper resize handles, AutoCAD model space, kop gambar auto-wrap, hotkeys lengkap, export PDF clean iframe, DXF, SVG, PNG, responsive header & HUD).
 >
-> **v2.7:** Ditambahkan Section N (Drawing 2D Rule — rencana), catatan AHSP di Section M, catatan Custom Properties Blender, dan catatan profil arsitek + wilayah.
+> **v2.7:** Ditambahkan Section N (Profil Arsitek & Wilayah), Section P (AI Vision Studio), dan Section Q (High Concurrency & Redis Performance).
 >
 > **v2.6:** Ditambahkan `Domains/Rab` dan Section M (RAB Rule).
 >
@@ -174,14 +175,39 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
 5. **HandleInertiaRequests:** share semua field profil baru ke frontend agar tersedia sebagai `$page.props.auth.user.*`.
 6. **Kop surat export:** `ExportRabAction` membaca `company_name`, `address`, `city_name`, `province_name`, `postal_code`, `phone` dari profil pemilik project — bukan dari nama personal (`users.name`).
 
-### O. Drawing 2D Rule *(Rencana v2.7 — Belum Diimplementasikan)*
-> Aturan ini hanya berlaku saat fitur Drawing 2D mulai diimplementasikan. Jangan mengimplementasikan kode apa pun dari section ini tanpa perintah eksplisit.
+### O. Drawing 2D Rule (`Domains/Drawing` — Fitur Enterprise)
+1. **Gating & Akses:** Fitur Lembar Kerja CAD 2D hanya dapat diakses oleh paket **Enterprise** (`plans.can_use_drawing = true`) dan role Super Admin. Verifikasi melalui `DrawingAccessService` dan SubscriptionLimitService. Klien berstatus `accepted` memiliki hak akses read-only jika diperbolehkan arsitek.
+2. **Domain & Data Modeling:** Seluruh backend drawing terisolasi di `Domains/Drawing`:
+   - Tabel `drawing_sheets` (UUID PK, `project_id`, `user_id`, `title`, `type`, `width`, `height`, `scale`, `sort_order`).
+   - Tabel `drawing_elements` (UUID PK, `sheet_id`, `element_type`, `properties` JSON, `layer`, `z_index`).
+   - Tipe sheet wajib enum: `plan` (denah), `elevation` (tampak), `section` (potongan).
+3. **Canvas Engine & Konva.js Architecture:**
+   - Gunakan `konva.js` (npm) untuk rendering kanvas vektor performa tinggi.
+   - Hirarki layer kanvas wajib: `paperBgLayer` (latar putih kertas) → `gridLayer` (grid garis mm/cm) → `paperLayer` (border kertas + Kop Gambar arsitek di sudut kanan bawah) → `mainLayer` (elemen CAD) → `tempLayer` (preview gambar / box selection) → `overlayLayer` (transform handles).
+   - Penempatan layer ini menjamin garis grid **tidak pernah** menabrak atau memotong teks di dalam Kop Gambar (Title Block).
+4. **Mode Lembar Kerja (Paper Space vs Model Space):**
+   - Mode default adalah **Frame Kertas (Paper Space)**: mendukung lembar kerja ISO (A0–A4 portrait/landscape) serta ukuran kustom.
+   - Mode alternatif adalah **AutoCAD Model Space (∞)**: kanvas gelap tanpa batas tanpa border kertas untuk perancangan layout bebas.
+5. **Multi-Paper Frame & Interaktivitas Figma-Style:**
+   - Multi-paper didukung pada satu kanvas (`+ Kertas ke Kanvas`). Tiap kertas memiliki tombol hapus mandiri di pojok kanvas.
+   - Interaktivitas resize tepi (kanan dan bawah) serta sudut (kanan bawah) menggunakan drag handle responsif tanpa merusak (destroy) Konva node selama proses `dragmove`.
+   - Ukuran kertas kustom wajib disimpan secara instan ke `localStorage` (`cad_paper_sizes_{sheet_id}`) dan disinkronkan secara atomik ke database via debounced/blur API call.
+6. **Kop Gambar (Title Block) Standar Arsitek:**
+   - Kop gambar wajib menempel di sudut kanan bawah kertas dengan margin aman.
+   - Teks judul proyek dan instansi wajib menggunakan auto word-wrap (`wrap: 'word'`) dengan tinggi baris adaptif agar teks panjang tidak pernah meluber keluar batas kotak.
+7. **Pintasan Keyboard (Hotkeys) Standar CAD:**
+   - `V`: Select, `H` / `Spasi`: Pan kanvas, `Z`: Zoom extents/pusatkan, `W`: Dinding tebal, `R`: Ruangan kotak, `L`: Garis bebas (Line), `D`: Pintu swing, `J`: Jendela, `C`: Kolom beton, `S`: Tangga 2D, `M`: Dimensi ukuran otomatis, `T`: Teks/Label ruang, `E`: Penghapus.
+   - `Ctrl+A`: Select All, `Ctrl+C`: Copy, `Ctrl+V`: Paste, `Ctrl+D`: Duplicate, `Ctrl+Z`: Undo, `Ctrl+Y` / `Ctrl+Shift+Z`: Redo, `Delete` / `Backspace`: Hapus objek, `Esc`: Batal/Deselect/Tutup menu.
+   - `Ctrl + Drag`: Clone drag langsung, `Ctrl + Klik`: Multi-seleksi.
+8. **Export & Print Architecture:**
+   - **DXF:** `ExportDxfAction` menghasilkan format AutoCAD ASCII compliant dengan layer terpisah (`WALLS`, `DOORS`, `WINDOWS`, `DIMENSIONS`, `TEXT`).
+   - **SVG & PNG:** Export vektor SVG via Konva data-URL dan raster PNG resolusi tinggi.
+   - **PDF & Cetak Bersih:** Export PDF standar kertas ISO (A4–A0) dan cetak browser dilakukan melalui isolasi iframe tersembunyi (`hidden print iframe`) dengan ukuran kertas target dan resolusi 2×/3× tanpa bleed atau kebocoran elemen UI editor.
+9. **Responsivitas Toolbar & HUD:**
+   - Header baris kedua (paper presets & quick actions) dilengkapi deteksi scroll overflow horizontal dan indikator visual pulsing ("Menu Lainnya ▶").
+   - Bottom HUD responsif dengan scroll cues kiri/kanan.
+   - Left sidebar CAD tools diberi batas bawah aman (`bottom-18 sm:bottom-20 z-30`) agar tidak pernah tumpang tindih dengan bottom HUD pada layar mobile, serta dilengkapi indikator scroll vertikal (`▲` / `▼`).
 
-1. **Gating:** hanya Enterprise — kolom `plans.can_use_drawing = true`. Cek via service yang setara dengan `RabAccessService`.
-2. **Domain baru:** `Domains/Drawing` — jangan menambahkan logika drawing ke domain lain.
-3. **Tipe sheet:** `plan` (denah), `elevation` (tampak), `section` (potongan) — wajib gunakan nilai enum ini.
-4. **Library:** `konva.js` (npm) untuk canvas editor 2D di frontend. `nzcreations/dxf` (composer) untuk export DXF. Jangan install library konva atau DXF alternatif lain.
-5. **Export:** DXF (kompatibel AutoCAD) dan SVG (via konva). Jangan export ke PDF dalam tahap ini.
 ### P. AI Vision Studio Rule (`Domains/VisionStudio`)
 1. **Gating Berbayar (Strict):** Fitur AI Vision Studio hanya boleh diakses oleh pengguna paket **Pro**, **Enterprise**, atau role **Super Admin**. Gunakan `SubscriptionLimitService::canAccessVisionStudio($user)` dan middleware `CheckVisionStudioAccess` (`vision.access`). Free tier wajib di-redirect ke `/plans` atau menerima error 403.
 2. **Penyimpanan Terpisah Penuh:** Galeri kreasi AI menggunakan tabel `vision_creations`. Dilarang menggabungkan media AI studio dengan `project_captures`. Tidak ada fitur "tampilkan ke klien" di studio ini.

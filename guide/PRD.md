@@ -1,10 +1,12 @@
-# 📄 Product Requirement Document (PRD) v2.9
+# 📄 Product Requirement Document (PRD) v2.10
 
+> **v2.10 Note:** Menambahkan detail implementasi penuh **Section 10 (Drawing 2D — Editor Denah, Tampak & Potongan)**. Update MoSCoW matrix: Drawing 2D (Konva.js CAD editor, Multi-Paper Frame Canvas, AutoCAD Model Space, Figma-style edge/corner drag resize, Kop Gambar auto-wrap, CAD hotkeys, Clean Print & PDF export via isolated iframe, DXF/SVG/PNG export) → ✅ Selesai.
+>
 > **v2.9 Note:** Menambahkan **Section 12 (AI Vision Studio)** dan **Section 13 (Arsitektur Caching & Proteksi Konkurensi Skala Tinggi)**. Update MoSCoW matrix: AI Vision Studio (Image/Video generative, Paid-Only) & Caching Redis Multi-DB + Concurrency Protection → ✅ Selesai.
 >
 > **v2.8 Note:** Menambahkan **Section 11 (Pencahayaan Real-Time di Viewer & Snapshot Captures)**. Update MoSCoW matrix: Real-Time Solar Lighting Simulation (Three.js + SunCalc) & 3D Snapshot Captures → ✅ Selesai.
 >
-> **v2.7 Note:** Menambahkan **Section 9 (Profil Arsitek)** dan **Section 10 (Drawing 2D — Rencana)**. Update MoSCoW matrix: RAB Fase A/B/C, AHSP, Export RAB, Mapping RAB → ✅ Selesai. Drawing 2D ditambahkan sebagai Should Have 🔴 Pending.
+> **v2.7 Note:** Menambahkan **Section 9 (Profil Arsitek)**. Update MoSCoW matrix: RAB Fase A/B/C, AHSP, Export RAB, Mapping RAB → ✅ Selesai.
 
 > **v2.6 Note:** Menambahkan modul **RAB & Lembar Kerja** (`Domains/Rab`): template + harga satuan, import quantity take-off CSV/Excel, estimator dari `.glb`, switch visibilitas RAB ke Klien, gating `plans.can_use_rab`. Lihat Section 8.
 
@@ -105,7 +107,7 @@ Membangun platform SaaS berbasis Web 3D interaktif bernama **PitchArch** yang me
 | **Should Have** | 3D Snapshot Captures (Viewport/FHD PNG, kuota gambar, galeri per-ruangan & jam, switch visibilitas klien) | ✅ Selesai |
 | **Should Have** | AI Vision Studio (Image & Video prompts arsitektural, Paid-Only gating, local persistence) | ✅ Selesai |
 | **Should Have** | Arsitektur Cache Redis Multi-DB & Proteksi Konkurensi Skala 1M User (atomic locks) | ✅ Selesai |
-| **Should Have** | Drawing 2D (Denah/Tampak/Potongan, konva.js, export DXF+SVG) — Enterprise only | 🔴 Pending |
+| **Should Have** | Drawing 2D (Denah/Tampak/Potongan, konva.js, export DXF+SVG, PDF, Multi-Paper) — Enterprise only | ✅ Selesai |
 | **Could Have** | First-Person Walkthrough Mode | 🔴 Pending |
 | **Could Have** | Material Swapper | 🔴 Pending |
 | **Could Have** | Import IFC (data BIM) untuk RAB | 🔴 Pending |
@@ -283,25 +285,52 @@ Melengkapi profil Arsitek dengan informasi badan usaha (perusahaan/individu) dan
 
 ---
 
-## 10. Drawing 2D — Editor Denah, Tampak & Potongan *(Rencana v2.7 — 🔴 Pending)*
+## 10. Drawing 2D — Editor Denah, Tampak & Potongan (`Domains/Drawing` — 🟢 Selesai)
 
-> **Status:** Fitur ini **belum diimplementasikan**. Hanya direncanakan. Tunggu perintah implementasi.
+### 10.A Tujuan & Gambaran Umum
+Menyediakan editor CAD 2D interaktif berbasis web untuk menggambar denah (plan), tampak (elevation), dan potongan (section) langsung di browser tanpa perlu software CAD desktop pihak ketiga. Fitur ini dirancang khusus untuk paket **Enterprise** (`plans.can_use_drawing = true`) dan role Super Admin.
 
-### 10.A Tujuan
-Menyediakan editor gambar teknik 2D (denah, tampak, potongan) langsung di platform tanpa perlu software CAD eksternal. Terbatas untuk paket **Enterprise** (`plans.can_use_drawing = true`).
+### 10.B Arsitektur Domain & Database
+- **Domain:** `Domains/Drawing`
+- **Tabel `drawing_sheets`:** UUID PK, `project_id`, `user_id`, `title`, `type` (`plan | elevation | section`), `width`, `height`, `scale`, `sort_order`.
+- **Tabel `drawing_elements`:** UUID PK, `sheet_id`, `element_type` (`wall`, `rect`, `line`, `door`, `window`, `column`, `stair`, `dimension`, `room_label`, `furniture`), `properties` (JSON koordinat, ketebalan, warna, rotasi, ukuran), `layer`, `z_index`.
+- **Library Frontend:** **konva.js** (vektor performa tinggi hardware-accelerated via HTML5 Canvas)
+- **Export & Output:**
+  - **DXF:** Ekspor format AutoCAD R12 ASCII compliant via `ExportDxfAction`.
+  - **SVG & PNG:** Format gambar vektor murni dan raster resolusi tinggi.
+  - **PDF & Clean Print:** Cetak langsung standar ISO (A4–A0) dan download PDF melalui isolated hidden iframe tanpa bleed UI editor.
 
-### 10.B Rancangan Domain
-- Domain baru: `Domains/Drawing`
-- Tabel: `drawing_sheets` (lembar gambar, tipe: `plan | elevation | section`) dan `drawing_elements` (elemen vektor: garis, dimensi, teks, simbol)
-- Library frontend: **konva.js** (canvas 2D, npm)
-- Export: **DXF** (`nzcreations/dxf`, composer) dan **SVG** (built-in konva)
-
-### 10.C Aturan Bisnis (Rencana)
-1. **Gating:** hanya Enterprise — kolom `plans.can_use_drawing = true`.
-2. **Tipe sheet:** `plan` (denah), `elevation` (tampak), `section` (potongan).
-3. **Library simbol:** pintu, jendela, kolom, tangga (pre-built SVG symbols di konva canvas).
-4. **Export format:** DXF (kompatibel AutoCAD) + SVG.
-5. **Kepemilikan:** drawing sheet milik Arsitek pemilik project; Klien hanya bisa melihat (jika switch visibilitas aktif).
+### 10.C Fitur & Kapabilitas Utama
+1. **Mode Lembar Kerja Ganda:**
+   - **Frame Kertas (Paper Space):** Menampilkan batas lembar kerja standar (A4, A3, A2, A1, A0 baik Portrait maupun Landscape) atau ukuran kustom, dilengkapi Kop Gambar resmi arsitek di sudut kanan bawah.
+   - **AutoCAD Model Space (∞):** Mode kanvas tak terbatas berlatar gelap untuk kebebasan menggambar layout skala besar tanpa batasan tepi kertas.
+2. **Multi-Paper Frame pada Satu Kanvas:**
+   - Mendukung penambahan lembar kertas baru ke dalam kanvas yang sama (`+ Kertas ke Kanvas`).
+   - Setiap lembar kertas memiliki tombol hapus independen di sudut kanvas (`Hapus Kertas`).
+3. **Interaktivitas Resize Kertas Mirip Figma:**
+   - Handle resize interaktif pada tepi kanan, tepi bawah, dan sudut kanan bawah kertas.
+   - Live drag resize non-destruktif (tanpa destroy Konva node selama `dragmove`) dengan tooltip dimensi real-time.
+   - Caching instan dimensi kertas ke browser `localStorage` (`cad_paper_sizes_{sheet_id}`) sehingga ukuran tetap presisi saat refresh, sebelum tersinkronisasi ke database.
+4. **Kop Gambar (Title Block) Arsitektur Dinamis:**
+   - Auto word-wrap untuk teks judul proyek dan nama instansi/arsitek.
+   - Tinggi baris adaptif sehingga teks panjang tidak keluar batas garis kotak.
+   - Layer Kop Gambar diposisikan di atas grid (`paperBgLayer` → `gridLayer` → `paperLayer`) sehingga garis grid tidak memotong teks.
+5. **Alat Gambar Arsitektur Lengkap:**
+   - Dinding tebal (`wall` - W) dengan ketebalan standar arsitek.
+   - Kotak ruangan (`rect` - R), Garis bebas (`line` - L).
+   - Simbol pintu swing (`door` - D), bukaan jendela (`window` - J).
+   - Kolom beton struktural (`column` - C), tangga 2D (`stair` - S).
+   - Dimensi ukuran otomatis (`dimension` - M) dan teks label ruangan (`room_label` - T).
+   - Library perabot/furniture (tempat tidur, meja, sanitair/toilet).
+   - Penghapus elemen (`eraser` - E).
+6. **Sistem Navigasi & Seleksi AutoCAD Standar:**
+   - AutoCAD Box Select: seleksi crossing (kanan ke kiri, hijau putus-putus) dan window select (kiri ke kanan, biru solid).
+   - Multi-seleksi dengan `Ctrl` + Klik, Clone Drag langsung dengan `Ctrl` + Drag.
+   - Hotkeys: `V` (Select), `H`/`Spasi` (Pan), `Z` (Pusatkan Gambar), `Ctrl+A` (Pilih Semua), `Ctrl+C` (Salin), `Ctrl+V` (Tempel), `Ctrl+D` (Duplikat), `Ctrl+Z` (Undo), `Ctrl+Y`/`Ctrl+Shift+Z` (Redo), `Delete`/`Backspace` (Hapus), `Esc` (Batal/Deselect).
+7. **Responsivitas Layar & Toolbar CAD:**
+   - Header baris kedua dilengkapi indikator horizontal overflow "Menu Lainnya ▶" yang berkedip jika layar sempit.
+   - Navbottom HUD responsif dengan scroll cues kiri & kanan.
+   - Sidebar toolbar kiri diproteksi batas bawah `bottom-18 sm:bottom-20 z-30` agar tidak menabrak bottom HUD di layar mobile, lengkap dengan indikator scroll vertikal (`▲` / `▼`).
 
 ---
 

@@ -483,31 +483,41 @@ Tabel-tabel berikut disediakan dan di-seed oleh package `laravolt/indonesia`. Ti
 
 ---
 
-### J. Drawing 2D — Rancangan Tabel *(Rencana v2.7 — Belum Dibuat)*
+### J. Drawing 2D Domain (`Domains/Drawing` — 🟢 Aktif / Selesai)
 
-> Tabel-tabel ini **belum diimplementasikan**. Ini adalah rancangan awal untuk fitur Drawing 2D yang akan datang.
+Menyimpan metadata lembar kerja gambar teknik 2D dan elemen-elemen vektor konva.js. Fitur ini eksklusif untuk paket Enterprise (`plans.can_use_drawing = true`) dan role Super Admin.
 
-#### `drawing_sheets` *(Rencana)*
+#### `drawing_sheets`
 | Field | Type | Modifiers | Description |
 | :--- | :--- | :--- | :--- |
 | `id` | `uuid` | `PRIMARY KEY` | Unique Identifier |
-| `project_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Relasi ke `projects.id` |
-| `user_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Pemilik (Arsitek) |
+| `project_id` | `uuid` | `FOREIGN KEY, NOT NULL, CASCADE` | Relasi ke `projects.id` |
+| `user_id` | `uuid` | `FOREIGN KEY, NOT NULL, CASCADE` | Pemilik (Arsitek) |
 | `title` | `string` | `NOT NULL` | Judul lembar gambar |
-| `type` | `string(20)` | `NOT NULL` | Tipe: `plan`, `elevation`, `section` |
-| `scale` | `string(20)` | `NULLABLE` | Skala gambar (cth: `1:100`) |
-| `sort_order` | `unsignedInteger` | `DEFAULT(0)` | Urutan lembar |
+| `type` | `string(20)` | `NOT NULL, DEFAULT('plan')` | Tipe: `plan`, `elevation`, `section` |
+| `scale` | `string(20)` | `NOT NULL, DEFAULT('1:100')` | Skala gambar (cth: `1:100`) |
+| `paper_size` | `string(20)` | `NOT NULL, DEFAULT('A3')` | Preset ISO kertas: `A4`, `A3`, `A2`, `A1`, `A0`, `custom` |
+| `orientation` | `string(20)` | `NOT NULL, DEFAULT('landscape')` | `portrait` atau `landscape` |
+| `width` | `unsignedInteger` | `NULLABLE` | Lebar kertas kustom / aktif dalam pixel |
+| `height` | `unsignedInteger` | `NULLABLE` | Tinggi kertas kustom / aktif dalam pixel |
+| `grid_spacing` | `unsignedInteger` | `NOT NULL, DEFAULT(20)` | Jarak grid kanvas (pixel) |
+| `unit` | `string(10)` | `NOT NULL, DEFAULT('m')` | Satuan pengukuran: `m`, `cm`, `mm` |
+| `sort_order` | `unsignedInteger` | `DEFAULT(0)` | Urutan lembar dalam proyek |
 | `created_at` / `updated_at` | `timestamp` | `NULLABLE` | |
 
-#### `drawing_elements` *(Rencana)*
+*Indexes:* `(project_id, sort_order)`, `user_id`.
+
+#### `drawing_elements`
 | Field | Type | Modifiers | Description |
 | :--- | :--- | :--- | :--- |
 | `id` | `uuid` | `PRIMARY KEY` | Unique Identifier |
 | `drawing_sheet_id` | `uuid` | `FOREIGN KEY, NOT NULL, CASCADE` | Relasi ke `drawing_sheets.id` |
-| `type` | `string(30)` | `NOT NULL` | Tipe elemen: `line`, `rect`, `text`, `dimension`, `symbol` |
-| `data` | `json` | `NOT NULL` | Payload konva.js (koordinat, gaya, properti elemen) |
-| `sort_order` | `unsignedInteger` | `DEFAULT(0)` | |
+| `type` | `string(30)` | `NOT NULL` | Tipe elemen: `wall`, `rect`, `line`, `door`, `window`, `column`, `stair`, `dimension`, `text`, `room_label`, `furniture` |
+| `data` | `json` | `NOT NULL` | Payload konva.js (koordinat x/y, width, height, points, rotation, stroke, fill, text, dll.) |
+| `sort_order` | `unsignedInteger` | `DEFAULT(0)` | Urutan z-index / rendering |
 | `created_at` / `updated_at` | `timestamp` | `NULLABLE` | |
+
+*Indexes:* `(drawing_sheet_id, sort_order)`.
 
 ---
 

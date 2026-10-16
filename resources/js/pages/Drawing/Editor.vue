@@ -5247,7 +5247,15 @@ onUnmounted(() => {
                         </div>
                         <div class="p-2 rounded-xl bg-white/5 flex justify-between">
                             <span class="text-slate-400">Redo</span>
-                            <span class="text-violet-400 font-bold">Ctrl+Y</span>
+                            <span class="text-violet-400 font-bold">Ctrl+Y / Ctrl+Shift+Z</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Hapus Objek Terpilih</span>
+                            <span class="text-rose-400 font-bold">Delete / Backspace</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Batal / Tutup Menu</span>
+                            <span class="text-amber-400 font-bold">Esc</span>
                         </div>
                     </div>
 
@@ -5264,6 +5272,10 @@ onUnmounted(() => {
                         <div class="p-2 rounded-xl bg-white/5 flex justify-between">
                             <span class="text-slate-400">Ruangan Kotak</span>
                             <span class="text-violet-400 font-bold">R</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Garis Bebas (Line)</span>
+                            <span class="text-violet-400 font-bold">L</span>
                         </div>
                         <div class="p-2 rounded-xl bg-white/5 flex justify-between">
                             <span class="text-slate-400">Pintu Swing</span>
