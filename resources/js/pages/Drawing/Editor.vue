@@ -1587,9 +1587,10 @@ function zoomToFit() {
 
 // ── DRAW PAPER BOUNDARY & ARCHITECTURAL TITLE BLOCK (FIGMA FRAME / CAD) ─────
 function drawPaperBoundary() {
-    if (!paperLayer) return;
+    const curPaperLayer = paperLayer;
+    if (!curPaperLayer) return;
     paperBgLayer?.destroyChildren();
-    paperLayer.destroyChildren();
+    curPaperLayer.destroyChildren();
 
     const frames = getPaperFrames();
 
@@ -1643,7 +1644,7 @@ function drawPaperBoundary() {
             fontFamily: 'monospace',
             fill: '#94a3b8',
         }));
-        paperLayer.add(ucsGroup);
+        curPaperLayer.add(ucsGroup);
 
         // 2. Gambar setiap frame kertas di Model Space (Batas Frame CAD)
         frames.forEach((frame) => {
@@ -1666,7 +1667,7 @@ function drawPaperBoundary() {
                 shadowOpacity: 0.25,
                 listening: false,
             });
-            paperLayer.add(bgRect);
+            curPaperLayer.add(bgRect);
 
             // Badge Header Model Frame (Bisa digeser)
             const badgeGroup = new Konva.Group({
@@ -1712,10 +1713,10 @@ function drawPaperBoundary() {
                     triggerAutoSaveDebounced();
                 });
             }
-            paperLayer.add(badgeGroup);
+            curPaperLayer.add(badgeGroup);
         });
 
-        paperLayer.batchDraw();
+        curPaperLayer.batchDraw();
         return;
     }
 
@@ -1779,7 +1780,7 @@ function drawPaperBoundary() {
                 triggerAutoSaveDebounced();
             });
 
-            paperLayer.add(headerGroup);
+            curPaperLayer.add(headerGroup);
 
             // Tombol Hapus Frame Tambahan (jika bukan frame utama)
             if (!frame.isMain) {
@@ -1812,7 +1813,7 @@ function drawPaperBoundary() {
                     e.cancelBubble = true;
                     confirmRemovePaperFrame(frame);
                 });
-                paperLayer.add(delGroup);
+                curPaperLayer.add(delGroup);
             }
         }
 
@@ -1834,7 +1835,7 @@ function drawPaperBoundary() {
         if (paperBgLayer) {
             paperBgLayer.add(paperRect);
         } else {
-            paperLayer.add(paperRect);
+            curPaperLayer.add(paperRect);
         }
 
         // 3. Border Frame (Garis Tepi Arsitektur Standar ISO)
@@ -1940,13 +1941,13 @@ function drawPaperBoundary() {
 
         kopMeta.position({ x: kopX + 14, y: kopY + offsetMeta });
 
-        paperLayer.add(frameRect);
-        paperLayer.add(kopRect);
-        paperLayer.add(kopStudio);
-        paperLayer.add(kopTitle);
-        paperLayer.add(kopProject);
-        paperLayer.add(kopDivider);
-        paperLayer.add(kopMeta);
+        curPaperLayer.add(frameRect);
+        curPaperLayer.add(kopRect);
+        curPaperLayer.add(kopStudio);
+        curPaperLayer.add(kopTitle);
+        curPaperLayer.add(kopProject);
+        curPaperLayer.add(kopDivider);
+        curPaperLayer.add(kopMeta);
 
         // Helper to update Kop live during resize drag
         const updateKopLive = (newW: number, newH: number) => {
@@ -2046,7 +2047,7 @@ function drawPaperBoundary() {
                 bottomEdgeGroup.position({ x: fx + newW / 2, y: fy + newH });
 
                 paperBgLayer?.batchDraw();
-                paperLayer?.batchDraw();
+                curPaperLayer.batchDraw();
             });
             cornerGroup.on('dragend', () => {
                 isResizingSheet.value = false;
@@ -2055,7 +2056,7 @@ function drawPaperBoundary() {
                 triggerAutoSaveDebounced();
             });
 
-            paperLayer.add(cornerGroup);
+            curPaperLayer.add(cornerGroup);
 
             // 2. Handle Tepi Kanan (Right Edge Handle)
             const rightEdgeGroup = new Konva.Group({
@@ -2142,7 +2143,7 @@ function drawPaperBoundary() {
                 bottomEdgeGroup.x(fx + newW / 2);
 
                 paperBgLayer?.batchDraw();
-                paperLayer?.batchDraw();
+                curPaperLayer.batchDraw();
             });
             rightEdgeGroup.on('dragend', () => {
                 isResizingSheet.value = false;
@@ -2151,7 +2152,7 @@ function drawPaperBoundary() {
                 triggerAutoSaveDebounced();
             });
 
-            paperLayer.add(rightEdgeGroup);
+            curPaperLayer.add(rightEdgeGroup);
 
             // 3. Handle Tepi Bawah (Bottom Edge Handle)
             const bottomEdgeGroup = new Konva.Group({
@@ -2238,7 +2239,7 @@ function drawPaperBoundary() {
                 rightEdgeGroup.y(fy + newH / 2);
 
                 paperBgLayer?.batchDraw();
-                paperLayer?.batchDraw();
+                curPaperLayer.batchDraw();
             });
             bottomEdgeGroup.on('dragend', () => {
                 isResizingSheet.value = false;
@@ -2247,12 +2248,12 @@ function drawPaperBoundary() {
                 triggerAutoSaveDebounced();
             });
 
-            paperLayer.add(bottomEdgeGroup);
+            curPaperLayer.add(bottomEdgeGroup);
         }
     });
 
     paperBgLayer?.batchDraw();
-    paperLayer.batchDraw();
+    curPaperLayer.batchDraw();
 }
 
 // ── DRAW GRID LINES (AUTOCAD INFINITE MODEL SPACE / SHEET GRID) ─────────────
@@ -3168,7 +3169,7 @@ function finishBoxSelection(e?: any) {
             node !== tr && node !== selectionOverlay && matchedIds.has(node.id())
         ) as Konva.Group[];
 
-        let finalNodes = matchedNodes;
+        let finalNodes: Konva.Node[] = matchedNodes;
         const isShiftOrCtrl = Boolean(e?.shiftKey || e?.ctrlKey || (e?.evt && (e.evt.shiftKey || e.evt.ctrlKey)));
         if (isShiftOrCtrl) {
             const currentNodes = tr?.nodes() || [];
@@ -3227,22 +3228,23 @@ function getElementGroupFromTarget(target: Konva.Node | null): Konva.Group | nul
     while (curr && curr.parent && curr.parent !== mainLayer) {
         curr = curr.parent;
     }
-    if (curr && curr instanceof Konva.Group && curr !== (tr as any) && curr !== selectionOverlay) {
+    if (curr && curr instanceof Konva.Group && curr !== (tr as any) && (curr as any) !== selectionOverlay) {
         return curr;
     }
     return null;
 }
 
 function setupDrawingInteractions() {
-    if (!stage || !tempLayer || !mainLayer) return;
+    const curStage = stage;
+    if (!curStage || !tempLayer || !mainLayer) return;
 
-    stage.on('mousedown touchstart', (e) => {
+    curStage.on('mousedown touchstart', (e) => {
         if (!props.canEdit || isSpacePressed.value) return;
         if (e.target.getLayer() === paperLayer || e.target.getLayer() === paperBgLayer || isResizingSheet.value) return;
 
         // Middle mouse click OR Pan Tool = start pan
         if (e.evt.button === 1 || activeTool.value === 'pan') {
-            stage?.draggable(true);
+            curStage.draggable(true);
             if (containerRef.value) containerRef.value.style.cursor = 'grabbing';
             return;
         }
@@ -3259,9 +3261,9 @@ function setupDrawingInteractions() {
             // If clicked on selectionOverlay, check if an element is directly under the pointer
             if (!parentGroup && e.target === selectionOverlay) {
                 selectionOverlay.visible(false);
-                const pos = stage.getPointerPosition();
+                const pos = curStage.getPointerPosition();
                 if (pos) {
-                    const hit = stage.getIntersection(pos);
+                    const hit = curStage.getIntersection(pos);
                     parentGroup = getElementGroupFromTarget(hit);
                 }
                 selectionOverlay.visible(Boolean(tr && tr.nodes().length > 0));
@@ -3352,9 +3354,9 @@ function setupDrawingInteractions() {
                 mainLayer?.batchDraw();
             }
 
-            const pos = stage.getPointerPosition();
+            const pos = curStage.getPointerPosition();
             if (pos) {
-                const transform = stage.getAbsoluteTransform().copy().invert();
+                const transform = curStage.getAbsoluteTransform().copy().invert();
                 const pt = transform.point(pos);
                 isBoxSelecting = true;
                 boxStartPt = { x: pt.x, y: pt.y };
@@ -3391,10 +3393,10 @@ function setupDrawingInteractions() {
         }
 
         // CAD Creation Tools
-        const pos = stage.getPointerPosition();
+        const pos = curStage.getPointerPosition();
         if (!pos) return;
 
-        const transform = stage.getAbsoluteTransform().copy().invert();
+        const transform = curStage.getAbsoluteTransform().copy().invert();
         const pt = transform.point(pos);
 
         startX = snap(pt.x);
@@ -3430,7 +3432,7 @@ function setupDrawingInteractions() {
         }
     });
 
-    stage.on('mousemove touchmove', () => {
+    curStage.on('mousemove touchmove', () => {
         // Handle AutoCAD Marquee Box Selection Preview
         if (isBoxSelecting && selectionBoxRect && stage) {
             const pos = stage.getPointerPosition();
@@ -3480,7 +3482,7 @@ function setupDrawingInteractions() {
         tempLayer?.batchDraw();
     });
 
-    stage.on('mouseup touchend', (e) => {
+    curStage.on('mouseup touchend', (e) => {
         if ((e.evt.button === 1 || activeTool.value === 'pan') && !isSpacePressed.value) {
             stage?.draggable(false);
             if (containerRef.value) {

@@ -51,7 +51,7 @@ interface RowItem {
     volume: number;
     count: number;
     is_open_mesh: boolean;
-    warnings: string[];
+    warnings: readonly string[];
     /** Basis yang dipilih user */
     quantity_basis: 'area' | 'volume' | 'count' | 'length';
     /** Nilai kuantitas sesuai basis yang dipilih */

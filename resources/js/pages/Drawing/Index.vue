@@ -214,7 +214,7 @@ async function saveLinkedCaptures() {
 
         if (response.ok) {
             showLinkCapturesModal.value = false;
-            router.reload({ preserveScroll: true });
+            router.reload();
         }
     } catch (err) {
         console.error('Failed to link captures:', err);

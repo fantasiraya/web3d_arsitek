@@ -480,13 +480,13 @@ const abortBatchFlag = ref(false);
 async function handleBatchGenerateAi() {
     if (isBatchRendering.value) return;
 
-    const targets = activeCaptures.value.length > 0 ? activeCaptures.value : captures.value;
+    const targets = activeCaptures.value.length > 0 ? activeCaptures.value : props.captures;
     if (targets.length === 0) {
         alert('Tidak ada snapshot ruangan untuk dirender.');
         return;
     }
 
-    const unrenderedCount = targets.filter(c => !c.ai_rendered_url).length;
+    const unrenderedCount = targets.filter((c: any) => !c.ai_rendered_url).length;
     const confirmText = unrenderedCount > 0
         ? `Mulai render visual AI untuk seluruh ${targets.length} lembar ruangan (${unrenderedCount} belum dirender)?\n\nProses akan berjalan otomatis satu per satu.`
         : `Render ulang visual AI untuk semua ${targets.length} lembar ruangan?\n\nProses akan berjalan otomatis satu per satu.`;

@@ -441,6 +441,12 @@ function copyFormattedPrompt() {
     }, 2000);
 }
 
+function copyCreationPrompt(prompt?: string | null) {
+    if (!prompt) return;
+    navigator.clipboard.writeText(prompt);
+    alert('Prompt disalin ke clipboard!');
+}
+
 function copyNegativePrompt() {
     navigator.clipboard.writeText(defaultNegativePrompt.value);
     copiedNegative.value = true;
@@ -1511,12 +1517,7 @@ generateDraftPrompt();
                         <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-white/5 text-xs">
                             <button
                                 type="button"
-                                @click="() => {
-                                    if (creation.prompt) {
-                                        navigator.clipboard.writeText(creation.prompt);
-                                        alert('Prompt disalin ke clipboard!');
-                                    }
-                                }"
+                                @click="copyCreationPrompt(creation.prompt)"
                                 class="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold flex items-center gap-1 text-[11px]"
                             >
                                 <Copy class="h-3 w-3" />

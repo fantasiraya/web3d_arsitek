@@ -32,7 +32,7 @@ export interface MeshQuantity {
     /** True jika mesh kemungkinan tidak tertutup (watertight check) */
     is_open_mesh: boolean;
     /** Peringatan spesifik untuk mesh ini */
-    warnings: string[];
+    warnings: readonly string[];
     /** Dimensi bounding box (untuk heuristik skala) */
     bbox: { x: number; y: number; z: number };
     /**

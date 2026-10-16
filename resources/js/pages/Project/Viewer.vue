@@ -3359,7 +3359,7 @@ function analyzeSceneFromCamera(): Analyzed3DView | null {
                 if (cur.userData?.isMarker) return false;
                 cur = cur.parent;
             }
-            return (i.object as THREE.Mesh).isMesh !== false;
+            return Boolean((i.object as any).isMesh);
         });
 
         if (valid) {
@@ -5532,15 +5532,17 @@ function loadModel(): void {
     loader.load(
         modelUrl,
         (gltf: { scene: any }) => {
-            model = gltf.scene;
-            model.traverse((child: any) => {
+            const loadedModel = gltf.scene;
+            model = loadedModel;
+            if (!loadedModel) return;
+            loadedModel.traverse((child: any) => {
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
                 }
             });
-            scene?.add(model);
-            scanLampObjects(model);
+            scene?.add(loadedModel);
+            scanLampObjects(loadedModel);
             frameModel();
             updateClippingRangeFromModel();
             applyClippingToRenderer();

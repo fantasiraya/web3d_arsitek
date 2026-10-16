@@ -102,6 +102,10 @@ interface Stats {
     max_projects: number;
     can_create_project: boolean;
     subscription_status: 'free' | 'pro';
+    limit_warning?: {
+        message: string;
+        [key: string]: any;
+    } | null;
 }
 
 interface Transaction {
@@ -360,7 +364,7 @@ const editSelectedFileName = ref('');
 const editSelectedFileSize = ref('');
 const editFileError = ref('');
 
-function openEditModal(project: OwnedProject) {
+function openEditModal(project: any) {
     editingProject.value = project;
     editForm.title = project.title;
     editForm.description = project.description || '';
@@ -491,7 +495,7 @@ function closeSuggestions() {
     setTimeout(() => { showSuggestions.value = false; }, 150);
 }
 
-function openClientModal(project: OwnedProject) {
+function openClientModal(project: any) {
     // Pakai dari localOwnedProjects agar status realtime sudah terupdate
     const localProject = localOwnedProjects.value.find(p => p.id === project.id) ?? project;
     activeProjectForClients.value = localProject;
@@ -558,7 +562,7 @@ function acceptInvitation(project: ClientProject) {
 }
 
 // Action: Delete Project
-async function deleteProject(project: OwnedProject) {
+async function deleteProject(project: any) {
     const ok = await confirm({
         title: 'Hapus Proyek?',
         description: `Proyek "${project.title}" beserta semua file dan versinya akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.`,

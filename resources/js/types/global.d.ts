@@ -19,6 +19,12 @@ declare module '@inertiajs/core' {
             name: string;
             auth: Auth;
             sidebarOpen: boolean;
+            stats?: {
+                owned_count?: number;
+                max_projects?: number;
+                plan_name?: string;
+                [key: string]: any;
+            };
             [key: string]: unknown;
         };
     }
@@ -31,7 +37,3 @@ declare module 'vue' {
         $headManager: ReturnType<typeof createHeadManager>;
     }
 }
-
-declare module 'three';
-declare module 'three/examples/jsm/controls/OrbitControls.js';
-declare module 'three/examples/jsm/loaders/GLTFLoader.js';

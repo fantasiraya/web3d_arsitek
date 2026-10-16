@@ -11,8 +11,11 @@ import { ref, shallowRef } from 'vue';
 export interface ConfirmOptions {
     title: string;
     description?: string;
+    message?: string;
     confirmText?: string;
+    confirmLabel?: string;
     cancelText?: string;
+    cancelLabel?: string;
     variant?: 'destructive' | 'default';
     icon?: 'trash' | 'warning' | 'info';
 }
@@ -39,9 +42,9 @@ export function useConfirm() {
             state.value = {
                 open: true,
                 title: options.title,
-                description: options.description ?? '',
-                confirmText: options.confirmText ?? 'Konfirmasi',
-                cancelText: options.cancelText ?? 'Batal',
+                description: options.description ?? options.message ?? '',
+                confirmText: options.confirmText ?? options.confirmLabel ?? 'Konfirmasi',
+                cancelText: options.cancelText ?? options.cancelLabel ?? 'Batal',
                 variant: options.variant ?? 'destructive',
                 icon: options.icon ?? 'warning',
                 resolve,
