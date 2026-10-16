@@ -276,7 +276,12 @@ function getCaptureDisplayUrl(capture: ProjectCapture): string {
 
 // 1-Click Print / Download PDF
 function handlePrintPdf() {
-    window.print();
+    // Beri sedikit jeda microtask agar image render di canvas/DOM selesai ter-paint
+    requestAnimationFrame(() => {
+        setTimeout(() => {
+            window.print();
+        }, 120);
+    });
 }
 
 // Trigger upload file AI Render untuk capture tertentu
@@ -464,6 +469,103 @@ async function handleExecuteAiGenerate() {
         aiGenerationError.value = err.message || 'Terjadi kesalahan saat memproses permintaan render AI.';
     } finally {
         isGeneratingAiRender.value = null;
+    }
+}
+
+// State dan Handler Batch Render Seluruh Section / Ruangan
+const isBatchRendering = ref(false);
+const batchProgress = ref({ current: 0, total: 0, currentName: '' });
+const abortBatchFlag = ref(false);
+
+async function handleBatchGenerateAi() {
+    if (isBatchRendering.value) return;
+
+    const targets = activeCaptures.value.length > 0 ? activeCaptures.value : captures.value;
+    if (targets.length === 0) {
+        alert('Tidak ada snapshot ruangan untuk dirender.');
+        return;
+    }
+
+    const unrenderedCount = targets.filter(c => !c.ai_rendered_url).length;
+    const confirmText = unrenderedCount > 0
+        ? `Mulai render visual AI untuk seluruh ${targets.length} lembar ruangan (${unrenderedCount} belum dirender)?\n\nProses akan berjalan otomatis satu per satu.`
+        : `Render ulang visual AI untuk semua ${targets.length} lembar ruangan?\n\nProses akan berjalan otomatis satu per satu.`;
+
+    if (!confirm(confirmText)) return;
+
+    isBatchRendering.value = true;
+    abortBatchFlag.value = false;
+    preferAiRender.value = true;
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < targets.length; i++) {
+        if (abortBatchFlag.value) {
+            break;
+        }
+
+        const capture = targets[i];
+        batchProgress.value = {
+            current: i + 1,
+            total: targets.length,
+            currentName: capture.room_name || `Ruangan ${i + 1}`,
+        };
+        isGeneratingAiRender.value = capture.id;
+
+        try {
+            const formData = new FormData();
+            formData.append('mood', 'natural bright daylight');
+            formData.append('aspect_ratio', '16:9');
+            if (capture.prompt) {
+                formData.append('prompt', capture.prompt);
+            }
+
+            try {
+                const imgRes = await fetch(capture.url);
+                if (imgRes.ok) {
+                    const blob = await imgRes.blob();
+                    formData.append('image', blob, `ref_${capture.room_name || '3d'}.jpg`);
+                }
+            } catch (fetchErr) {
+                console.warn('Gagal fetch blob gambar:', fetchErr);
+            }
+
+            const res = await fetch(`/projects/${props.project.id}/captures/${capture.id}/generate-ai`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    Accept: 'application/json',
+                },
+                body: formData,
+            });
+
+            const data = await res.json();
+            if (res.ok && data.data) {
+                const idx = props.captures.findIndex(c => c.id === capture.id);
+                if (idx !== -1) {
+                    props.captures[idx] = data.data;
+                }
+                successCount++;
+            } else {
+                failCount++;
+            }
+        } catch (err) {
+            console.error(`Batch render gagal untuk ${capture.room_name}:`, err);
+            failCount++;
+        }
+    }
+
+    isGeneratingAiRender.value = null;
+    isBatchRendering.value = false;
+
+    if (abortBatchFlag.value) {
+        alert(`Proses render dihentikan. (${successCount} ruangan berhasil dirender)`);
+    } else if (successCount > 0) {
+        alert(`Selesai! Berhasil merender ${successCount} lembar ruangan secara otomatis.`);
+    } else if (failCount > 0) {
+        alert('Terjadi kendala saat merender beberapa lembar ruangan.');
     }
 }
 
@@ -681,6 +783,21 @@ onUnmounted(() => {
                             <span>{{ preferAiRender ? 'Prioritas: Render AI' : 'Prioritas: 3D Asli' }}</span>
                         </button>
 
+                        <!-- Tombol 1-Klik Render AI Semua Section -->
+                        <button
+                            v-if="isOwner && captures.length > 0"
+                            @click="handleBatchGenerateAi"
+                            :disabled="isBatchRendering || Boolean(isGeneratingAiRender)"
+                            class="px-3.5 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 shrink-0"
+                            :class="isBatchRendering
+                                ? 'bg-purple-600 text-white border-purple-500 animate-pulse'
+                                : 'bg-gradient-to-r from-purple-900/60 to-indigo-900/60 border-purple-700/60 text-purple-200 hover:text-white hover:border-purple-500 hover:from-purple-800/80 hover:to-indigo-800/80'"
+                            title="Render visual AI untuk seluruh lembar ruangan secara otomatis"
+                        >
+                            <Sparkles class="w-3.5 h-3.5 text-purple-300" :class="isBatchRendering ? 'animate-spin' : ''" />
+                            <span>{{ isBatchRendering ? `Merender (${batchProgress.current}/${batchProgress.total})...` : '✨ Render AI Semua Lembar' }}</span>
+                        </button>
+
                         <!-- Ukuran Kertas Selector -->
                         <div class="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5 text-xs font-mono shrink-0">
                             <button
@@ -835,6 +952,16 @@ onUnmounted(() => {
                         >
                             <Calculator class="w-4 h-4" />
                             <span>{{ isGeneratingRab ? 'Menghitung...' : '🧮 Generate Draf RAB' }}</span>
+                        </button>
+
+                        <button
+                            v-if="isOwner && captures.length > 0"
+                            @click="handleBatchGenerateAi(); isMobileMenuOpen = false"
+                            :disabled="isBatchRendering || Boolean(isGeneratingAiRender)"
+                            class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold shadow-lg shadow-purple-950/40 transition flex items-center justify-center gap-2 text-xs disabled:opacity-50"
+                        >
+                            <Sparkles class="w-4 h-4" :class="isBatchRendering ? 'animate-spin' : ''" />
+                            <span>{{ isBatchRendering ? `Sedang Render (${batchProgress.current}/${batchProgress.total})...` : '✨ Render AI Semua Lembar' }}</span>
                         </button>
                     </div>
 
@@ -1186,6 +1313,27 @@ onUnmounted(() => {
         </div>
 
 
+        <!-- Floating Batch Progress Indicator (Hidden saat print) -->
+        <div
+            v-if="isBatchRendering"
+            class="no-print fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 border border-purple-500/50 shadow-2xl rounded-2xl px-5 py-3 flex items-center gap-4 text-xs backdrop-blur-md animate-in slide-in-from-bottom-5"
+        >
+            <Sparkles class="w-5 h-5 text-purple-400 animate-spin shrink-0" />
+            <div>
+                <p class="font-bold text-white flex items-center gap-2">
+                    <span>Sedang Me-render AI Ruangan ({{ batchProgress.current }} / {{ batchProgress.total }})</span>
+                    <span class="text-purple-300 font-normal">({{ Math.round((batchProgress.current / batchProgress.total) * 100) }}%)</span>
+                </p>
+                <p class="text-[11px] text-slate-400 mt-0.5 truncate max-w-[200px] sm:max-w-xs">{{ batchProgress.currentName }}</p>
+            </div>
+            <button
+                @click="abortBatchFlag = true"
+                class="ml-2 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-red-900/40 border border-slate-700 hover:border-red-600 text-slate-300 hover:text-red-200 transition text-[11px] font-medium"
+            >
+                Hentikan
+            </button>
+        </div>
+
         <!-- BOOKLET PAGES CONTAINER (Printable Area) -->
         <main class="flex-1 w-full flex flex-col items-center py-6 px-4 sm:px-6 space-y-10 print:p-0 print:m-0 print:space-y-0">
             
@@ -1193,7 +1341,7 @@ onUnmounted(() => {
             <!-- HALAMAN 1: COVER PAGE                                     -->
             <!-- ======================================================== -->
             <section
-                class="booklet-sheet relative bg-black shadow-2xl overflow-hidden flex flex-col justify-between"
+                class="booklet-sheet cover-sheet relative bg-slate-950 shadow-2xl overflow-hidden flex flex-col justify-between print:bg-slate-950"
                 :class="paperSize === 'A3' ? 'sheet-a3' : 'sheet-a4'"
             >
                 <!-- Full Cover Background Visual (Jika Ada) -->
@@ -1201,13 +1349,13 @@ onUnmounted(() => {
                     <img
                         :src="coverImage"
                         alt="Cover Visual"
-                        class="absolute inset-0 w-full h-full object-cover opacity-90"
+                        class="cover-bg-image absolute inset-0 w-full h-full object-cover opacity-90 print:opacity-100"
                     />
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
+                    <div class="cover-gradient absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
                 </template>
                 <!-- Cover Minimalis Arsitektural Mewah (Jika Belum Ada Visual Cover) -->
                 <template v-else>
-                    <div class="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0b101d] to-slate-900 flex flex-col justify-between">
+                    <div class="cover-minimalist absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0b101d] to-slate-900 flex flex-col justify-between">
                         <!-- Blueprint grid pattern background -->
                         <div class="absolute inset-0 opacity-15 pointer-events-none" style="background-image: linear-gradient(to right, #475569 1px, transparent 1px), linear-gradient(to bottom, #475569 1px, transparent 1px); background-size: 32px 32px;"></div>
                         <div class="absolute inset-0 bg-radial-at-c from-transparent via-black/40 to-black/80 pointer-events-none"></div>
@@ -1235,7 +1383,7 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Header / Title Atas -->
-                <div class="relative z-10 p-8 sm:p-12 flex justify-between items-start">
+                <div class="cover-content relative z-10 p-8 sm:p-12 flex justify-between items-start">
                     <div>
                         <span class="inline-block px-3 py-1 rounded bg-orange-600 text-white font-mono text-[11px] font-bold tracking-widest uppercase mb-3 shadow-md">
                             ARCHITECTURAL PRESENTATION • {{ planSheet?.title ? 'WORKING SHEET' : 'FULL PROJECT' }}
@@ -1254,7 +1402,7 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Footer Watermark Credit: DESIGN BY [company_name] -->
-                <div class="relative z-10 p-8 sm:p-12 flex flex-col items-center justify-center text-center">
+                <div class="cover-content relative z-10 p-8 sm:p-12 flex flex-col items-center justify-center text-center">
                     <p class="text-xs sm:text-sm uppercase tracking-[0.3em] text-slate-300 font-semibold mb-1">
                         DESIGN BY
                     </p>
@@ -1663,11 +1811,14 @@ onUnmounted(() => {
         margin: 0;
     }
 
-    body {
-        background: white !important;
-        color: black !important;
+    html, body {
+        width: 100% !important;
+        min-height: 100% !important;
         margin: 0 !important;
         padding: 0 !important;
+        background: white !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
 
     .no-print {
@@ -1675,15 +1826,89 @@ onUnmounted(() => {
     }
 
     .booklet-sheet {
-        width: 100vw !important;
+        position: relative !important;
+        width: 100% !important;
         height: 100vh !important;
+        min-height: 100vh !important;
         max-width: none !important;
         page-break-after: always !important;
+        page-break-inside: avoid !important;
         break-after: page !important;
+        break-inside: avoid !important;
         border: none !important;
         box-shadow: none !important;
         margin: 0 !important;
+        padding: 0 !important;
         border-radius: 0 !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Khusus Halaman 1 (Cover Sheet) saat Cetak / PDF */
+    .cover-sheet {
+        position: relative !important;
+        background-color: #020617 !important;
+        color: white !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .cover-sheet .cover-bg-image {
+        display: block !important;
+        visibility: visible !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        opacity: 1 !important;
+        z-index: 1 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .cover-sheet .cover-gradient {
+        display: block !important;
+        visibility: visible !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        z-index: 2 !important;
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.25) 50%, rgba(0, 0, 0, 0.45) 100%) !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .cover-sheet .cover-minimalist {
+        background: #0b101d !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .cover-sheet .cover-content {
+        position: relative !important;
+        z-index: 10 !important;
+    }
+
+    .cover-sheet,
+    .cover-sheet * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .cover-sheet h1,
+    .cover-sheet h2,
+    .cover-sheet p,
+    .cover-sheet span {
+        color: white !important;
     }
 
     * {
