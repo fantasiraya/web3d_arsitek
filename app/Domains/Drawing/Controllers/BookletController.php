@@ -96,6 +96,18 @@ class BookletController extends Controller
             $capturesQuery->where('is_visible_to_clients', true);
         }
 
+        // Sesuai opsi 2: Hanya ambil visual 3D yang sudah pernah disambungkan ke lembar kerja 2D!
+        if ($selectedSheetId) {
+            // Jika membuka booklet untuk lembar kerja spesifik:
+            // HANYA ambil visual 3D yang secara khusus ditautkan ke lembar kerja ini!
+            $capturesQuery->where('drawing_sheet_id', $selectedSheetId);
+        } else {
+            // Jika membuka booklet dari 3D Viewer / Proyek utama:
+            // HANYA ambil visual 3D yang SUDAH pernah disambungkan ke lembar kerja 2D!
+            // Gambar di galeri 3D yang belum pernah disambungkan ke lembar kerja 2D tidak akan dimunculkan.
+            $capturesQuery->whereNotNull('drawing_sheet_id');
+        }
+
         $captures = $capturesQuery->get();
 
         // Ambil dokumen RAB untuk lampiran opsional
