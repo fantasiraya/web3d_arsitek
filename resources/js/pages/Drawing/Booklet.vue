@@ -77,6 +77,7 @@ interface DrawingSheet {
     width: number;
     height: number;
     elements?: DrawingElement[];
+    captures?: ProjectCapture[];
 }
 
 interface RabItem {
@@ -114,6 +115,7 @@ const props = defineProps<{
     captures: ProjectCapture[];
     rabDocuments: RabDocument[];
     isOwner: boolean;
+    selectedSheetId?: string | null;
     architect: {
         name: string;
         company_name: string;
@@ -174,8 +176,6 @@ async function saveKopInfo() {
     }
 }
 
-
-
 // State Upload AI Render
 const isUploadingAi = ref<string | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -188,9 +188,34 @@ const rabMessage = ref('');
 // Pilihan Gambar Cover Booklet (Dapat dipilih arsitek atau auto)
 const selectedCoverCaptureId = ref<string>('auto');
 
+// Cek apakah lembar kerja aktif memiliki capture 3D yang ditautkan
+const hasSheetCaptures = computed(() => {
+    if (!props.planSheet?.id) return false;
+    const fromProps = props.captures.some(c => c.drawing_sheet_id === props.planSheet?.id);
+    const fromSheet = Boolean(props.planSheet.captures && props.planSheet.captures.length > 0);
+    return fromProps || fromSheet;
+});
+
+// Mode filter captures: jika dibuka spesifik dari sheet dan ada captures tertaut, default 'sheet'
+const filterMode = ref<'sheet' | 'all'>(
+    (props.selectedSheetId || props.planSheet?.id) && hasSheetCaptures.value ? 'sheet' : 'all'
+);
+
+// Captures aktif yang digunakan di halaman eksterior & interior
+const activeCaptures = computed(() => {
+    if (filterMode.value === 'sheet' && props.planSheet?.id) {
+        const linked = props.captures.filter(c => c.drawing_sheet_id === props.planSheet?.id);
+        if (linked.length > 0) return linked;
+        if (props.planSheet.captures && props.planSheet.captures.length > 0) {
+            return props.planSheet.captures;
+        }
+    }
+    return props.captures;
+});
+
 // Filter & susun halaman lembar kerja
 const exteriorCaptures = computed(() => {
-    return props.captures.filter(c => {
+    return activeCaptures.value.filter(c => {
         const code = (c.code || '').toUpperCase();
         if (code.startsWith('EXT')) return true;
         const name = (c.room_name || '').toUpperCase();
@@ -199,7 +224,7 @@ const exteriorCaptures = computed(() => {
 });
 
 const interiorCaptures = computed(() => {
-    return props.captures.filter(c => {
+    return activeCaptures.value.filter(c => {
         const code = (c.code || '').toUpperCase();
         if (code.startsWith('EXT')) return false;
         const name = (c.room_name || '').toUpperCase();
@@ -213,24 +238,24 @@ const selectedCoverCapture = computed(() => {
         const found = props.captures.find(c => c.id === selectedCoverCaptureId.value);
         if (found) return found;
     }
-    // Default otomatis: prioritaskan eksterior, lalu capture pertama
+    // Default otomatis: prioritaskan eksterior aktif, lalu capture aktif pertama
     if (exteriorCaptures.value.length > 0) {
         return exteriorCaptures.value[0];
     }
-    if (props.captures.length > 0) {
-        return props.captures[0];
+    if (activeCaptures.value.length > 0) {
+        return activeCaptures.value[0];
     }
     return null;
 });
 
-// URL Gambar Cover aktif
+// URL Gambar Cover aktif: TIDAK ADA GAMBAR DEFAULT PALSU!
 const coverImage = computed(() => {
     if (selectedCoverCapture.value) {
         return (preferAiRender.value && selectedCoverCapture.value.ai_rendered_url)
             ? selectedCoverCapture.value.ai_rendered_url
             : selectedCoverCapture.value.url;
     }
-    return '/images/villa_orbit_360.jpg';
+    return null; // Return null jika belum ada gambar cover
 });
 
 // Dapatkan URL gambar aktif (AI atau Asli)
@@ -430,14 +455,34 @@ async function handleGenerateRabFromWorksheet() {
                     </select>
                 </div>
 
+                <!-- Filter Visual Ruangan: Khusus Lembar Ini vs Semua Proyek -->
+                <div v-if="hasSheetCaptures && captures.length > 0" class="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5 text-xs">
+                    <button
+                        @click="filterMode = 'sheet'"
+                        class="px-2.5 py-1 rounded transition"
+                        :class="filterMode === 'sheet' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                        title="Tampilkan hanya visual 3D yang ditautkan ke lembar kerja ini"
+                    >
+                        Khusus Lembar Ini
+                    </button>
+                    <button
+                        @click="filterMode = 'all'"
+                        class="px-2.5 py-1 rounded transition"
+                        :class="filterMode === 'all' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                        title="Tampilkan semua visual 3D dari proyek ini"
+                    >
+                        Semua Proyek ({{ captures.length }})
+                    </button>
+                </div>
+
                 <!-- Selector Denah Acuan jika ada lebih dari 1 denah -->
                 <div v-if="planSheets && planSheets.length > 1" class="flex items-center gap-1.5 px-2 py-1 bg-slate-800/80 border border-slate-700 rounded-lg text-xs">
-                    <span class="text-slate-400 font-medium shrink-0">Denah:</span>
+                    <span class="text-slate-400 font-medium shrink-0">Lembar:</span>
                     <select
                         :value="currentSelectedSheetId"
                         @change="handlePlanSheetChange"
                         class="bg-transparent text-amber-300 text-xs font-semibold focus:outline-none cursor-pointer max-w-[150px] truncate"
-                        title="Pilih denah yang ditampilkan di halaman master plan"
+                        title="Pilih lembar kerja yang ditampilkan"
                     >
                         <option
                             v-for="s in planSheets"
@@ -572,21 +617,31 @@ async function handleGenerateRabFromWorksheet() {
                 class="booklet-sheet relative bg-black shadow-2xl overflow-hidden flex flex-col justify-between"
                 :class="paperSize === 'A3' ? 'sheet-a3' : 'sheet-a4'"
             >
-                <!-- Full Cover Background Visual -->
-                <img
-                    :src="coverImage"
-                    alt="Cover Visual"
-                    class="absolute inset-0 w-full h-full object-cover opacity-90"
-                />
-                <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
+                <!-- Full Cover Background Visual (Jika Ada) -->
+                <template v-if="coverImage">
+                    <img
+                        :src="coverImage"
+                        alt="Cover Visual"
+                        class="absolute inset-0 w-full h-full object-cover opacity-90"
+                    />
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40"></div>
+                </template>
+                <!-- Cover Minimalis Arsitektural Mewah (Jika Belum Ada Visual Cover) -->
+                <template v-else>
+                    <div class="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0b101d] to-slate-900 flex flex-col justify-between">
+                        <!-- Blueprint grid pattern background -->
+                        <div class="absolute inset-0 opacity-15 pointer-events-none" style="background-image: linear-gradient(to right, #475569 1px, transparent 1px), linear-gradient(to bottom, #475569 1px, transparent 1px); background-size: 32px 32px;"></div>
+                        <div class="absolute inset-0 bg-radial-at-c from-transparent via-black/40 to-black/80 pointer-events-none"></div>
+                    </div>
+                </template>
 
                 <!-- Floating Switch Cover di Halaman 1 Preview (Hidden saat print) -->
-                <div class="no-print absolute top-6 right-6 z-20 flex items-center gap-2 bg-black/75 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/20 text-xs shadow-lg">
+                <div v-if="captures.length > 0" class="no-print absolute top-6 right-6 z-20 flex items-center gap-2 bg-black/75 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/20 text-xs shadow-lg">
                     <ImageIcon class="w-4 h-4 text-orange-400" />
                     <span class="text-neutral-300 font-medium">Gambar Cover:</span>
                     <select
                         v-model="selectedCoverCaptureId"
-                        class="bg-transparent text-white font-semibold focus:outline-none cursor-pointer"
+                        class="bg-transparent text-white font-semibold focus:outline-none cursor-pointer max-w-[200px] truncate"
                     >
                         <option value="auto" class="bg-neutral-900 text-white">Otomatis (Fasad / Eksterior)</option>
                         <option
@@ -603,12 +658,16 @@ async function handleGenerateRabFromWorksheet() {
                 <!-- Header / Title Atas -->
                 <div class="relative z-10 p-8 sm:p-12 flex justify-between items-start">
                     <div>
-                        <span class="inline-block px-3 py-1 rounded bg-orange-600 text-white font-mono text-[11px] font-bold tracking-widest uppercase mb-3">
-                            ARCHITECTURAL PRESENTATION
+                        <span class="inline-block px-3 py-1 rounded bg-orange-600 text-white font-mono text-[11px] font-bold tracking-widest uppercase mb-3 shadow-md">
+                            ARCHITECTURAL PRESENTATION • {{ planSheet?.title ? 'WORKING SHEET' : 'FULL PROJECT' }}
                         </span>
                         <h1 class="text-3xl sm:text-5xl font-black text-white tracking-tight uppercase drop-shadow-md">
                             {{ project.title }}
                         </h1>
+                        <p v-if="planSheet?.title" class="text-lg sm:text-2xl font-bold text-amber-400 mt-2 tracking-wide drop-shadow flex items-center gap-2">
+                            <span>📄</span>
+                            <span>{{ planSheet.title }}</span>
+                        </p>
                         <p class="text-sm sm:text-base text-slate-200 mt-1 drop-shadow font-light">
                             {{ clientAddress }}
                         </p>
@@ -651,10 +710,10 @@ async function handleGenerateRabFromWorksheet() {
                     <!-- Label Nama Halaman Kiri Bawah -->
                     <div class="pt-4">
                         <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight uppercase">
-                            DENAH
+                            {{ planSheet?.title || 'DENAH' }}
                         </h2>
                         <p class="text-xs text-slate-500 font-mono">
-                            MASTER FLOOR PLAN • SKALA {{ planSheet?.scale || '1:100' }}
+                            {{ (planSheet?.type === 'plan' ? 'MASTER FLOOR PLAN' : (planSheet?.type || 'LEMBAR KERJA')).toUpperCase() }} • SKALA {{ planSheet?.scale || '1:100' }}
                         </p>
                     </div>
                 </div>
@@ -664,7 +723,7 @@ async function handleGenerateRabFromWorksheet() {
                     <!-- Logo / Brand Studio Atas -->
                     <div class="border-b border-slate-800 pb-4 text-center">
                         <h3 class="text-xl sm:text-2xl font-black tracking-wider text-slate-900 uppercase font-serif">
-                            {{ architect.company_name || 'TRIVES' }}
+                            {{ architect.company_name || 'STUDIO ARSITEK' }}
                         </h3>
                         <p class="text-[9px] text-slate-500 uppercase tracking-widest mt-0.5">
                             ARCHITECTURAL STUDIO
@@ -692,7 +751,7 @@ async function handleGenerateRabFromWorksheet() {
                         </div>
                         <div class="border-b border-slate-300 pb-2">
                             <span class="block text-[9px] font-mono uppercase tracking-wider text-slate-400">DESCRIPTION</span>
-                            <p class="text-[10px] text-slate-600 italic">Master Layout Plan</p>
+                            <p class="text-[10px] text-slate-800 font-bold uppercase truncate">{{ planSheet?.title || 'Master Layout Plan' }}</p>
                         </div>
                     </div>
 
@@ -767,7 +826,7 @@ async function handleGenerateRabFromWorksheet() {
                     <div class="w-[20%] h-full bg-white flex flex-col justify-between p-4 sm:p-5 border-l border-slate-300 text-[11px] leading-tight">
                         <div class="border-b border-slate-800 pb-4 text-center">
                             <h3 class="text-xl sm:text-2xl font-black tracking-wider text-slate-900 uppercase font-serif">
-                                {{ architect.company_name || 'TRIVES' }}
+                                {{ architect.company_name || 'STUDIO ARSITEK' }}
                             </h3>
                             <p class="text-[9px] text-slate-500 uppercase tracking-widest mt-0.5">ARCHITECTURAL STUDIO</p>
                         </div>
@@ -898,7 +957,7 @@ async function handleGenerateRabFromWorksheet() {
                     <div class="w-[20%] h-full bg-white flex flex-col justify-between p-4 sm:p-5 border-l border-slate-300 text-[11px] leading-tight">
                         <div class="border-b border-slate-800 pb-4 text-center">
                             <h3 class="text-xl sm:text-2xl font-black tracking-wider text-slate-900 uppercase font-serif">
-                                {{ architect.company_name || 'TRIVES' }}
+                                {{ architect.company_name || 'STUDIO ARSITEK' }}
                             </h3>
                             <p class="text-[9px] text-slate-500 uppercase tracking-widest mt-0.5">ARCHITECTURAL STUDIO</p>
                         </div>

@@ -39,11 +39,10 @@ class BookletController extends Controller
             }
         }
 
-        // Ambil Denah 2D aktif (type = 'plan') beserta elemen-elemennya
+        // Ambil lembar kerja proyek (semua jenis lembar kerja)
         $selectedSheetId = $request->query('sheet_id');
 
         $planSheets = DrawingSheet::where('project_id', $project->id)
-            ->where('type', DrawingSheet::TYPE_PLAN)
             ->select('id', 'title', 'scale', 'unit', 'type')
             ->orderBy('sort_order')
             ->orderBy('created_at')
@@ -53,9 +52,14 @@ class BookletController extends Controller
         if ($selectedSheetId) {
             $planSheet = DrawingSheet::where('project_id', $project->id)
                 ->where('id', $selectedSheetId)
-                ->with(['elements' => function ($q) {
-                    $q->orderBy('sort_order');
-                }])
+                ->with([
+                    'elements' => function ($q) {
+                        $q->orderBy('sort_order');
+                    },
+                    'captures' => function ($q) {
+                        $q->orderBy('sort_order')->orderBy('created_at');
+                    },
+                ])
                 ->first();
         }
 
@@ -63,14 +67,23 @@ class BookletController extends Controller
             $planSheet = DrawingSheet::where('project_id', $project->id)
                 ->where('type', DrawingSheet::TYPE_PLAN)
                 ->where('title', 'like', '%DENAH%')
-                ->with(['elements' => function ($q) {
-                    $q->orderBy('sort_order');
-                }])
+                ->with([
+                    'elements' => function ($q) {
+                        $q->orderBy('sort_order');
+                    },
+                    'captures' => function ($q) {
+                        $q->orderBy('sort_order')->orderBy('created_at');
+                    },
+                ])
                 ->first() ?? DrawingSheet::where('project_id', $project->id)
-                ->where('type', DrawingSheet::TYPE_PLAN)
-                ->with(['elements' => function ($q) {
-                    $q->orderBy('sort_order');
-                }])
+                ->with([
+                    'elements' => function ($q) {
+                        $q->orderBy('sort_order');
+                    },
+                    'captures' => function ($q) {
+                        $q->orderBy('sort_order')->orderBy('created_at');
+                    },
+                ])
                 ->first();
         }
 
@@ -100,13 +113,14 @@ class BookletController extends Controller
         $architect = $project->user;
 
         return Inertia::render('Drawing/Booklet', [
-            'project'      => $project,
-            'planSheet'    => $planSheet,
-            'planSheets'   => $planSheets,
-            'captures'     => $captures,
-            'rabDocuments' => $rabDocuments,
-            'isOwner'      => $isOwner,
-            'architect'    => [
+            'project'         => $project,
+            'planSheet'       => $planSheet,
+            'planSheets'      => $planSheets,
+            'captures'        => $captures,
+            'rabDocuments'    => $rabDocuments,
+            'isOwner'         => $isOwner,
+            'selectedSheetId' => $selectedSheetId,
+            'architect'       => [
                 'name'         => $architect?->name ?? 'Arsitek',
                 'company_name' => $architect?->company_name ?? 'STUDIO ARSITEK',
                 'company_type' => $architect?->company_type ?? 'Studio',

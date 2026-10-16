@@ -840,8 +840,10 @@ function drawSelectionHighlights() {
     oldHighlights.forEach((h) => h.destroy());
 
     const nodes = tr?.nodes() || [];
-    // If 2 or more nodes are selected, draw an individual dashed cyan outline and corner grips on EACH one!
-    if (nodes.length > 1) {
+    // Batasi individual highlight hanya jika objek sedikit (<= 30 objek)
+    // Jika objek banyak (seperti saat Select All ratusan objek), selectionOverlay sudah cukup
+    // membungkus seluruh denah tanpa menurunkan FPS canvas!
+    if (nodes.length > 1 && nodes.length <= 30) {
         nodes.forEach((node) => {
             try {
                 const box = node.getClientRect({ skipTransform: false, relativeTo: stage! });
@@ -899,32 +901,73 @@ function drawSelectionHighlights() {
 function updateSelectionOverlay() {
     if (!selectionOverlay || !tr || tr.nodes().length === 0 || !props.canEdit || activeTool.value !== 'select') {
         if (selectionOverlay) selectionOverlay.visible(false);
-        if (tr) tr.visible(false);
+        if (tr) {
+            tr.visible(false);
+            tr.nodes([]);
+        }
         drawSelectionHighlights();
         return;
     }
 
     const nodes = tr.nodes();
 
-    // JIKA MULTI-SELEKSI (> 1 OBJEK):
-    // Matikan transformer Konva secara TOTAL (visible: false) agar TIDAK ADA box ungu raksasa,
-    // tidak ada handle resize, dan tidak ada handle rotasi di sekeliling ruangan!
+    // JIKA MULTI-SELEKSI (> 1 OBJEK ATAU SELECT ALL):
+    // Hitung bounding box gabungan seluruh objek terpilih dan aktifkan selectionOverlay
+    // agar pengguna bisa dengan sangat mudah mengklik dan men-drag dari mana saja di dalam area denah!
     if (nodes.length > 1) {
         tr.visible(false);
         tr.borderStrokeWidth(0);
         tr.resizeEnabled(false);
         tr.rotateEnabled(false);
         tr.enabledAnchors([]);
-        selectionOverlay.visible(false); // Hilangkan kotak overlay raksasa
+
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+
+        nodes.forEach((node) => {
+            try {
+                const box = node.getClientRect({ skipTransform: false, relativeTo: mainLayer! });
+                if (box.width > 0 || box.height > 0) {
+                    minX = Math.min(minX, box.x);
+                    minY = Math.min(minY, box.y);
+                    maxX = Math.max(maxX, box.x + box.width);
+                    maxY = Math.max(maxY, box.y + box.height);
+                }
+            } catch {}
+        });
+
+        if (minX !== Infinity && maxX !== -Infinity) {
+            const pad = 12;
+            selectionOverlay.setAttrs({
+                x: Math.round(minX - pad),
+                y: Math.round(minY - pad),
+                width: Math.round(maxX - minX + pad * 2),
+                height: Math.round(maxY - minY + pad * 2),
+                visible: true,
+                draggable: props.canEdit,
+                fill: 'rgba(139, 92, 246, 0.05)',
+                stroke: '#8b5cf6',
+                strokeWidth: 1.5,
+                dash: [6, 4],
+                cornerRadius: 6,
+                listening: true,
+            });
+            selectionOverlay.moveToTop();
+        } else {
+            selectionOverlay.visible(false);
+        }
     } else {
         // Seleksi tunggal: tampilkan transformer normal dengan handle resize & rotate
+        if (selectionOverlay) selectionOverlay.visible(false);
         tr.visible(true);
         tr.borderStrokeWidth(1.5);
         tr.borderStroke('#8b5cf6');
         tr.resizeEnabled(true);
         tr.rotateEnabled(true);
         tr.enabledAnchors(['top-left', 'top-center', 'top-right', 'middle-right', 'middle-left', 'bottom-left', 'bottom-center', 'bottom-right']);
-        selectionOverlay.visible(false);
+        tr.moveToTop();
     }
 
     drawSelectionHighlights();
@@ -1139,6 +1182,7 @@ function selectAllElements() {
     const allShapes = mainLayer.getChildren((node) => node !== tr && node !== selectionOverlay) as Konva.Group[];
     if (allShapes.length === 0) return;
 
+    allShapes.forEach((n) => n.draggable(props.canEdit));
     tr.nodes(allShapes);
     selectedNodeId.value = 'all';
     selectedElementData.value = {
@@ -1147,6 +1191,7 @@ function selectAllElements() {
     };
     updateSelectionOverlay();
     mainLayer.batchDraw();
+    toast.info(`${allShapes.length} objek denah terpilih. Klik & geser kotak seleksi untuk memindahkan seluruh denah.`);
 }
 
 // ── COPY, PASTE & DUPLICATE (SALIN PER OBJEK ATAU SELURUH OBJEK) ───────────
@@ -2679,6 +2724,10 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
             tr.nodes().forEach((n) => {
                 groupStartPositions.set(n, { x: n.x(), y: n.y() });
             });
+            if (selectionOverlay && selectionOverlay.visible()) {
+                groupStartPositions.set(selectionOverlay, { x: selectionOverlay.x(), y: selectionOverlay.y() });
+            }
+            tempLayer?.visible(false);
         }
         if (isGroupCloneDrag && stage) {
             stage.container().style.cursor = 'copy';
@@ -2702,17 +2751,26 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
                     }
                 }
             });
-            tr.update();
-            drawSelectionHighlights();
+            if (selectionOverlay && selectionOverlay.visible()) {
+                const origOverlay = groupStartPositions.get(selectionOverlay);
+                if (origOverlay) {
+                    selectionOverlay.x(origOverlay.x + dx);
+                    selectionOverlay.y(origOverlay.y + dy);
+                }
+            }
             mainLayer?.batchDraw();
         }
     });
 
     group.on('dragend', (e) => {
+        tempLayer?.visible(true);
         const totalDx = group.x();
         const totalDy = group.y();
         const isClone = isGroupCloneDrag || isCtrlHeld.value || isAltHeld.value || e.evt?.ctrlKey || e.evt?.altKey || e.evt?.metaKey;
-        if (totalDx === 0 && totalDy === 0) return;
+        if (totalDx === 0 && totalDy === 0) {
+            updateSelectionOverlay();
+            return;
+        }
 
         if (isClone) {
             // Ctrl + Drag: Buat objek salinan di posisi baru, pertahankan posisi objek asli!
@@ -2745,6 +2803,7 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
             if (tr && newElements.length > 0) {
                 const newIds = new Set(newElements.map((x) => x.id));
                 const newNodes = mainLayer!.getChildren((node) => newIds.has(node.id())) as Konva.Group[];
+                newNodes.forEach((n) => n.draggable(props.canEdit));
                 tr.nodes(newNodes);
                 tr.moveToTop();
                 if (newNodes.length === 1) {
@@ -2776,6 +2835,7 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
             }
 
             restoreFromState(elementList.value, true);
+            updateSelectionOverlay();
             pushHistory();
             triggerAutoSaveDebounced();
         }
@@ -2848,6 +2908,8 @@ function initCanvas() {
     let isOverlayCloneDrag = false;
 
     selectionOverlay.on('dragstart', (e) => {
+        pendingSingleSelect = null;
+        pendingToggleOff = null;
         isOverlayCloneDrag = Boolean(isCtrlHeld.value || isAltHeld.value || e.evt?.ctrlKey || e.evt?.altKey || e.evt?.metaKey);
         prevOverlayPos = { x: selectionOverlay!.x(), y: selectionOverlay!.y() };
         totalOverlayDx = 0;
@@ -2858,6 +2920,7 @@ function initCanvas() {
                 overlayStartNodePositions.set(n, { x: n.x(), y: n.y() });
             });
         }
+        tempLayer?.visible(false);
         if (isOverlayCloneDrag && stage) {
             stage.container().style.cursor = 'copy';
         }
@@ -2884,13 +2947,12 @@ function initCanvas() {
                     n.y(orig.y + totalOverlayDy);
                 }
             });
-            tr.update();
-            drawSelectionHighlights();
             mainLayer?.batchDraw();
         }
     });
 
     selectionOverlay.on('dragend', (e) => {
+        tempLayer?.visible(true);
         const isClone = isOverlayCloneDrag || isCtrlHeld.value || isAltHeld.value || e.evt?.ctrlKey || e.evt?.altKey || e.evt?.metaKey;
         if (totalOverlayDx !== 0 || totalOverlayDy !== 0) {
             if (isClone && tr && tr.nodes().length > 0) {
@@ -2918,6 +2980,7 @@ function initCanvas() {
                 if (tr && newElements.length > 0) {
                     const newIds = new Set(newElements.map((x) => x.id));
                     const newNodes = mainLayer!.getChildren((node) => newIds.has(node.id())) as Konva.Group[];
+                    newNodes.forEach((n) => n.draggable(props.canEdit));
                     tr.nodes(newNodes);
                     tr.moveToTop();
                     if (newNodes.length === 1) {
@@ -2945,6 +3008,7 @@ function initCanvas() {
                     });
                 }
                 restoreFromState(elementList.value, true);
+                updateSelectionOverlay();
                 pushHistory();
                 triggerAutoSaveDebounced();
             }
