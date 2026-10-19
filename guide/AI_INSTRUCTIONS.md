@@ -1,6 +1,10 @@
 # 🤖 System Prompt & AI Coding Instructions — PitchArch
 
 > **PENTING UNTUK AI:** Sebelum menulis atau memodifikasi kode apa pun di project ini, kamu WAJIB membaca dan mematuhi seluruh panduan yang ada di dalam folder `guide/`. Dilarang keras membuat asumsi, halusinasi arsitektur, atau mengubah konvensi tanpa persetujuan.
+> **v3.1:** Ditambahkan Section R (Architectural Working Booklet & Bidirectional Reference), Section S (Direct AI Render Generation), dan Section T (Interactive 3D Previews & Dashboard).
+>
+> **v3.0:** Modul Architectural Working Booklet PDF & Per-Room RAB Generator telah selesai diimplementasikan.
+>
 > **v2.8:** Modul Drawing 2D (`Domains/Drawing`) telah diimplementasikan penuh (Section O: multi-paper canvas, Figma-style paper resize handles, AutoCAD model space, kop gambar auto-wrap, hotkeys lengkap, export PDF clean iframe, DXF, SVG, PNG, responsive header & HUD).
 >
 > **v2.7:** Ditambahkan Section N (Profil Arsitek & Wilayah), Section P (AI Vision Studio), dan Section Q (High Concurrency & Redis Performance).
@@ -14,10 +18,10 @@
 ## 1. Context & Architecture References
 
 Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu pada file-file berikut di dalam folder `guide/`:
-- `guide/PRD.md` — Logika bisnis, batasan kuota, dan fitur SaaS (PRD v2.5).
+- `guide/PRD.md` — Logika bisnis, batasan kuota, dan fitur SaaS (PRD v3.1).
 - `guide/RTCF.md` — Spesifikasi arsitektur teknis, tech stack, dan alur integrasi.
 - `guide/RISE.md` — Draf prompt & langkah-langkah penulisan kode per komponen.
-- `guide/DATABASE_SCHEMA.md` — Skema tabel MySQL, tipe data, dan relasi UUID (v2.5).
+- `guide/DATABASE_SCHEMA.md` — Skema tabel MySQL, tipe data, dan relasi UUID (v3.1).
 - `guide/PROGRESS_TRACKER.md` — Status pengerjaan menu & fitur terupdate.
 - `guide/FOLDER_STRUCTURE.md` — Peta direktori monorepo aktual.
 
@@ -29,13 +33,13 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
 1. **No Role-Based Domains:** Dilarang keras membuat domain bernama `Admin`, `Client`, atau `Architect`. Domain HARUS murni berdasarkan Bounded Context logika bisnis:
    - `Domains/Auth` (Autentikasi & Identitas)
    - `Domains/SystemConfig` (Konfigurasi Aturan Bisnis & Kuota Global — termasuk backoffice panel Super Admin)
-   - `Domains/Project` (Manajemen Model 3D, Storage & Client Invitation)
+   - `Domains/Project` (Manajemen Model 3D, Storage, Lighting & Client Invitation)
    - `Domains/Comment` (Spatial Pin Annotation & Feedback)
    - `Domains/Chat` (Real-time Messaging Arsitek ↔ Klien per Project)
    - `Domains/Billing` (Transaksi, Subscription & Midtrans)
-   - `Domains/Rab` (RAB & Lembar Kerja: harga satuan, AHSP, template, import take-off, estimator `.glb`, mapping, export Excel)
+   - `Domains/Rab` (RAB & Lembar Kerja: harga satuan, AHSP, template, import take-off, estimator `.glb`, generator worksheet, export Excel)
    - `Domains/VisionStudio` (AI Generative Studio: Image & Video prompts arsitektural, paid-only)
-   - `Domains/Drawing` *(Rencana v2.7)* (Editor gambar teknik 2D: denah, tampak, potongan — hanya Enterprise)
+   - `Domains/Drawing` (Editor CAD 2D: denah, tampak, potongan, konva.js, export DXF/SVG, Booklet PDF Builder — hanya Enterprise)
 2. **Primary Key UUID:** Selalu gunakan UUID untuk ID tabel database. Gunakan `$table->uuid('id')->primary()` di migration.
 3. **Dynamic Quotas:** Selalu baca batasan kuota Free/Pro Tier dari `system_settings` via database query. **Jangan hardcode** angka kuota di controller atau action.
 4. **No Spaghetti Code:** Terapkan pemisahan tanggung jawab yang jelas (Form Request, Action/Service, Repository).
@@ -229,13 +233,34 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
    - Redis DB 1 dialokasikan khusus untuk cache (`REDIS_CACHE_DB=1`).
    - Redis DB 2 dialokasikan khusus untuk session pengguna (`REDIS_SESSION_DB=2`) agar command `cache:clear` tidak mendrop session pengguna yang aktif.
 
+### R. Architectural Working Booklet & Bidirectional Reference Rule (`Domains/Drawing` & `Domains/Project`)
+1. **Standar Presentasi Studio:** Halaman booklet di `Drawing/Booklet.vue` wajib mendukung tata letak landscape ISO (A3/A4) dengan komposisi baku: Halaman 1 Cover + watermark `DESIGN BY [COMPANY_NAME]`, Halaman 2 Master Plan Denah 2D 80/20, Halaman 3+ Eksterior & Interior per ruangan (Visual 68% + catatan + Key Plan + Kop Gambar 20%).
+2. **Auto Key-Plan Locator (`KeyPlanCanvas.vue`):** Wajib menggunakan render SVG murni tanpa dependensi eksternal berat. Bounding box dihitung dinamis dari seluruh elemen denah 2D. Ruangan yang sedang aktif WAJIB disorot dengan warna oranye terang arsitektural (`#EA580C`) beserta nomor/label kode ruangan.
+3. **Dedicated Print Engine:** Booklet menggunakan isolated CSS `@page { size: A3 landscape; margin: 0; }` dan utility `.booklet-page { break-after: page; }` agar hasil cetak browser atau save to PDF presisi 100% tanpa margin terpotong atau halaman kosong.
+4. **Bidirectional Reference System (3D ↔ 2D):**
+   - Kolom `code` pada `project_captures` (contoh: `R-01`, `EXT-01`) wajib unik dan sinkron antara 3D capture dan denah 2D.
+   - Panel Inspector pada CAD Editor 2D (`Drawing/Editor.vue`) menyediakan combobox interaktif untuk menautkan visual 3D ke elemen label ruangan, dengan proteksi badge "Sedang Dipakai" atau "Sudah Digunakan di [Ruangan]".
+   - Kanvas Konva CAD wajib menampilkan badge kamera oranye `📷 R-01` di atas label ruangan yang telah terhubung.
+5. **Worksheet to RAB Generator:** Pembuatan RAB per ruangan melalui `GenerateRabFromWorksheetAction` (`POST /projects/{project}/rab/from-worksheet`) WAJIB mengelompokkan item berdasarkan `section = Nama Ruangan` dan melakukan kalkulasi ulang melalui `RecalculateRabAction`.
+
+### S. Direct AI Render Generation Rule (`Domains/Project`)
+1. **Action & Provider:** Gunakan `GenerateAiRenderFromCaptureAction` sebagai satu-satunya titik masuk untuk generasi render fotorealistik AI dari snapshot 3D.
+2. **Kepatuhan Geometri 3D (100% Geometry Adherence):** Prompt yang dikirim ke Google Gemini API wajib menekankan ketaatan mutlak terhadap geometri referensi gambar 3D (`strict adherence to reference geometry`).
+3. **Storage & Pathing:** File hasil generate AI disimpan di `storage/app/public/projects/{id}/captures/ai/{uuid}.png` dan path disimpan pada kolom `ai_rendered_path` di tabel `project_captures`.
+4. **Mode Visual Switcher:** Frontend wajib menyediakan toggle visual untuk berganti secara instan antara "Render AI" dan "3D Asli" baik di 3D Viewer, drawer galeri, maupun di Working Booklet.
+
+### T. Interactive 3D Previews & Dashboard Rule (`resources/js/components/`)
+1. **Komponen Modular:** Tampilan preview 3D interaktif pada kartu proyek diisolasi dalam `Project3DPreview.vue` dan di-consume oleh `ProjectCard.vue`.
+2. **Optimasi Performa WebGL:** Animasi auto-rotate Three.js wajib menggunakan requestAnimationFrame yang hemat baterai dan men-dispose Three.js scene, geometry, material, dan texture saat komponen di-unmount.
+3. **Data Klien:** Kartu proyek menampilkan `client_name` dan `client_address` jika tersedia.
+
 ---
 
 ## 3. Workflow Procedure for AI
 1. Periksa `guide/PROGRESS_TRACKER.md` untuk melihat fitur mana yang perlu dikerjakan selanjutnya.
 2. Baca skema tabel terkait di `guide/DATABASE_SCHEMA.md`.
 3. Baca peta folder di `guide/FOLDER_STRUCTURE.md` untuk menentukan lokasi file yang benar.
-4. Tulis kode sesuai aturan DDD dan konvensi project (termasuk Section H/I/J/K/L/M/N/O/P/Q jika menyentuh Auth, Project, Chat, Frontend, RAB, Profil Wilayah, Vision Studio, Caching, atau Concurrency).
+4. Tulis kode sesuai aturan DDD dan konvensi project (termasuk Section H/I/J/K/L/M/N/O/P/Q/R/S/T).
 5. Update `guide/PROGRESS_TRACKER.md` begitu pekerjaan selesai.
 
 ---
@@ -258,6 +283,9 @@ Seluruh logika bisnis, arsitektur teknis, dan skema database project ini mengacu
 | Email | **noreply@pitcharch.id** | email lain |
 | Canvas 2D (Drawing) | **konva.js** (npm) | library canvas lain |
 | Export DXF | **nzcreations/dxf** (composer) | library DXF lain |
+| AI Render Vision | **Google Gemini API** (`GenerateAiRenderFromCaptureAction`) | API generator tanpa ketaatan geometri |
+| Key-Plan Locator | **KeyPlanCanvas.vue** (SVG responsive) | Bitmap snapshot raster |
+| Booklet Print Engine | **Pure CSS @page ISO Landscape** (`Booklet.vue`) | Browser screenshot bleed |
 | Wilayah Indonesia | **laravolt/indonesia** | buat tabel sendiri |
 | Kalkulasi harga satuan | **RecalculatePriceItemAction** | hitung di controller/frontend |
 | Kalkulasi total RAB | **RecalculateRabAction** | hitung di controller/frontend |

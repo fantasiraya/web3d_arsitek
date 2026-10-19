@@ -1,5 +1,7 @@
-# 📄 Product Requirement Document (PRD) v2.10
+# 📄 Product Requirement Document (PRD) v3.1
 
+> **v3.1 Note:** Menambahkan detail implementasi **Section 14 (Architectural Working Booklet PDF & Bidirectional Reference System)** dan **Section 15 (Direct AI Render Generation & Interactive 3D Previews)**. Update MoSCoW matrix: Architectural Working Booklet (A3/A4 Landscape PDF engine, auto Key-Plan, Kop Gambar), Direct AI Render (Gemini API, batch generate), Bidirectional 2D/3D Code System (`R-01`, `EXT-01`, Inspector combobox), Worksheet to Per-Room RAB Generator, dan Interactive 3D Project Cards → ✅ Selesai.
+>
 > **v2.10 Note:** Menambahkan detail implementasi penuh **Section 10 (Drawing 2D — Editor Denah, Tampak & Potongan)**. Update MoSCoW matrix: Drawing 2D (Konva.js CAD editor, Multi-Paper Frame Canvas, AutoCAD Model Space, Figma-style edge/corner drag resize, Kop Gambar auto-wrap, CAD hotkeys, Clean Print & PDF export via isolated iframe, DXF/SVG/PNG export) → ✅ Selesai.
 >
 > **v2.9 Note:** Menambahkan **Section 12 (AI Vision Studio)** dan **Section 13 (Arsitektur Caching & Proteksi Konkurensi Skala Tinggi)**. Update MoSCoW matrix: AI Vision Studio (Image/Video generative, Paid-Only) & Caching Redis Multi-DB + Concurrency Protection → ✅ Selesai.
@@ -66,7 +68,7 @@ Membangun platform SaaS berbasis Web 3D interaktif bernama **PitchArch** yang me
 | :--- | :--- | :--- |
 | **Arsitek (Free Tier)** | Kapabilitas default setiap akun baru. | Register/Login (Email + Google OAuth), Maksimal **1 project**, bisa tambah & edit project, mengundang Klien via email, chat real-time dengan Klien |
 | **Arsitek (Pro Subscriber)** | Kapasitas berbayar untuk individual atau tim kecil. | Batas kuota **20 project**, file maks 100MB, kustomisasi batas revisi client, undangan Klien hingga batas team plan |
-| **Arsitek (Enterprise)** | Paket organisasi/perusahaan skala besar. | **Unlimited projects**, advanced analytics & audit logs, SSO, API Access, Custom Branding, priority support |
+| **Arsitek (Enterprise)** | Paket organisasi/perusahaan skala besar. | **Unlimited projects**, advanced analytics & audit logs, SSO, API Access, Custom Branding, priority support, CAD 2D & Booklet |
 | **Klien (Invited Reviewer)** | Status per-project yang didapat saat email akun cocok dengan undangan Arsitek. | Wajib Login sebelum mengakses apa pun, sistem validasi email vs `project_clients`, buka 3D Viewer, lihat Counter Status Revisi, tempatkan Pin Comment, chat real-time dengan Arsitek |
 | **Super Admin** | Role eksplisit internal via Spatie `super_admin`. | Akses Admin Panel (`/admin/*`), kelola users/projects/plans/transactions/audit logs, atur konfigurasi kuota dinamis |
 
@@ -93,9 +95,6 @@ Membangun platform SaaS berbasis Web 3D interaktif bernama **PitchArch** yang me
 | **Should Have** | Camera View Presets | ✅ Selesai |
 | **Should Have** | Admin Panel (/admin/*) lengkap | ✅ Selesai |
 | **Should Have** | Settings: Profile, Password, Appearance | ✅ Selesai |
-| **Should Have** | Sectioning / Clipping Tool di Viewer | 🔴 Pending |
-| **Should Have** | Invoice PDF Download | 🔴 Pending |
-| **Should Have** | Chat Read Receipt & Typing Indicator | 🔴 Pending |
 | **Should Have** | RAB Fase A: Harga Satuan, Template RAB, RAB Manual, Switch Visibilitas Klien | ✅ Selesai |
 | **Should Have** | AHSP (Analisa Harga Satuan Pekerjaan) — `rab_price_item_components`, RecalculatePriceItemAction | ✅ Selesai |
 | **Should Have** | RAB Fase B: Import Quantity Take-off (CSV/Excel) via `league/csv` + `phpspreadsheet` | ✅ Selesai |
@@ -108,6 +107,16 @@ Membangun platform SaaS berbasis Web 3D interaktif bernama **PitchArch** yang me
 | **Should Have** | AI Vision Studio (Image & Video prompts arsitektural, Paid-Only gating, local persistence) | ✅ Selesai |
 | **Should Have** | Arsitektur Cache Redis Multi-DB & Proteksi Konkurensi Skala 1M User (atomic locks) | ✅ Selesai |
 | **Should Have** | Drawing 2D (Denah/Tampak/Potongan, konva.js, export DXF+SVG, PDF, Multi-Paper) — Enterprise only | ✅ Selesai |
+| **Should Have** | Architectural Working Booklet Builder (A3/A4 Landscape PDF Engine, Cover, Master Plan, Room Views) | ✅ Selesai |
+| **Should Have** | Auto Key-Plan Generator (`KeyPlanCanvas.vue` SVG mini-map dengan highlight oranye) | ✅ Selesai |
+| **Should Have** | Direct AI Render Generation from 3D Captures (`GenerateAiRenderFromCaptureAction`, Gemini API, Batch) | ✅ Selesai |
+| **Should Have** | Bidirectional 2D ↔ 3D Code & Reference System (`R-01`, `EXT-01`, Inspector combobox, Konva badge) | ✅ Selesai |
+| **Should Have** | Worksheet to Per-Room RAB Generator (`GenerateRabFromWorksheetAction`, `POST .../from-worksheet`) | ✅ Selesai |
+| **Should Have** | Interactive 3D Project Card & Dashboard Preview (`ProjectCard.vue`, `Project3DPreview.vue`) | ✅ Selesai |
+| **Should Have** | Client Metadata on Projects (`client_name`, `client_address` untuk Title Block & Booklet) | ✅ Selesai |
+| **Should Have** | Sectioning / Clipping Tool di Viewer | 🔴 Pending |
+| **Should Have** | Invoice PDF Download | 🔴 Pending |
+| **Should Have** | Chat Read Receipt & Typing Indicator | 🔴 Pending |
 | **Could Have** | First-Person Walkthrough Mode | 🔴 Pending |
 | **Could Have** | Material Swapper | 🔴 Pending |
 | **Could Have** | Import IFC (data BIM) untuk RAB | 🔴 Pending |
@@ -209,7 +218,7 @@ Effective Limit = Custom User Override (jika ada) ?? Plan Limit ?? 1
 | `Domains/Chat` | Real-time messaging Arsitek ↔ Klien per project via Reverb |
 | `Domains/Billing` | Midtrans Snap, webhook handler, subscription management |
 | `Domains/Rab` | Harga satuan, AHSP (komponen biaya), template RAB, dokumen RAB, import take-off, estimator `.glb`, mapping, visibilitas ke Klien, export Excel |
-| `Domains/Drawing` | *(Rencana v2.7)* Editor denah/tampak/potongan 2D, export DXF+SVG — hanya Enterprise |
+| `Domains/Drawing` | Editor denah/tampak/potongan 2D, konva.js CAD editor, Multi-Paper, export DXF+SVG, Architectural Working Booklet PDF Builder (A3/A4 Landscape) — hanya Enterprise |
 
 ---
 
@@ -394,4 +403,64 @@ Operasi kritis yang memvalidasi kuota dan status kini diamankan dengan atomic di
 ### 13.C Eliminasi N+1 Query Sistemik
 - Event listener `User::retrieved` di `AppServiceProvider.php` telah dihapus.
 - Eager loading relasi diterapkan pada seluruh endpoint admin dan listing data (`with(['user.activeSubscription.planModel', 'user.planOverride', 'invitedClients'])` dan `withCount('projects')`).
+
+---
+
+## 14. Architectural Working Booklet & Bidirectional Reference System (`Domains/Drawing` & `Domains/Project`)
+
+### 14.A Tujuan & Konsep Booklet
+Menyediakan lembar presentasi arsitektur profesional (Working Booklet) berstandar studio arsitektur terkemuka dalam format landscape ISO (A3 dan A4). Booklet menggabungkan denah 2D, snapshot 3D resolusi tinggi atau render AI, locator denah mini (Key Plan), dan Kop Gambar resmi proyek dalam satu dokumen yang siap cetak atau unduh ke PDF.
+
+### 14.B Struktur Halaman Booklet
+1. **Halaman 1 (Cover Page):**
+   - Menampilkan gambar cover utama beresolusi tinggi (bisa dipilih manual atau default dari tampak eksterior `EXT-*`).
+   - Judul Proyek monumental dengan watermark arsitek: `DESIGN BY [COMPANY_NAME]`.
+   - Nama klien (`projects.client_name`) dan alamat lokasi site (`projects.client_address`).
+2. **Halaman 2 (Master Floor Plan 2D):**
+   - Denah lantai utama dalam rasio 80/20 (80% denah skala besar, 20% Kop Gambar vertikal).
+   - Menampilkan seluruh layout partisi dinding, bukaan pintu, jendela, kolom, dan label nama ruangan.
+3. **Halaman 3+ (Per-Room Visual Presentation):**
+   - **Area Visual Utama (68%):** Snapshot visual 3D WebGL atau foto render fotorealistik AI.
+   - **Header Ruangan:** Badge kode ruangan (`R-01`, `R-02`, dll.) dan nama ruangan (`TERAS`, `KASIR`, `AREA VIP`, dll.) beserta catatan arsitektural.
+   - **Auto Key-Plan Locator (SVG):** Miniatur denah lantai yang otomatis menyorot posisi ruangan aktif dengan **highlight oranye menyala (`#EA580C`)**, memudahkan klien memahami orientasi spasial ruangan dalam denah.
+   - **Kop Gambar Title Block (20%):** Menempel di sisi kanan atau sudut lembar, menyajikan nama arsitek, studio, nama proyek, tanggal, dan nomor halaman.
+
+### 14.C Auto Key-Plan Renderer (`KeyPlanCanvas.vue`)
+- Komponen visual denah mini berbasis vektor SVG murni.
+- Menghitung bounding box dari seluruh elemen denah 2D (`drawing_elements`) secara otomatis.
+- Menampilkan denah dalam skema monokrom bersih (garis dinding abu-abu/hitam) dan **meng-highlight poligon ruangan aktif** dengan warna oranye studio `#EA580C` beserta badge nomor/kode ruangan.
+- Tidak memerlukan render server terpisah; kalkulasi berlangsung instan di browser klien.
+
+### 14.D Sistem Kode Dua Arah (Bidirectional Reference: 3D ↔ 2D CAD)
+1. **Auto Code Generation:** Kode unik otomatis saat snapshot diambil (`EXT-01`, `EXT-02` untuk tampak luar, `R-01`, `R-02` untuk interior) dengan dukungan kustomisasi nama kode oleh arsitek.
+2. **Filter Galeri 3D:** Drawer galeri di 3D Viewer dilengkapi tab filter kode (`Semua Kode`, `R-* (Interior)`, `EXT-* (Eksterior)`, `Kustom`).
+3. **Live Inspector Combobox di CAD 2D:**
+   - Saat arsitek mengeklik label ruangan di editor CAD (`Drawing/Editor.vue`), panel properti menyediakan combobox pencarian snapshot 3D.
+   - Menampilkan visual thumbnail, kode, nama ruangan, dan jam pencahayaan.
+   - Menandai visual yang sudah terhubung dengan badge **"Sedang Dipakai"** atau **"Sudah Digunakan di [Ruangan]"** untuk mencegah penautan ganda yang salah.
+4. **Visual Badge di Kanvas Konva:** Label ruangan yang telah ditautkan ke visual 3D otomatis menampilkan badge kamera oranye `📷 R-01` di kanvas CAD.
+5. **Indikator Daftar Proyek:** Halaman `/drawings` menampilkan badge jumlah visual 3D tertaut (`📷 X 3D`) dan tombol akses cepat langsung ke Booklet PDF.
+
+### 14.E Generator Draf RAB Per Ruangan dari Lembar Kerja
+- **Endpoint:** `POST /projects/{project}/rab/from-worksheet`
+- **Action:** `GenerateRabFromWorksheetAction`
+- Membaca seluruh ruangan yang terdefinisi di lembar denah 2D dan booklet, lalu membuat dokumen RAB baru dengan mengelompokkan item RAB per `section = Nama Ruangan` (`TERAS`, `RUANG UTAMA`, `DAPUR`, dll.).
+- Mengaitkan otomatis ke harga satuan arsitek, menandai kuantitas sebagai `is_estimate = true`, dan mengkalkulasi subtotal, overhead 10%, serta PPN 11% secara atomik melalui `RecalculateRabAction`.
+
+---
+
+## 15. Direct AI Render Generation & Interactive 3D Cards (`Domains/Project`)
+
+### 15.A Direct AI Render Generation from 3D Captures
+1. **Konsep & Arsitektur:** Arsitek dapat mentransformasi tangkapan layar 3D WebGL menjadi render fotorealistik kualitas majalah arsitektur tanpa meninggalkan halaman Booklet atau Viewer.
+2. **Action & Integrasi:** `GenerateAiRenderFromCaptureAction` menggunakan Google Gemini API (`gemini-2.5-flash` / multimodal vision) untuk merekonstruksi material, pencahayaan alami, dan detail tekstur dengan ketaatan 100% pada geometri referensi 3D.
+3. **Batch Generation:** Mendukung pembuatan render AI secara simultan untuk seluruh ruangan proyek (`POST /projects/{project}/captures/generate-all-ai`) atau satu per satu per capture.
+4. **Pengaturan Prompt & Mood:** Pilihan mood pencahayaan (natural daylight, warm golden hour, moody dusk, cinematic evening) dengan prompt kontekstual otomatis.
+5. **Mode Visual Switcher:** Arsitek dan klien dapat beralih antara "Render AI" dan "3D Asli" dalam 1 klik di galeri maupun booklet.
+
+### 15.B Interactive 3D Project Cards (`ProjectCard.vue` & `Project3DPreview.vue`)
+1. **Preview 3D Interaktif di Dashboard & Galeri:** Kartu proyek pada halaman `/dashboard` dan `/projects` kini dilengkapi viewport WebGL mini interaktif yang me-load model 3D asli (.glb).
+2. **Interaktivitas:** Model 3D berotasi lembut secara otomatis (auto-rotate), mendukung orbit kontrol mouse interaktif, dan dilengkapi pencahayaan ambient + directional light yang responsif.
+3. **Optimasi Performa:** WebGL canvas diinisialisasi secara efisien dengan listener interaksi agar tidak membebani browser saat banyak kartu ditampilkan sekaligus.
+4. **Metadata Klien Proyek:** Menampilkan nama klien (`client_name`) dan alamat site (`client_address`) langsung pada kartu proyek.
 

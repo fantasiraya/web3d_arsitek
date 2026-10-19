@@ -2,10 +2,11 @@
 **Project:** PitchArch — Platform Presentasi & Feedback Arsitektur 3D
 **Database Engine:** MySQL
 **Primary Key Standard:** UUID
-**Reference:** PRD v2.9, RTCF, RISE Framework
-**Revision:** v3.0 — Architectural Working Booklet PDF & Per-Room RAB Generator: kolom `ai_rendered_path`, `drawing_sheet_id`, `room_element_id`, `description`, `sort_order` di `project_captures`, dan konstanta `source = 'worksheet'` di `rab_documents`.
+**Reference:** PRD v2.11, RTCF, RISE Framework
+**Revision:** v3.1 — Architectural Working Booklet PDF, Direct AI Render, Bidirectional 2D/3D Code Reference & Client Info: penambahan kolom `client_name` & `client_address` di `projects`, kolom `code`, `ai_rendered_path`, `drawing_sheet_id`, `room_element_id`, `description`, `sort_order` di `project_captures`, serta konstanta `source = 'worksheet'` di `rab_documents`.
+**v3.0 Changelog:** Architectural Working Booklet PDF & Per-Room RAB Generator: kolom `ai_rendered_path`, `drawing_sheet_id`, `room_element_id`, `description`, `sort_order` di `project_captures`, dan `source = 'worksheet'` di `rab_documents`.
 **v2.9 Changelog:** Ditambah tabel `vision_creations` (AI Vision Studio), kolom `prompt` di `project_captures`, optimasi Redis cache multi-DB, distributed locking & eliminasi N+1
-**v2.7 Changelog:** Ditambah kolom profil arsitek di `users`, kolom `is_pinned` di `comments`, tabel `rab_price_item_components` (AHSP), kolom `overhead_percent`/`has_components` di `rab_price_items`, tabel wilayah `laravolt/indonesia`, rancangan Drawing 2D
+**v2.7 Changelog:** Ditambah kolom profil arsitek di `users`, kolom `is_pinned` di `comments`, tabel `rab_price_item_components` (AHSP), kolom `overhead_percent`/`has_components` di `rab_price_items`, tabel wilayah `laravolt/indonesia`, implementasi Drawing 2D
 **v2.6 Changelog:** Menambahkan modul RAB (tabel `rab_*`, kolom `plans.can_use_rab`)
 **v2.5 Changelog:** Mengganti engine dari PostgreSQL ke **MySQL** (aktual). Menambahkan tabel `camera_presets`. Semua tipe `jsonb` → `json` (MySQL syntax). Menyesuaikan catatan storage dari Cloudflare R2 ke **local disk `public`**.
 
@@ -21,11 +22,16 @@ erDiagram
     USERS ||--o{ SUBSCRIPTIONS : "subscribes"
     USERS ||--o{ PROJECT_CLIENTS : "invited as (matched by email)"
     USERS ||--o{ CHAT_MESSAGES : "sends"
+    USERS ||--o{ VISION_CREATIONS : "creates"
     PROJECTS ||--o{ COMMENTS : "contains"
     PROJECTS ||--o{ PROJECT_VERSIONS : "has revisions"
     PROJECTS ||--o{ PROJECT_CLIENTS : "invites"
     PROJECTS ||--o{ CHAT_MESSAGES : "has thread"
     PROJECTS ||--o{ CAMERA_PRESETS : "has presets"
+    PROJECTS ||--o{ PROJECT_CAPTURES : "has captures"
+    PROJECTS ||--o{ DRAWING_SHEETS : "has 2D sheets"
+    DRAWING_SHEETS ||--o{ DRAWING_ELEMENTS : "contains elements"
+    DRAWING_SHEETS ||--o{ PROJECT_CAPTURES : "references 2D sheet"
     COMMENTS ||--o{ COMMENTS : "has replies (parent_id)"
     USERS ||--o{ RAB_PRICE_ITEMS : "owns"
     USERS ||--o{ RAB_TEMPLATES : "owns"
@@ -145,6 +151,8 @@ Menyimpan metadata file 3D `.glb` yang diunggah oleh Arsitek.
 | `title` | `string` | `NOT NULL` | Judul project presentasi |
 | `slug` | `string` | `UNIQUE, NOT NULL` | Slug URL friendly |
 | `description` | `text` | `NULLABLE` | Catatan/deskripsi tambahan |
+| `client_name` | `string` | `NULLABLE` | Nama klien / pemilik proyek (dipakai pada Kop Gambar & Architectural Booklet) |
+| `client_address` | `text` | `NULLABLE` | Alamat lengkap klien / lokasi site proyek |
 | `file_path` | `string` | `NOT NULL` | Path lokasi file `.glb` di storage (relative dari `storage/app/public/`) |
 | `file_size_bytes` | `bigInteger` | `NOT NULL` | Ukuran file dalam bytes |
 | `is_draco_compressed` | `boolean` | `DEFAULT(false)` | Status apakah file sudah dikompresi Draco |
@@ -431,7 +439,7 @@ Aturan pencocokan nama objek/material/baris CSV ke harga satuan (dipakai Fase B 
 | `user_id` | `uuid` | `FOREIGN KEY, NOT NULL` | Pembuat (Arsitek pemilik) |
 | `rab_template_id` | `uuid` | `FOREIGN KEY, NULLABLE` | Template asal |
 | `title` | `string` | `NOT NULL` | |
-| `source` | `string(10)` | `DEFAULT('manual')` | `manual`, `csv`, `glb` |
+| `source` | `string(10)` | `DEFAULT('manual')` | `manual`, `csv`, `glb`, `worksheet` |
 | `status` | `string(10)` | `DEFAULT('draft')` | `draft`, `final` |
 | `is_visible_to_clients` | `boolean` | `DEFAULT(false)` | Switch: Klien `accepted` boleh melihat read-only |
 | `overhead_percent` / `ppn_percent` | `decimal(5,2)` | `DEFAULT(0)` | |

@@ -1,8 +1,12 @@
+> **v3.1 Note:** Ditambahkan alur Q (Architectural Working Booklet PDF & Key Plan Canvas), alur R (Bidirectional 2D/3D Code System), alur S (Direct AI Render Generation), alur T (Worksheet to Per-Room RAB Generator), dan alur U (Interactive 3D Project Cards). Update route structure: tambah `/drawings*`, `/projects/{project}/booklet`, `/projects/{project}/captures/{capture}/ai-render*`, `/projects/{project}/captures/{capture}/generate-ai`, dan `/projects/{project}/rab/from-worksheet`.
+>
+> **v3.0 Note:** Alur M (Drawing 2D) telah selesai diimplementasikan. Integrasi booklet fields dan upload render AI pada `project_captures`.
+>
 > **v2.9 Note:** Ditambahkan alur O (AI Vision Studio, Paid-Only gating, local persistence) dan alur P (Redis Multi-DB Caching & High Concurrency Control). Update route structure: tambah `/vision-studio*`.
 >
 > **v2.8 Note:** Ditambahkan alur N (Pencahayaan Matahari Real-Time SunCalc & 3D Snapshot Captures). Update route structure: tambah `/projects/{project}/captures*` dan `/projects/{project}/sun-settings`.
 >
-> **v2.7 Note:** Ditambahkan alur L (Profil Arsitek & Wilayah Indonesia) dan alur M (Drawing 2D — Rencana). Update route structure: tambah `/region/*`, `/rab/mappings`, `/rab/price-items/{id}/components`, `/rab/price-items/{id}/overhead`.
+> **v2.7 Note:** Ditambahkan alur L (Profil Arsitek & Wilayah Indonesia). Update route structure: tambah `/region/*`, `/rab/mappings`, `/rab/price-items/{id}/components`, `/rab/price-items/{id}/overhead`.
 >
 > **v2.6 Note:** Ditambahkan alur K (RAB & Lembar Kerja) dan route RAB.
 >
@@ -12,7 +16,7 @@
 Bertindaklah sebagai Senior Full-Stack Developer & Software Architect spesialis Laravel 12 (DDD) dan Inertia.js + Vue 3.
 
 [TASK]
-Buatkan rancangan arsitektur teknis dan panduan integrasi sistem untuk platform SaaS Web 3D Arsitek **PitchArch** berdasarkan PRD v2.9.
+Buatkan rancangan arsitektur teknis dan panduan integrasi sistem untuk platform SaaS Web 3D Arsitek **PitchArch** berdasarkan PRD v3.1.
 
 [CONTEXT]
 1. Platform diperuntukkan bagi arsitek untuk mempresentasikan model 3D ke klien terundang (bukan publik), mengumpulkan pin komentar 3D, dan berkomunikasi via chat real-time.
@@ -131,12 +135,16 @@ Sajikan output secara terstruktur dalam format Markdown:
    - `HandleInertiaRequests` di-update untuk share semua field profil baru ke frontend.
    - `AddressInput.vue` + `useIndonesiaRegion.ts` menangani cascading dropdown di `Settings/Profile.vue`.
 
-   **M. Drawing 2D — Rencana *(Belum Diimplementasikan)***
-   - Domain baru `Domains/Drawing`, tabel `drawing_sheets` (plan/elevation/section) + `drawing_elements`.
-   - Editor frontend: **konva.js** (canvas 2D). Export: DXF (`nzcreations/dxf`) + SVG.
-   - Gating: kolom `plans.can_use_drawing = true`, hanya Enterprise.
-   - Library simbol: pintu, jendela, kolom, tangga (pre-built SVG di konva).
-   - Status: **🔴 Pending** — tunggu perintah implementasi.
+   **M. Drawing 2D — Editor CAD Konva.js (`Domains/Drawing` — 🟢 Selesai)**
+   - Domain `Domains/Drawing`, tabel `drawing_sheets` (plan/elevation/section, paper_size, width, height, scale, sort_order) + `drawing_elements`.
+   - Editor frontend: **konva.js** (canvas 2D vektor hardware-accelerated).
+   - Multi-paper frame canvas: tambah kertas (`+ Kertas ke Kanvas`) dan hapus lembar independen.
+   - Mode ganda: Paper Space (A0–A4 portrait/landscape & custom) vs AutoCAD Model Space (∞).
+   - Figma-style edge/corner live resize handle tanpa destroy Konva node + instant `localStorage` cache.
+   - Kop Gambar (Title Block) auto word-wrap dengan tinggi adaptif & layer isolation (`paperBgLayer` → `gridLayer` → `paperLayer`).
+   - Clean PDF export & direct browser print via hidden isolated iframe beresolusi tinggi tanpa bleed UI editor.
+   - Export format: DXF (AutoCAD R12 ASCII compliant via `ExportDxfAction`), SVG scalable (`ExportSvgAction`), dan PNG resolusi tinggi.
+   - Gating: kolom `plans.can_use_drawing = true`, khusus tier Enterprise & Super Admin.
 
    **N. Simulasi Pencahayaan Matahari Real-Time & 3D Snapshot Captures (`Domains/Project`)**
    - Perhitungan sudut azimuth & altitude matahari via library `SunCalc` di `useSunSimulation.ts`.
@@ -160,6 +168,34 @@ Sajikan output secara terstruktur dalam format Markdown:
    - Safe Cache Tagging: `CacheKeys::tags(['plans'])` membungkus pemanggilan cache ber-tag agar portabel ke berbagai cache driver.
    - Eliminasi N+1: Penghapusan global model event listener `User::retrieved` di `AppServiceProvider.php` dan penerapan eager loading di seluruh listing controller.
    - Distributed Atomic Locking: Mutasi kuota kritis dilindungi dengan `Cache::lock()->block()`, dan webhook pembayaran Midtrans diisolasi dengan `lockForUpdate()`.
+
+   **Q. Architectural Working Booklet PDF & Key Plan Canvas (`Domains/Drawing` & `Domains/Project`)**
+   - Halaman builder booklet presentasi standar studio arsitektur landscape ISO (A3/A4) di `Booklet.vue`.
+   - Komposisi multi-halaman: Halaman 1 Cover dengan watermark arsitek, Halaman 2 Master Plan Denah 2D rasio 80/20, Halaman 3+ Visual 3D/AI 68% + catatan + Key Plan locator + Kop Gambar 20%.
+   - Mini denah SVG otomatis (`KeyPlanCanvas.vue`): menghitung bounding box dari elemen denah dan menyorot ruangan aktif dengan **warna oranye menyala (`#EA580C`)**.
+   - Dedicated print engine CSS `@page { size: A3 landscape; margin: 0; }` untuk 1-click cetak dan simpan PDF presisi.
+
+   **R. Bidirectional 2D ↔ 3D Reference & Code System (`Domains/Drawing` & `Domains/Project`)**
+   - Kode capture otomatis (`EXT-01`, `R-01`) dengan input kustom dan auto-save on blur di Lightbox modal.
+   - Filter kategori kode pada drawer galeri 3D (`R-*`, `EXT-*`, `Kustom`).
+   - Live Combobox Inspector di CAD Editor 2D (`Drawing/Editor.vue`) untuk menautkan snapshot visual ke elemen label ruangan, dilengkapi badge status "Sedang Dipakai" atau "Sudah Digunakan di [Ruangan]".
+   - Tampilan badge kamera oranye `📷 R-01` langsung di atas label ruangan pada kanvas Konva.
+
+   **S. Direct AI Render Generation from 3D Captures (`Domains/Project`)**
+   - Action `GenerateAiRenderFromCaptureAction` mentransformasikan snapshot 3D WebGL menjadi render fotorealistik arsitektural menggunakan Google Gemini API.
+   - Batch AI render generator (`POST /projects/{project}/captures/generate-all-ai`) untuk memproses seluruh ruangan proyek sekaligus.
+   - Mood switcher dan prompt kontekstual otomatis dengan ketaatan 100% pada geometri referensi 3D.
+   - Toggle mode "Render AI" vs "3D Asli" di galeri dan booklet.
+
+   **T. Generator Draf RAB Per Ruangan dari Lembar Kerja (`Domains/Rab`)**
+   - Action `GenerateRabFromWorksheetAction` (`POST /projects/{project}/rab/from-worksheet`) membaca elemen denah dan booklet.
+   - Otomatis mengelompokkan item RAB per `section = Nama Ruangan` (`TERAS`, `KASIR`, `AREA VIP`, dll.).
+   - Memetakan ke harga satuan arsitek, memberi label `is_estimate = true`, dan mengkalkulasi ulang subtotal, overhead, serta PPN melalui `RecalculateRabAction`.
+
+   **U. Interactive 3D Project Cards (`ProjectCard.vue` & `Project3DPreview.vue`)**
+   - Kartu proyek pada halaman `/dashboard` dan `/projects` terintegrasi dengan WebGL mini viewport.
+   - Auto-rotation halus, orbit control mouse interaktif, ambient & directional lighting, fallback graceful ke thumbnail 2D.
+   - Menampilkan informasi klien proyek (`client_name`, `client_address`).
 
 2. **Struktur Folder (lihat `FOLDER_STRUCTURE.md` untuk detail lengkap)**
    - Monorepo: `app/Domains/`, `app/Http/`, `app/Support/`, `resources/js/pages/`, `resources/js/components/`, `resources/js/layouts/`.
@@ -203,7 +239,24 @@ Sajikan output secara terstruktur dalam format Markdown:
    GET|POST /projects/{project}/captures          → ProjectCaptureController@index|store
    DELETE   /projects/{project}/captures/{capture}→ ProjectCaptureController@destroy
    PATCH    /projects/{project}/captures/{capture}/visibility → ProjectCaptureController@toggleVisibility
+   PATCH    /projects/{project}/captures/{capture}/prompt     → ProjectCaptureController@updatePrompt
+   POST     /projects/{project}/captures/generate-prompt      → ProjectCaptureController@generatePrompt
+   POST     /projects/{project}/captures/{capture}/ai-render  → ProjectCaptureController@uploadAiRender
+   POST     /projects/{project}/captures/{capture}/generate-ai→ ProjectCaptureController@generateAiRender
+   DELETE   /projects/{project}/captures/{capture}/ai-render  → ProjectCaptureController@deleteAiRender
    PATCH    /projects/{project}/sun-settings       → ProjectCaptureController@updateSunSettings
+
+   # Drawing 2D & Booklet (auth, verified, enterprise gating: plans.can_use_drawing)
+   GET      /drawings                              → DrawingSheetController@index        (Drawing/Index.vue)
+   POST     /drawings                              → DrawingSheetController@store
+   GET      /drawings/{sheet}                      → DrawingSheetController@show         (Drawing/Editor.vue)
+   PATCH    /drawings/{sheet}                      → DrawingSheetController@update
+   DELETE   /drawings/{sheet}                      → DrawingSheetController@destroy
+   POST     /drawings/{sheet}/sync                 → DrawingElementController@sync
+   POST     /drawings/{sheet}/sync-captures        → DrawingSheetController@syncCaptures
+   GET      /drawings/{sheet}/export-dxf           → DrawingSheetController@exportDxf
+   GET|POST /drawings/{sheet}/export-svg           → DrawingSheetController@exportSvg
+   GET      /projects/{project}/booklet            → BookletController@show              (Drawing/Booklet.vue)
 
    # AI Vision Studio (auth, vision.access — khusus berbayar)
    GET    /vision-studio                          → VisionStudioController@index (VisionStudio/Index.vue)
@@ -230,6 +283,7 @@ Sajikan output secara terstruktur dalam format Markdown:
    # RAB & Lembar Kerja (pemilik + can_use_rab; klien read-only bila is_visible_to_clients)
    GET    /projects/{project}/rab                    → RabDocumentController@index
    POST   /projects/{project}/rab                    → RabDocumentController@store
+   POST   /projects/{project}/rab/from-worksheet     → RabDocumentController@generateFromWorksheet
    GET    /projects/{project}/rab/{rab}              → RabDocumentController@show
    PUT    /projects/{project}/rab/{rab}              → RabDocumentController@update
    PATCH  /projects/{project}/rab/{rab}/visibility   → RabDocumentController@toggleVisibility
