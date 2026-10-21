@@ -41,6 +41,7 @@ class DrawingSheet extends Model
         'height',
         'grid_spacing',
         'unit',
+        'image_path',
         'sort_order',
     ];
 
@@ -52,6 +53,32 @@ class DrawingSheet extends Model
             'grid_spacing' => 'integer',
             'sort_order'   => 'integer',
         ];
+    }
+
+    protected $appends = [
+        'image_url',
+    ];
+
+    public function getImageUrlAttribute(): ?string
+    {
+        if (empty($this->image_path)) {
+            return null;
+        }
+
+        if (str_starts_with($this->image_path, 'http://') || str_starts_with($this->image_path, 'https://')) {
+            return $this->image_path;
+        }
+
+        return '/storage/' . ltrim($this->image_path, '/');
+    }
+
+    protected static function booted(): void
+    {
+        static::deleting(function (DrawingSheet $sheet): void {
+            if ($sheet->image_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($sheet->image_path)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($sheet->image_path);
+            }
+        });
     }
 
     public function project(): BelongsTo

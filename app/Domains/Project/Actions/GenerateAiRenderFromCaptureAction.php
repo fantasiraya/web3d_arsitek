@@ -26,7 +26,8 @@ class GenerateAiRenderFromCaptureAction
         Project $project,
         ProjectCapture $capture,
         array $options = [],
-        ?UploadedFile $uploadedReferenceImage = null
+        ?UploadedFile $uploadedReferenceImage = null,
+        ?UploadedFile $uploadedDepthMap = null
     ): ProjectCapture {
         if ($project->user_id !== $user->id) {
             abort(403, 'Hanya arsitek pemilik proyek yang dapat melakukan generate render AI.');
@@ -36,55 +37,137 @@ class GenerateAiRenderFromCaptureAction
             abort(422, 'Capture tidak cocok dengan proyek.');
         }
 
-        // Resolusi konfigurasi AI sesuai sistem backend sebelumnya (VISION_AI_PROVIDER & GEMINI_API_KEY)
-        $dbProvider = $this->getSetting('vision_ai_provider');
-        $provider = strtolower((string) ($dbProvider ?: config('services.vision_ai.provider', 'gemini')));
-        $geminiApiKey = (string) ($this->getSetting('gemini_api_key', config('services.vision_ai.providers.gemini.api_key') ?: config('services.gemini.api_key')));
+        // Resolusi konfigurasi AI
+        $dbProvider = $this->getSetting('image_render_provider');
+        $provider = strtolower((string) ($dbProvider ?: config('services.image_render.provider') ?: env('IMAGE_RENDER_PROVIDER', 'gemini')));
 
-        // Tentukan prompt yang digunakan
+        $dbModel = $this->getSetting('image_render_model');
+        $model = (string) ($dbModel ?: config('services.image_render.model') ?: env('IMAGE_RENDER_MODEL', 'imagen-3.0-generate-002'));
+
+        $geminiApiKey = (string) ($this->getSetting('gemini_api_key', config('services.vision_ai.providers.gemini.api_key') ?: config('services.gemini.api_key')));
+        $replicateToken = (string) ($this->getSetting('replicate_api_token', env('REPLICATE_API_TOKEN')));
+
+        // 1. Tentukan prompt yang digunakan (prioritaskan prompt dari modal / vision AI capture)
         $userPrompt = trim((string) ($options['prompt'] ?? ''));
         if (empty($userPrompt)) {
             $userPrompt = $capture->prompt;
         }
 
         if (empty($userPrompt)) {
-            $roomName = $capture->room_name ?: 'Modern Architectural Space';
+            $roomName = $capture->room_name ?: 'Ruangan Arsitektur';
             $mood = $options['mood'] ?? 'natural bright daylight';
             $userPrompt = "Masterpiece architectural photograph of {$roomName}, modern high-end architectural design, {$mood}, 100% strict adherence to the reference geometry, realistic physical textures, clean wood and concrete materials, natural soft illumination, cinematic depth of field, architectural digest 8k magazine quality.";
         }
 
         $aspectRatio = $options['aspect_ratio'] ?? '16:9';
 
-        // Dapatkan URL gambar referensi 3D (dari file yang diunggah langsung atau file di storage)
-        $referenceImageUrl = $this->getPublicImageUrl($capture, $uploadedReferenceImage);
-
-        // Eksekusi render: Coba Gemini Imagen terlebih dahulu sesuai GEMINI_API_KEY.
-        // Jika akun Google AI Studio gratisan dibatasi policy (403), alihkan otomatis ke Flux dengan gambar acuan.
-        $imageData = null;
-        if ($provider === 'gemini') {
-            try {
-                $imageData = $this->callGeminiImagen($geminiApiKey, $userPrompt, $aspectRatio);
-            } catch (\Throwable $e) {
-                Log::warning("Gemini Imagen tidak dapat dipanggil langsung ({$e->getMessage()}). Mengalihkan otomatis ke engine fotorealistik Flux dengan gambar acuan 3D.");
-                $imageData = $this->renderWithPollinations($userPrompt, $aspectRatio, 'flux', $referenceImageUrl);
-            }
-        } elseif ($provider === 'replicate') {
-            $imageData = $this->renderWithReplicate($this->getSetting('replicate_api_token', env('REPLICATE_API_TOKEN')), $userPrompt, $aspectRatio, 'black-forest-labs/flux-schnell', $referenceImageUrl);
-        } else {
-            $imageData = $this->renderWithPollinations($userPrompt, $aspectRatio, 'flux', $referenceImageUrl);
+        // 2. Ekstrak file biner Gambar Referensi (RGB)
+        $refBinary = $this->getImageBinary($capture, $uploadedReferenceImage);
+        if (empty($refBinary)) {
+            throw new RuntimeException('File gambar referensi 3D tidak ditemukan pada server.');
         }
 
-        // Hapus file AI render lama jika ada
+        // 3. Ekstrak / Buat Depth Map (Peta Kedalaman Kontrol Geometri)
+        $depthMapBinary = $this->resolveDepthMapBinary($capture, $uploadedDepthMap, $refBinary);
+        if ($depthMapBinary) {
+            $depthPath = "projects/{$project->id}/captures/depth/depth_{$capture->id}.png";
+            Storage::disk('public')->put($depthPath, $depthMapBinary);
+            $capture->depth_map_path = $depthPath;
+            $capture->saveQuietly();
+        }
+
+        // 4. Resolusi Public URL untuk Gambar Referensi dan Depth Map (agar dapat diakses model AI online)
+        $referenceImageUrl = $this->getPublicUrlForBinary(
+            $refBinary,
+            "ref_{$capture->id}.jpg",
+            'image/jpeg',
+            $capture->url
+        );
+
+        $depthMapUrl = $depthMapBinary ? $this->getPublicUrlForBinary(
+            $depthMapBinary,
+            "depth_{$capture->id}.png",
+            'image/png',
+            $capture->depth_map_url
+        ) : null;
+
+        // 5. Eksekusi render AI:
+        // Agar geometri ruangan dan sudut kamera 100% presisi dan sama persis dengan snapshot 3D,
+        // kita menggunakan engine image-guided (Flux / ControlNet) yang menerima gambar referensi dan depth map.
+        $imageData = null;
+        $geminiError = null;
+
+        // 1. Jika provider GEMINI dipilih (menggunakan model kustom seperti imagen-3.0-generate-002)
+        if ($provider === 'gemini') {
+            try {
+                $imageData = $this->callGeminiImagen($geminiApiKey, $userPrompt, $aspectRatio, $model);
+            } catch (\Throwable $e) {
+                $geminiError = $e->getMessage();
+                Log::warning("Gemini Image Render [{$model}] gagal: {$geminiError}. Mengalihkan ke fallback Pollinations.");
+            }
+        }
+
+        // 2. Jika provider REPLICATE dipilih
+        if (empty($imageData) && $provider === 'replicate' && !empty($replicateToken)) {
+            try {
+                $imageData = $this->renderWithReplicate(
+                    $replicateToken,
+                    $userPrompt,
+                    $aspectRatio,
+                    $model ?: 'black-forest-labs/flux-schnell',
+                    $referenceImageUrl,
+                    $depthMapUrl
+                );
+            } catch (\Throwable $e) {
+                Log::warning("Replicate render gagal ({$e->getMessage()}), beralih ke Flux Pollinations.");
+            }
+        }
+
+        // 3. Engine FLUX / Pollinations (Mendukung Gambar Acuan RGB & Depth Map ControlNet)
+        if (empty($imageData)) {
+            $pollinationsModel = ($provider === 'pollinations' && !empty($model)) ? $model : 'flux';
+            try {
+                $imageData = $this->renderWithPollinations(
+                    $userPrompt,
+                    $aspectRatio,
+                    $pollinationsModel,
+                    $referenceImageUrl,
+                    $depthMapUrl
+                );
+            } catch (\Throwable $e) {
+                Log::warning("Pollinations [{$pollinationsModel}] render gagal ({$e->getMessage()}), mencoba model turbo/SDXL...");
+                try {
+                    $imageData = $this->renderWithPollinations(
+                        $userPrompt,
+                        $aspectRatio,
+                        'turbo',
+                        $referenceImageUrl,
+                        $depthMapUrl
+                    );
+                } catch (\Throwable $turboErr) {
+                    if ($geminiError) {
+                        throw new RuntimeException("API Google Gemini tidak dapat merender gambar ({$geminiError}). Pengalihan cadangan ke Pollinations juga terkendala: " . $turboErr->getMessage());
+                    }
+                    throw new RuntimeException("Gagal melakukan render AI: " . $turboErr->getMessage());
+                }
+            }
+        }
+
+        if (empty($imageData)) {
+            throw new RuntimeException('Gagal menghasilkan gambar render AI dari server.');
+        }
+
+        // 6. Hapus file AI render lama jika ada
         if ($capture->ai_rendered_path && Storage::disk('public')->exists($capture->ai_rendered_path)) {
             Storage::disk('public')->delete($capture->ai_rendered_path);
         }
 
-        // Simpan file hasil generate
+        // 7. Simpan file hasil generate
         $filename = 'ai_render_' . Str::uuid() . '.jpg';
         $path = "projects/{$project->id}/captures/ai/{$filename}";
         Storage::disk('public')->put($path, $imageData);
 
-        // Update model capture
+        // 8. Update model capture
         $capture->update([
             'ai_rendered_path' => $path,
             'prompt'           => $userPrompt,
@@ -94,80 +177,170 @@ class GenerateAiRenderFromCaptureAction
     }
 
     /**
-     * Dapatkan URL gambar yang dapat diakses oleh layanan AI online sebagai referensi geometri
+     * Dapatkan file biner gambar 3D dari upload atau storage
      */
-    protected function getPublicImageUrl(ProjectCapture $capture, ?UploadedFile $uploadedFile = null): ?string
+    protected function getImageBinary(ProjectCapture $capture, ?UploadedFile $uploadedFile = null): ?string
     {
-        $fileContents = null;
-        $mime = 'image/jpeg';
-        $ext = 'jpg';
-
-        // Prioritaskan file yang dikirim langsung dari browser
         if ($uploadedFile && $uploadedFile->isValid()) {
-            $fileContents = file_get_contents($uploadedFile->getRealPath());
-            $mime = $uploadedFile->getClientMimeType() ?: 'image/jpeg';
-            $ext = $uploadedFile->getClientOriginalExtension() ?: 'jpg';
-        } elseif ($capture->file_path && Storage::disk('public')->exists($capture->file_path)) {
-            $fileContents = Storage::disk('public')->get($capture->file_path);
-            $mime = Storage::disk('public')->mimeType($capture->file_path) ?: 'image/jpeg';
-            $ext = pathinfo($capture->file_path, PATHINFO_EXTENSION) ?: 'jpg';
+            return file_get_contents($uploadedFile->getRealPath());
         }
 
-        if (empty($fileContents)) {
-            return null;
-        }
-
-        // Jika URL sudah publik di domain online (bukan localhost/127.0.0.1)
-        $rawUrl = $capture->url;
-        if (!empty($rawUrl) && filter_var($rawUrl, FILTER_VALIDATE_URL)) {
-            $host = parse_url($rawUrl, PHP_URL_HOST);
-            if ($host && !in_array($host, ['localhost', '127.0.0.1', '::1']) && !str_ends_with($host, '.local') && !str_ends_with($host, '.test')) {
-                return $rawUrl;
-            }
-        }
-
-        // Jika berada di localhost / file lokal, kirim file ke temporary host agar AI bisa membacanya
-        try {
-            $response = Http::timeout(25)
-                ->attach('file', $fileContents, "capture_ref.{$ext}", ['Content-Type' => $mime])
-                ->post('https://tmpfiles.org/api/v1/upload');
-
-            if ($response->successful()) {
-                $json = $response->json();
-                $pageUrl = $json['data']['url'] ?? null;
-                if ($pageUrl) {
-                    // Ubah tmpfiles.org/123/name.jpg menjadi tmpfiles.org/dl/123/name.jpg untuk direct download URL
-                    return str_replace('tmpfiles.org/', 'tmpfiles.org/dl/', $pageUrl);
-                }
-            }
-        } catch (\Throwable $e) {
-            Log::warning('TmpFiles bridge error: ' . $e->getMessage());
+        if ($capture->file_path && Storage::disk('public')->exists($capture->file_path)) {
+            return Storage::disk('public')->get($capture->file_path);
         }
 
         return null;
     }
 
     /**
-     * Render via Pollinations.ai (Mengirimkan gambar referensi via parameter ?image=)
+     * Selesaikan pembuatan binary Depth Map: dari upload, storage, atau server-side GD generator
      */
-    protected function renderWithPollinations(string $prompt, string $aspectRatio, string $model = 'flux', ?string $referenceImageUrl = null): string
+    protected function resolveDepthMapBinary(
+        ProjectCapture $capture,
+        ?UploadedFile $uploadedDepthMap = null,
+        ?string $refBinary = null
+    ): ?string {
+        // 1. Jika depth map diupload langsung dari browser canvas
+        if ($uploadedDepthMap && $uploadedDepthMap->isValid()) {
+            return file_get_contents($uploadedDepthMap->getRealPath());
+        }
+
+        // 2. Jika depth map sudah pernah tersimpan di storage sebelumnya
+        if ($capture->depth_map_path && Storage::disk('public')->exists($capture->depth_map_path)) {
+            return Storage::disk('public')->get($capture->depth_map_path);
+        }
+
+        // 3. Generate otomatis menggunakan GD di server jika belum ada
+        if (!empty($refBinary) && extension_loaded('gd')) {
+            return $this->generateDepthMapFromImage($refBinary);
+        }
+
+        return null;
+    }
+
+    /**
+     * Generator Depth Map di server menggunakan ekstensi GD
+     */
+    protected function generateDepthMapFromImage(string $imageBinary): ?string
     {
+        try {
+            $src = @imagecreatefromstring($imageBinary);
+            if (! $src) {
+                return null;
+            }
+
+            // Konversi ke grayscale untuk peta kedalaman
+            imagefilter($src, IMG_FILTER_GRAYSCALE);
+            imagefilter($src, IMG_FILTER_CONTRAST, -10);
+
+            ob_start();
+            imagepng($src);
+            $output = ob_get_clean();
+
+            return $output ?: null;
+        } catch (\Throwable $e) {
+            Log::warning('Gagal generate depth map GD: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Dapatkan URL publik untuk file binary agar dapat diunduh oleh API generator AI
+     */
+    protected function getPublicUrlForBinary(
+        ?string $fileContents,
+        string $filename = 'image.jpg',
+        string $mime = 'image/jpeg',
+        ?string $existingUrl = null
+    ): ?string {
+        if (empty($fileContents)) {
+            return null;
+        }
+
+        // Jika URL sudah publik online (bukan localhost/127.0.0.1)
+        if (!empty($existingUrl) && filter_var($existingUrl, FILTER_VALIDATE_URL)) {
+            $host = parse_url($existingUrl, PHP_URL_HOST);
+            if ($host && !in_array($host, ['localhost', '127.0.0.1', '::1']) && !str_ends_with($host, '.local') && !str_ends_with($host, '.test')) {
+                return $existingUrl;
+            }
+        }
+
+        // Jika berada di localhost, upload sementara ke bridge tmpfiles.org
+        try {
+            $response = Http::timeout(25)
+                ->attach('file', $fileContents, $filename, ['Content-Type' => $mime])
+                ->post('https://tmpfiles.org/api/v1/upload');
+
+            if ($response->successful()) {
+                $json = $response->json();
+                $pageUrl = $json['data']['url'] ?? null;
+                if ($pageUrl) {
+                    return str_replace('tmpfiles.org/', 'tmpfiles.org/dl/', $pageUrl);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning("TmpFiles upload error ({$filename}): " . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Ringkas prompt agar efisien dan tidak menyebabkan URL terlalu panjang saat proses render visual
+     */
+    protected function buildCompactRenderPrompt(string $prompt): string
+    {
+        $clean = trim(preg_replace('/\s+/', ' ', $prompt));
+        if (strlen($clean) > 350) {
+            return substr($clean, 0, 347) . '...';
+        }
+        return $clean;
+    }
+
+    /**
+     * Render via Pollinations.ai dengan dukungan Gambar Referensi & Depth Map
+     */
+    protected function renderWithPollinations(
+        string $prompt,
+        string $aspectRatio,
+        string $model = 'flux',
+        ?string $referenceImageUrl = null,
+        ?string $depthMapUrl = null
+    ): string {
         [$width, $height] = match ($aspectRatio) {
             '4:3'   => [1024, 768],
             '1:1'   => [1024, 1024],
             default => [1280, 720], // 16:9
         };
 
+        $compactPrompt = $this->buildCompactRenderPrompt($prompt);
         $seed = random_int(1000, 9999999);
-        $encodedPrompt = rawurlencode($prompt);
+        $encodedPrompt = rawurlencode($compactPrompt);
         $url = "https://image.pollinations.ai/prompt/{$encodedPrompt}?width={$width}&height={$height}&model={$model}&nologo=true&seed={$seed}";
 
-        // Sertakan gambar referensi jika tersedia
-        if (!empty($referenceImageUrl)) {
+        // Sertakan Gambar Referensi dan Depth Map (ControlNet) jika tersedia
+        if (!empty($referenceImageUrl) && !empty($depthMapUrl)) {
+            $url .= "&image=" . rawurlencode($referenceImageUrl) . "&image=" . rawurlencode($depthMapUrl);
+        } elseif (!empty($referenceImageUrl)) {
             $url .= "&image=" . rawurlencode($referenceImageUrl);
+        } elseif (!empty($depthMapUrl)) {
+            $url .= "&image=" . rawurlencode($depthMapUrl);
         }
 
-        $response = Http::timeout(90)->get($url);
+        $pollinationsApiKey = (string) ($this->getSetting('pollinations_api_key', config('services.pollinations.api_key') ?: env('POLLINATIONS_API_KEY')));
+
+        $http = Http::timeout(60);
+        if (!empty($pollinationsApiKey)) {
+            $http = $http->withToken($pollinationsApiKey);
+            $url .= "&key=" . urlencode($pollinationsApiKey);
+        }
+
+        $response = $http->get($url);
+
+        // Jika terkena batas kecepatan tier gratis (1 gambar per 45 detik)
+        if ($response->status() === 402) {
+            throw new RuntimeException("Batas kecepatan render tier publik tercapai (1 gambar per 45 detik per IP). Mohon tunggu sekitar 45 detik sebelum menekan generate kembali.");
+        }
 
         if (! $response->successful()) {
             throw new RuntimeException("Pollinations API error (HTTP {$response->status()}): " . substr($response->body(), 0, 150));
@@ -184,8 +357,14 @@ class GenerateAiRenderFromCaptureAction
     /**
      * Render via Replicate (Flux / SDXL dengan dukungan input image)
      */
-    protected function renderWithReplicate(?string $apiKey, string $prompt, string $aspectRatio, string $model, ?string $referenceImageUrl = null): string
-    {
+    protected function renderWithReplicate(
+        ?string $apiKey,
+        string $prompt,
+        string $aspectRatio,
+        string $model,
+        ?string $referenceImageUrl = null,
+        ?string $depthMapUrl = null
+    ): string {
         if (empty($apiKey)) {
             throw new RuntimeException("REPLICATE_API_TOKEN belum disetel di .env untuk provider Replicate.");
         }
@@ -200,6 +379,10 @@ class GenerateAiRenderFromCaptureAction
 
         if (!empty($referenceImageUrl)) {
             $inputPayload['image'] = $referenceImageUrl;
+        }
+
+        if (!empty($depthMapUrl)) {
+            $inputPayload['depth_map'] = $depthMapUrl;
         }
 
         $response = Http::withToken($apiKey)
@@ -242,13 +425,20 @@ class GenerateAiRenderFromCaptureAction
     /**
      * Render via Google Gemini Imagen API
      */
-    protected function callGeminiImagen(?string $apiKey, string $prompt, string $aspectRatio = '16:9'): string
+    protected function callGeminiImagen(?string $apiKey, string $prompt, string $aspectRatio = '16:9', string $requestedModel = 'imagen-3.0-generate-002'): string
     {
         if (empty($apiKey)) {
             throw new RuntimeException('API Key Gemini belum disetel. Pastikan GEMINI_API_KEY terpasang di .env.');
         }
 
-        $models = ['imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001'];
+        // Prioritaskan model yang dikustomisasi di .env
+        $cleanRequested = str_replace('models/', '', $requestedModel);
+        $models = array_unique(array_filter([
+            $cleanRequested,
+            'imagen-3.0-generate-002',
+            'imagen-3.0-fast-generate-001',
+            'gemini-2.5-flash-image',
+        ]));
         $lastException = null;
 
         foreach ($models as $model) {

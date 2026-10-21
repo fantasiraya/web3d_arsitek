@@ -46,6 +46,11 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
     ],
 
+    'image_render' => [
+        'provider' => env('IMAGE_RENDER_PROVIDER', 'gemini'),
+        'model' => env('IMAGE_RENDER_MODEL', 'imagen-3.0-generate-002'),
+    ],
+
     'vision_ai' => [
         'provider' => env('VISION_AI_PROVIDER', 'gemini'),
         'providers' => [

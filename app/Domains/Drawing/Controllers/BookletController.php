@@ -43,7 +43,7 @@ class BookletController extends Controller
         $selectedSheetId = $request->query('sheet_id');
 
         $planSheets = DrawingSheet::where('project_id', $project->id)
-            ->select('id', 'title', 'scale', 'unit', 'type')
+            ->select('id', 'title', 'scale', 'unit', 'type', 'image_path')
             ->orderBy('sort_order')
             ->orderBy('created_at')
             ->get();

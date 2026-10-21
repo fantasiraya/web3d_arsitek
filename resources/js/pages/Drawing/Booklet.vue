@@ -59,8 +59,12 @@ interface ProjectCapture {
     room_name: string;
     captured_hour: string;
     file_path: string;
+    depth_map_path?: string;
+    key_plan_image_path?: string;
     ai_rendered_path?: string;
     url: string;
+    depth_map_url?: string;
+    key_plan_image_url?: string;
     ai_rendered_url?: string;
     is_visible_to_clients: boolean;
     prompt?: string;
@@ -83,6 +87,8 @@ interface DrawingSheet {
     scale?: string;
     width: number;
     height: number;
+    image_path?: string;
+    image_url?: string;
     elements?: DrawingElement[];
     captures?: ProjectCapture[];
 }
@@ -113,6 +119,8 @@ interface PlanSheetSummary {
     scale?: string;
     unit?: string;
     type: string;
+    image_path?: string;
+    image_url?: string;
 }
 
 const props = defineProps<{
@@ -355,6 +363,209 @@ async function removeAiRender(captureId: string) {
     }
 }
 
+// ── State & Handler Update Gambar 3D Snapshot Utama ──
+const isUploadingCapture = ref<string | null>(null);
+const activeUpdateCaptureId = ref<string | null>(null);
+const captureFileInputRef = ref<HTMLInputElement | null>(null);
+
+function triggerUpdateCapture(captureId: string) {
+    activeUpdateCaptureId.value = captureId;
+    captureFileInputRef.value?.click();
+}
+
+async function handleCaptureFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0 || !activeUpdateCaptureId.value) return;
+
+    const file = input.files[0];
+    const captureId = activeUpdateCaptureId.value;
+    isUploadingCapture.value = captureId;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+        const res = await fetch(`/projects/${props.project.id}/captures/${captureId}/image`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+                Accept: 'application/json',
+            },
+            body: formData,
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            const idx = props.captures.findIndex(c => c.id === captureId);
+            if (idx !== -1) {
+                props.captures[idx] = data.data;
+            }
+        } else {
+            alert(data.message || 'Gagal memperbarui gambar.');
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Terjadi kesalahan saat memperbarui gambar.');
+    } finally {
+        isUploadingCapture.value = null;
+        activeUpdateCaptureId.value = null;
+        if (input) input.value = '';
+    }
+}
+
+// ── State & Handler Gambar 2D Denah Master (Halaman 2) ──
+const isUploadingSheet2d = ref(false);
+const sheetFileInputRef = ref<HTMLInputElement | null>(null);
+const showVectorCanvasHalaman2 = ref(false);
+
+function triggerUploadSheet2d() {
+    if (!props.planSheet?.id) {
+        alert('Tidak ada lembar kerja denah yang dipilih.');
+        return;
+    }
+    sheetFileInputRef.value?.click();
+}
+
+async function handleSheetFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0 || !props.planSheet?.id) return;
+
+    const file = input.files[0];
+    isUploadingSheet2d.value = true;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+        const res = await fetch(`/drawings/${props.planSheet.id}/image`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+                Accept: 'application/json',
+            },
+            body: formData,
+        });
+
+        const data = await res.json();
+        if (res.ok && props.planSheet) {
+            props.planSheet.image_path = data.sheet.image_path;
+            props.planSheet.image_url = data.sheet.image_url;
+            showVectorCanvasHalaman2.value = false;
+        } else {
+            alert(data.message || 'Gagal mengunggah gambar denah 2D.');
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Terjadi kesalahan saat mengunggah gambar denah 2D.');
+    } finally {
+        isUploadingSheet2d.value = false;
+        if (input) input.value = '';
+    }
+}
+
+async function removeSheet2dImage() {
+    if (!props.planSheet?.id) return;
+    if (!confirm('Hapus gambar denah 2D dan kembali ke kanvas vektor otomatis?')) return;
+
+    try {
+        const res = await fetch(`/drawings/${props.planSheet.id}/image`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+                Accept: 'application/json',
+            },
+        });
+
+        const data = await res.json();
+        if (res.ok && props.planSheet) {
+            props.planSheet.image_path = null;
+            props.planSheet.image_url = null;
+            showVectorCanvasHalaman2.value = true;
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+// ── State & Handler Gambar 2D Key Plan per Ruangan (Per Lembar) ──
+const isUploadingRoom2d = ref<string | null>(null);
+const activeRoom2dCaptureId = ref<string | null>(null);
+const room2dFileInputRef = ref<HTMLInputElement | null>(null);
+
+function triggerUploadRoom2d(captureId: string) {
+    activeRoom2dCaptureId.value = captureId;
+    room2dFileInputRef.value?.click();
+}
+
+async function handleRoom2dFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0 || !activeRoom2dCaptureId.value) return;
+
+    const file = input.files[0];
+    const captureId = activeRoom2dCaptureId.value;
+    isUploadingRoom2d.value = captureId;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+        const res = await fetch(`/projects/${props.project.id}/captures/${captureId}/key-plan-image`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+                Accept: 'application/json',
+            },
+            body: formData,
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            const idx = props.captures.findIndex(c => c.id === captureId);
+            if (idx !== -1) {
+                props.captures[idx] = data.data;
+            }
+        } else {
+            alert(data.message || 'Gagal mengunggah denah 2D ruangan.');
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Terjadi kesalahan saat mengunggah denah 2D ruangan.');
+    } finally {
+        isUploadingRoom2d.value = null;
+        activeRoom2dCaptureId.value = null;
+        if (input) input.value = '';
+    }
+}
+
+async function removeRoom2dImage(captureId: string) {
+    if (!confirm('Hapus gambar denah 2D khusus ruangan ini dan kembali ke denah otomatis?')) return;
+
+    try {
+        const res = await fetch(`/projects/${props.project.id}/captures/${captureId}/key-plan-image`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+                Accept: 'application/json',
+            },
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            const idx = props.captures.findIndex(c => c.id === captureId);
+            if (idx !== -1) {
+                props.captures[idx] = data.data;
+            }
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
 // State & Handler Generate AI Render via Gemini Imagen
 const isAiModalOpen = ref(false);
 const activeGenerateCapture = ref<ProjectCapture | null>(null);
@@ -363,6 +574,8 @@ const selectedMood = ref('natural bright daylight');
 const selectedAspectRatio = ref<'16:9' | '4:3' | '1:1'>('16:9');
 const isGeneratingAiRender = ref<string | null>(null);
 const aiGenerationError = ref<string | null>(null);
+const depthMapPreviewUrl = ref<string | null>(null);
+const isGeneratingDepthPreview = ref(false);
 
 const moodPresets = [
     { id: 'natural bright daylight', label: '☀️ Siang Alami', desc: 'Cahaya matahari siang cerah, bayangan lembut dan natural' },
@@ -370,6 +583,98 @@ const moodPresets = [
     { id: 'evening ambient lighting', label: '🌙 Malam Hangat', desc: 'Pencahayaan lampu arsitektural interior yang elegan dan intim' },
     { id: 'minimalist cloudy diffuse', label: '☁️ Mendung Teduh', desc: 'Pencahayaan difus merata dengan nuansa arsitektural modern' },
 ];
+
+/**
+ * Buat Blob Depth Map hitam-putih skala perspektif untuk ControlNet langsung dari Canvas browser
+ */
+function createDepthMapBlob(imgUrl: string): Promise<Blob | null> {
+    return new Promise((resolve) => {
+        const processImage = (img: HTMLImageElement) => {
+            try {
+                const width = img.naturalWidth || img.width || 1280;
+                const height = img.naturalHeight || img.height || 720;
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    resolve(null);
+                    return;
+                }
+
+                ctx.drawImage(img, 0, 0, width, height);
+                const imgData = ctx.getImageData(0, 0, width, height);
+                const data = imgData.data;
+
+                for (let y = 0; y < height; y++) {
+                    const yNorm = y / height;
+                    const perspectiveFactor = 0.65 + (yNorm * 0.35);
+
+                    for (let x = 0; x < width; x++) {
+                        const idx = (y * width + x) * 4;
+                        const r = data[idx];
+                        const g = data[idx + 1];
+                        const b = data[idx + 2];
+
+                        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                        const depth = Math.min(255, Math.max(0, Math.round(lum * perspectiveFactor)));
+
+                        data[idx] = depth;
+                        data[idx + 1] = depth;
+                        data[idx + 2] = depth;
+                    }
+                }
+
+                ctx.putImageData(imgData, 0, 0);
+                canvas.toBlob((blob) => {
+                    resolve(blob);
+                }, 'image/png');
+            } catch (e) {
+                console.error('[DepthMap] Canvas error:', e);
+                resolve(null);
+            }
+        };
+
+        // Ambil blob melalui same-origin fetch terlebih dahulu agar tidak terkendala CORS / tainted canvas
+        fetch(imgUrl)
+            .then(res => res.blob())
+            .then(blob => {
+                const blobUrl = URL.createObjectURL(blob);
+                const img = new Image();
+                img.onload = () => {
+                    processImage(img);
+                    URL.revokeObjectURL(blobUrl);
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(blobUrl);
+                    resolve(null);
+                };
+                img.src = blobUrl;
+            })
+            .catch(() => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => processImage(img);
+                img.onerror = () => resolve(null);
+                img.src = imgUrl;
+            });
+    });
+}
+
+async function loadDepthMapPreview(imgUrl: string) {
+    isGeneratingDepthPreview.value = true;
+    depthMapPreviewUrl.value = null;
+    try {
+        const blob = await createDepthMapBlob(imgUrl);
+        if (blob) {
+            depthMapPreviewUrl.value = URL.createObjectURL(blob);
+        }
+    } catch (err) {
+        console.error('[DepthMap] Preview error:', err);
+    } finally {
+        isGeneratingDepthPreview.value = false;
+    }
+}
 
 function openAiGenerateModal(capture: ProjectCapture) {
     activeGenerateCapture.value = capture;
@@ -385,6 +690,7 @@ function openAiGenerateModal(capture: ProjectCapture) {
     }
 
     isAiModalOpen.value = true;
+    loadDepthMapPreview(capture.url);
 }
 
 function applyMoodPreset(presetId: string) {
@@ -416,6 +722,17 @@ function downloadReferenceImage() {
     document.body.removeChild(a);
 }
 
+function downloadDepthMapFromModal() {
+    if (!depthMapPreviewUrl.value || !activeGenerateCapture.value) return;
+    const a = document.createElement('a');
+    a.href = depthMapPreviewUrl.value;
+    const roomSlug = (activeGenerateCapture.value.room_name || 'capture').replace(/\s+/g, '-').toLowerCase();
+    a.download = `controlnet-depth-${roomSlug}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
 async function handleExecuteAiGenerate() {
     if (!activeGenerateCapture.value) return;
 
@@ -430,7 +747,7 @@ async function handleExecuteAiGenerate() {
         formData.append('mood', selectedMood.value);
         formData.append('aspect_ratio', selectedAspectRatio.value);
 
-        // Ambil file gambar 3D aktif dan kirimkan sebagai file referensi nyata
+        // 1. Ambil file gambar 3D (RGB) aktif dan kirimkan sebagai file referensi nyata
         try {
             const imgRes = await fetch(capture.url);
             if (imgRes.ok) {
@@ -439,6 +756,16 @@ async function handleExecuteAiGenerate() {
             }
         } catch (fetchErr) {
             console.warn('Gagal fetch blob gambar, backend akan membaca file_path dari storage:', fetchErr);
+        }
+
+        // 2. Buat dan kirim file Depth Map (ControlNet) agar geometri 100% presisi
+        try {
+            const depthBlob = await createDepthMapBlob(capture.url);
+            if (depthBlob) {
+                formData.append('depth_map', depthBlob, `depth_${capture.room_name || '3d'}.png`);
+            }
+        } catch (depthErr) {
+            console.warn('Gagal buat depth map blob, backend akan meng-generate otomatis:', depthErr);
         }
 
         const res = await fetch(`/projects/${props.project.id}/captures/${captureId}/generate-ai`, {
@@ -488,8 +815,8 @@ async function handleBatchGenerateAi() {
 
     const unrenderedCount = targets.filter((c: any) => !c.ai_rendered_url).length;
     const confirmText = unrenderedCount > 0
-        ? `Mulai render visual AI untuk seluruh ${targets.length} lembar ruangan (${unrenderedCount} belum dirender)?\n\nProses akan berjalan otomatis satu per satu.`
-        : `Render ulang visual AI untuk semua ${targets.length} lembar ruangan?\n\nProses akan berjalan otomatis satu per satu.`;
+        ? `Mulai render visual AI untuk seluruh ${targets.length} lembar ruangan (${unrenderedCount} belum dirender)?\n\nGambar referensi 3D & Depth Map akan disertakan otomatis.`
+        : `Render ulang visual AI untuk semua ${targets.length} lembar ruangan?\n\nGambar referensi 3D & Depth Map akan disertakan otomatis.`;
 
     if (!confirm(confirmText)) return;
 
@@ -529,6 +856,15 @@ async function handleBatchGenerateAi() {
                 }
             } catch (fetchErr) {
                 console.warn('Gagal fetch blob gambar:', fetchErr);
+            }
+
+            try {
+                const depthBlob = await createDepthMapBlob(capture.url);
+                if (depthBlob) {
+                    formData.append('depth_map', depthBlob, `depth_${capture.room_name || '3d'}.png`);
+                }
+            } catch (depthErr) {
+                console.warn('Gagal generate depth map untuk batch:', depthErr);
             }
 
             const res = await fetch(`/projects/${props.project.id}/captures/${capture.id}/generate-ai`, {
@@ -664,6 +1000,33 @@ onUnmounted(() => {
         accept="image/png,image/jpeg,image/webp"
         class="hidden"
         @change="handleFileSelected"
+    />
+
+    <!-- Hidden input file untuk Update Gambar 3D Snapshot -->
+    <input
+        ref="captureFileInputRef"
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        class="hidden"
+        @change="handleCaptureFileSelected"
+    />
+
+    <!-- Hidden input file untuk Gambar 2D Denah Master (Halaman 2) -->
+    <input
+        ref="sheetFileInputRef"
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        class="hidden"
+        @change="handleSheetFileSelected"
+    />
+
+    <!-- Hidden input file untuk Denah 2D Ruangan (Per Lembar) -->
+    <input
+        ref="room2dFileInputRef"
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        class="hidden"
+        @change="handleRoom2dFileSelected"
     />
 
     <div class="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans select-none print:bg-white print:text-black">
@@ -1181,44 +1544,74 @@ onUnmounted(() => {
 
                 <!-- Modal Body (Scrollable Content) -->
                 <div class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs overscroll-contain">
-                    <!-- Thumbnail Preview Acuan 3D -->
+                    <!-- Dual Preview: Gambar Referensi 3D & Depth Map (ControlNet) -->
                     <div class="space-y-2">
-                        <div class="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 h-32 sm:h-36 flex items-center justify-center">
-                            <img
-                                :src="activeGenerateCapture.url"
-                                :alt="activeGenerateCapture.room_name"
-                                class="w-full h-full object-cover opacity-85"
-                            />
-                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent"></div>
-                            <div class="absolute bottom-2 left-3 right-3 flex items-center justify-between text-[11px]">
-                                <span class="px-2 py-0.5 rounded bg-black/70 text-slate-300 font-mono backdrop-blur border border-white/10">
-                                    📐 Acuan Geometri Snapshot 3D
-                                </span>
-                                <span v-if="activeGenerateCapture.ai_rendered_url" class="text-emerald-400 font-semibold bg-emerald-950/70 px-2 py-0.5 rounded border border-emerald-500/30">
-                                    ✓ Sudah Ada Render AI
-                                </span>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <!-- 1. Acuan Geometri Snapshot 3D (RGB) -->
+                            <div class="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 h-28 sm:h-32 flex items-center justify-center">
+                                <img
+                                    :src="activeGenerateCapture.url"
+                                    :alt="activeGenerateCapture.room_name"
+                                    class="w-full h-full object-cover"
+                                />
+                                <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent"></div>
+                                <div class="absolute bottom-1.5 left-2 right-2 flex items-center justify-between text-[10px]">
+                                    <span class="px-2 py-0.5 rounded bg-black/80 text-white font-mono backdrop-blur border border-white/10">
+                                        🎨 1. Gambar Warna (RGB)
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- 2. Peta Kedalaman (Depth Map ControlNet) -->
+                            <div class="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 h-28 sm:h-32 flex items-center justify-center">
+                                <img
+                                    v-if="depthMapPreviewUrl"
+                                    :src="depthMapPreviewUrl"
+                                    alt="Depth Map ControlNet"
+                                    class="w-full h-full object-cover"
+                                />
+                                <div v-else class="flex flex-col items-center justify-center text-slate-500 gap-1 text-[10px]">
+                                    <Layers class="w-5 h-5 text-amber-400" :class="isGeneratingDepthPreview ? 'animate-pulse' : ''" />
+                                    <span>{{ isGeneratingDepthPreview ? 'Membuat Depth Map...' : 'Depth Map Otomatis' }}</span>
+                                </div>
+                                <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent pointer-events-none"></div>
+                                <div class="absolute bottom-1.5 left-2 right-2 flex items-center justify-between text-[10px] pointer-events-none">
+                                    <span class="px-2 py-0.5 rounded bg-black/80 text-amber-300 font-mono backdrop-blur border border-amber-500/30">
+                                        🗺️ 2. Depth Map (ControlNet)
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Shortcut Aksi Gemini / Download Referensi -->
-                        <div class="flex items-center justify-between gap-2 p-2 bg-slate-950/60 border border-slate-800 rounded-xl text-[11px]">
-                            <span class="text-slate-400 text-[10px] hidden sm:inline">
-                                💡 Gambar ini otomatis dikirim ke AI sebagai referensi
+                        <!-- Shortcut Aksi Gemini / Download Referensi & Depth Map -->
+                        <div class="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-950/60 border border-slate-800 rounded-xl text-[11px]">
+                            <span class="text-slate-400 text-[10px]">
+                                💡 RGB + Depth Map otomatis dikirim ke AI agar geometri 100% presisi
                             </span>
                             <div class="flex items-center gap-1.5 ml-auto">
                                 <button
                                     type="button"
                                     @click="downloadReferenceImage"
-                                    class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 font-medium"
-                                    title="Download gambar 3D ini ke laptop"
+                                    class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 font-medium text-[11px]"
+                                    title="Download gambar 3D (RGB) ini ke laptop"
                                 >
-                                    <Download class="w-3 h-3 text-orange-400" />
-                                    <span>Unduh 3D</span>
+                                    <Download class="w-3 h-3 text-rose-400" />
+                                    <span>Unduh RGB</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    :disabled="!depthMapPreviewUrl"
+                                    @click="downloadDepthMapFromModal"
+                                    class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-white transition flex items-center gap-1 font-medium text-[11px] disabled:opacity-40"
+                                    title="Download file Depth Map hitam-putih untuk ControlNet"
+                                >
+                                    <Layers class="w-3 h-3 text-amber-400" />
+                                    <span>Unduh Depth</span>
                                 </button>
                                 <button
                                     type="button"
                                     @click="copyAiPrompt"
-                                    class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 font-medium"
+                                    class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 font-medium text-[11px]"
                                     title="Salin teks prompt arsitektural"
                                 >
                                     <Copy class="w-3 h-3 text-orange-400" />
@@ -1228,7 +1621,7 @@ onUnmounted(() => {
                                     href="https://gemini.google.com/app"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    class="px-2 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition flex items-center gap-1 font-medium"
+                                    class="px-2 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition flex items-center gap-1 font-medium text-[11px]"
                                     title="Buka web Google Gemini"
                                 >
                                     <span>Buka Gemini</span>
@@ -1424,14 +1817,63 @@ onUnmounted(() => {
             >
                 <!-- Area Kiri: 80% Denah 2D Utuh + Garis Dimensi -->
                 <div class="w-[80%] h-full p-6 sm:p-8 flex flex-col justify-between relative bg-white border-r border-slate-800">
-                    <!-- Kanvas Denah 2D Mini/Utuh -->
-                    <div class="flex-1 min-h-0 w-full relative flex items-center justify-center">
+                    <!-- Kanvas Denah 2D Mini/Utuh atau Gambar 2D Hasil Upload -->
+                    <div class="flex-1 min-h-0 w-full relative flex items-center justify-center rounded overflow-hidden">
+                        <!-- Mode Gambar 2D jika diunggah -->
+                        <div
+                            v-if="planSheet?.image_url && !showVectorCanvasHalaman2"
+                            class="w-full h-full relative flex items-center justify-center p-2 bg-slate-50 border border-slate-200 rounded overflow-hidden"
+                        >
+                            <img
+                                :src="planSheet.image_url"
+                                :alt="planSheet?.title || 'Denah 2D'"
+                                class="max-w-full max-h-full object-contain"
+                            />
+                        </div>
+
+                        <!-- Mode Kanvas SVG Vektor (Default) -->
                         <KeyPlanCanvas
+                            v-else
                             :elements="planSheet?.elements || []"
                             width="100%"
                             height="100%"
                             className="w-full h-full border-none shadow-none bg-transparent"
                         />
+
+                        <!-- Floating Controls untuk Denah 2D (Hidden saat print) -->
+                        <div v-if="isOwner" class="no-print absolute top-3 right-3 flex items-center gap-1.5 z-20">
+                            <!-- Toggle Gambar vs Vektor jika ada gambar -->
+                            <button
+                                v-if="planSheet?.image_url"
+                                @click="showVectorCanvasHalaman2 = !showVectorCanvasHalaman2"
+                                class="px-2.5 py-1 rounded text-[10px] font-bold bg-slate-800 text-slate-200 hover:bg-slate-700 transition flex items-center gap-1 shadow backdrop-blur"
+                                title="Beralih antara gambar denah 2D dan kanvas vektor"
+                            >
+                                <Layers class="w-3 h-3 text-amber-400" />
+                                <span>{{ showVectorCanvasHalaman2 ? 'Lihat Gambar 2D' : 'Lihat Vektor' }}</span>
+                            </button>
+
+                            <!-- Tombol Update / Unggah Gambar 2D -->
+                            <button
+                                @click="triggerUploadSheet2d"
+                                :disabled="isUploadingSheet2d"
+                                class="px-2.5 py-1 rounded text-[10px] font-bold bg-amber-600 hover:bg-amber-500 text-white transition flex items-center gap-1 shadow backdrop-blur disabled:opacity-50"
+                                :title="planSheet?.image_url ? 'Ganti gambar denah 2D ini' : 'Unggah file gambar denah 2D (PNG/JPG)'"
+                            >
+                                <Upload class="w-3 h-3" :class="isUploadingSheet2d ? 'animate-spin' : ''" />
+                                <span>{{ planSheet?.image_url ? 'Ganti Gambar 2D' : 'Unggah Gambar 2D' }}</span>
+                            </button>
+
+                            <!-- Tombol Hapus Gambar 2D -->
+                            <button
+                                v-if="planSheet?.image_url"
+                                @click="removeSheet2dImage"
+                                class="p-1 rounded bg-red-600/80 text-white hover:bg-red-500 transition shadow"
+                                title="Hapus gambar denah 2D dan gunakan kanvas vektor"
+                            >
+                                <X class="w-3 h-3" />
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Label Nama Halaman Kiri Bawah -->
@@ -1535,6 +1977,18 @@ onUnmounted(() => {
                                     SNAPSHOT 3D
                                 </span>
 
+                                <!-- Tombol Ganti / Update Gambar 3D Snapshot -->
+                                <button
+                                    v-if="isOwner"
+                                    @click="triggerUpdateCapture(ext.id)"
+                                    :disabled="isUploadingCapture === ext.id"
+                                    class="px-2.5 py-1 rounded text-[10px] font-bold bg-slate-900/90 text-white hover:bg-slate-800 transition flex items-center gap-1 shadow backdrop-blur border border-white/20 disabled:opacity-50"
+                                    title="Ganti gambar foto/snapshot 3D ini dengan file baru"
+                                >
+                                    <RefreshCw class="w-3 h-3 text-amber-400" :class="isUploadingCapture === ext.id ? 'animate-spin' : ''" />
+                                    <span>Update Gambar</span>
+                                </button>
+
                                 <!-- Tombol 1-Click Generate AI (Gemini) -->
                                 <button
                                     v-if="isOwner"
@@ -1554,7 +2008,7 @@ onUnmounted(() => {
                                     title="Unggah file gambar render AI manual"
                                 >
                                     <Upload class="w-3 h-3" />
-                                    <span>Upload</span>
+                                    <span>Upload AI</span>
                                 </button>
 
                                 <button
@@ -1669,6 +2123,18 @@ onUnmounted(() => {
                                     SNAPSHOT 3D
                                 </span>
 
+                                <!-- Tombol Ganti / Update Gambar 3D Snapshot -->
+                                <button
+                                    v-if="isOwner"
+                                    @click="triggerUpdateCapture(room.id)"
+                                    :disabled="isUploadingCapture === room.id"
+                                    class="px-2.5 py-1 rounded text-[10px] font-bold bg-slate-900/90 text-white hover:bg-slate-800 transition flex items-center gap-1 shadow backdrop-blur border border-white/20 disabled:opacity-50"
+                                    title="Ganti gambar foto/snapshot 3D ruangan ini dengan file baru"
+                                >
+                                    <RefreshCw class="w-3 h-3 text-amber-400" :class="isUploadingCapture === room.id ? 'animate-spin' : ''" />
+                                    <span>Update Gambar</span>
+                                </button>
+
                                 <!-- Tombol 1-Click Generate AI (Gemini) -->
                                 <button
                                     v-if="isOwner"
@@ -1688,7 +2154,7 @@ onUnmounted(() => {
                                     title="Upload gambar render AI manual untuk ruangan ini"
                                 >
                                     <Upload class="w-3 h-3" />
-                                    <span>Upload</span>
+                                    <span>Upload AI</span>
                                 </button>
                                 
                                 <button
@@ -1725,9 +2191,41 @@ onUnmounted(() => {
                                 </p>
                             </div>
 
-                            <!-- Tengah/Kanan Bawah: Key Plan (Denah Mini Locator Otomatis) -->
-                            <div class="w-[280px] sm:w-[320px] h-full flex-shrink-0">
+                            <!-- Tengah/Kanan Bawah: Key Plan (Denah Mini Locator Otomatis atau Gambar 2D Ruangan) -->
+                            <div class="w-[280px] sm:w-[320px] h-full flex-shrink-0 relative group">
+                                <!-- Mode Gambar 2D Custom Ruangan -->
+                                <div
+                                    v-if="room.key_plan_image_url"
+                                    class="key-plan-container relative bg-slate-50 border border-slate-300 rounded shadow-sm overflow-hidden flex flex-col justify-between w-full h-full"
+                                >
+                                    <!-- Header Key Plan Badge -->
+                                    <div class="px-2 py-1 bg-slate-800 text-white flex items-center justify-between text-[10px] font-mono tracking-wider font-semibold uppercase shrink-0">
+                                        <span class="flex items-center gap-1.5">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                                            KEY PLAN (2D RUANGAN)
+                                        </span>
+                                        <span class="text-orange-400 truncate max-w-[110px]">{{ room.room_name }}</span>
+                                    </div>
+
+                                    <!-- Gambar 2D Ruangan -->
+                                    <div class="flex-1 min-h-0 w-full relative flex items-center justify-center p-1.5 bg-white">
+                                        <img
+                                            :src="room.key_plan_image_url"
+                                            :alt="`Denah 2D ${room.room_name}`"
+                                            class="max-w-full max-h-full object-contain"
+                                        />
+                                    </div>
+
+                                    <!-- Footer Key Plan -->
+                                    <div class="px-2 py-0.5 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-[9px] text-slate-500 font-mono">
+                                        <span>N ↑ UTARA</span>
+                                        <span>DENAH KHUSUS RUANGAN</span>
+                                    </div>
+                                </div>
+
+                                <!-- Mode Default: Kanvas Key Plan Vektor Otomatis -->
                                 <KeyPlanCanvas
+                                    v-else
                                     :elements="planSheet?.elements || []"
                                     :activeRoomName="room.room_name"
                                     :activeElementId="room.room_element_id"
@@ -1735,6 +2233,28 @@ onUnmounted(() => {
                                     width="100%"
                                     height="100%"
                                 />
+
+                                <!-- Floating Action Buttons untuk Denah 2D Ruangan (Hidden saat print) -->
+                                <div v-if="isOwner" class="no-print absolute top-1.5 right-1.5 flex items-center gap-1 z-20">
+                                    <button
+                                        @click="triggerUploadRoom2d(room.id)"
+                                        :disabled="isUploadingRoom2d === room.id"
+                                        class="px-2 py-0.5 rounded text-[9.5px] font-bold bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-amber-500/40 transition flex items-center gap-1 shadow backdrop-blur disabled:opacity-50"
+                                        :title="room.key_plan_image_url ? 'Ganti gambar denah 2D khusus ruangan ini' : 'Unggah gambar denah 2D khusus untuk lembar ruangan ini'"
+                                    >
+                                        <Upload class="w-3 h-3" :class="isUploadingRoom2d === room.id ? 'animate-spin' : ''" />
+                                        <span>{{ room.key_plan_image_url ? 'Ganti 2D' : '+ Denah 2D' }}</span>
+                                    </button>
+
+                                    <button
+                                        v-if="room.key_plan_image_url"
+                                        @click="removeRoom2dImage(room.id)"
+                                        class="p-0.5 rounded bg-red-600/80 text-white hover:bg-red-500 transition shadow"
+                                        title="Hapus gambar denah 2D dan kembali ke denah otomatis"
+                                    >
+                                        <X class="w-3 h-3" />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

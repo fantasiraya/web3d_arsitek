@@ -15,6 +15,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -227,6 +229,60 @@ class DrawingSheetController extends Controller
         $frameId = $request->query('frame_id');
 
         return $action->execute($user, $sheet, $rawSvg, $frameId);
+    }
+
+    /**
+     * Unggah / ganti gambar lembar kerja 2D (CAD / Denah / Arsitektur).
+     */
+    public function uploadImage(Request $request, DrawingSheet $sheet): JsonResponse
+    {
+        $user = $request->user();
+        $this->accessService->authorizeEdit($user, $sheet->project);
+
+        $request->validate([
+            'image' => ['required', 'file', 'image', 'max:20480'],
+        ]);
+
+        $file = $request->file('image');
+
+        if ($sheet->image_path && Storage::disk('public')->exists($sheet->image_path)) {
+            Storage::disk('public')->delete($sheet->image_path);
+        }
+
+        $extension = $file->getClientOriginalExtension() ?: 'png';
+        $filename = 'sheet_' . Str::uuid() . '.' . $extension;
+        $path = $file->storeAs("projects/{$sheet->project_id}/sheets", $filename, 'public');
+
+        $sheet->update([
+            'image_path' => $path,
+        ]);
+
+        return response()->json([
+            'message' => 'Gambar lembar kerja 2D berhasil diperbarui.',
+            'sheet'   => $sheet->fresh(),
+        ]);
+    }
+
+    /**
+     * Hapus gambar lembar kerja 2D (kembali ke tampilan kanvas vektor).
+     */
+    public function deleteImage(Request $request, DrawingSheet $sheet): JsonResponse
+    {
+        $user = $request->user();
+        $this->accessService->authorizeEdit($user, $sheet->project);
+
+        if ($sheet->image_path && Storage::disk('public')->exists($sheet->image_path)) {
+            Storage::disk('public')->delete($sheet->image_path);
+        }
+
+        $sheet->update([
+            'image_path' => null,
+        ]);
+
+        return response()->json([
+            'message' => 'Gambar lembar kerja 2D berhasil dihapus.',
+            'sheet'   => $sheet->fresh(),
+        ]);
     }
 }
 

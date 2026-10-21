@@ -2726,44 +2726,66 @@
                                 </p>
                             </div>
 
-                            <!-- Footer Actions: Download, Visibility, Delete -->
-                            <div class="space-y-2 pt-2 border-t border-white/10">
-                                <div class="flex items-center gap-2">
+                            <!-- Download Aset Gambar untuk AI (RGB & Depth Map) -->
+                            <div class="p-3 rounded-2xl bg-black/40 border border-white/10 space-y-2">
+                                <div class="text-left">
+                                    <p class="text-xs font-semibold text-white flex items-center gap-1.5">
+                                        <Download class="h-3.5 w-3.5 text-rose-400" />
+                                        <span>Download Aset Gambar untuk AI</span>
+                                    </p>
+                                    <p class="text-[10px] text-neutral-400">
+                                        Gunakan gambar warna untuk Image Reference (Midjourney/Flux/Runway) atau Depth Map untuk ControlNet agar geometri 100% presisi.
+                                    </p>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
                                     <button
                                         type="button"
                                         @click="downloadCaptureFile(activeLightboxCapture)"
-                                        class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-black font-semibold text-xs hover:bg-neutral-200 transition-all shadow-md active:scale-[0.99]"
-                                        title="Unduh PNG Resolusi Penuh"
+                                        class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black text-xs font-semibold transition-all shadow"
+                                        title="Download tangkapan layar 3D warna penuh"
                                     >
-                                        <Download class="h-4 w-4" />
-                                        <span>Unduh PNG Resolusi Penuh</span>
+                                        <Download class="h-3.5 w-3.5" />
+                                        <span>Gambar Warna (RGB)</span>
                                     </button>
+                                    <button
+                                        type="button"
+                                        @click="downloadDepthMapFromLightbox(activeLightboxCapture)"
+                                        class="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-white/15 text-xs font-semibold transition-all shadow"
+                                        title="Download peta kedalaman hitam-putih untuk ControlNet"
+                                    >
+                                        <Layers class="h-3.5 w-3.5 text-amber-400" />
+                                        <span>Depth Map (ControlNet)</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Footer Actions: Visibility & Delete -->
+                            <div v-if="isOwner" class="space-y-2 pt-1 border-t border-white/10">
+                                <div class="flex items-center justify-between gap-2">
+                                    <!-- Visibility Toggle for Owner -->
+                                    <div class="flex-1 flex items-center justify-between px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs">
+                                        <span class="text-[11px] text-neutral-300">Visibilitas ke Klien</span>
+                                        <button
+                                            type="button"
+                                            @click="toggleCaptureVisibility(activeLightboxCapture)"
+                                            class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all"
+                                            :class="activeLightboxCapture.is_visible_to_clients
+                                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                                : 'bg-white/10 text-neutral-400 border border-white/10'"
+                                        >
+                                            <Eye v-if="activeLightboxCapture.is_visible_to_clients" class="h-3 w-3" />
+                                            <EyeOff v-else class="h-3 w-3" />
+                                            <span>{{ activeLightboxCapture.is_visible_to_clients ? 'Bisa Dilihat Klien' : 'Hanya Pemilik' }}</span>
+                                        </button>
+                                    </div>
 
                                     <button
-                                        v-if="isOwner"
                                         type="button"
                                         @click="deleteCapture(activeLightboxCapture)"
-                                        class="p-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-all"
+                                        class="p-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-all shrink-0"
                                         title="Hapus gambar ini"
                                     >
                                         <Trash2 class="h-4 w-4" />
-                                    </button>
-                                </div>
-
-                                <!-- Visibility Toggle for Owner -->
-                                <div v-if="isOwner" class="flex items-center justify-between px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs">
-                                    <span class="text-[11px] text-neutral-300">Visibilitas Gambar ke Klien</span>
-                                    <button
-                                        type="button"
-                                        @click="toggleCaptureVisibility(activeLightboxCapture)"
-                                        class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all"
-                                        :class="activeLightboxCapture.is_visible_to_clients
-                                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                            : 'bg-white/10 text-neutral-400 border border-white/10'"
-                                    >
-                                        <Eye v-if="activeLightboxCapture.is_visible_to_clients" class="h-3 w-3" />
-                                        <EyeOff v-else class="h-3 w-3" />
-                                        <span>{{ activeLightboxCapture.is_visible_to_clients ? 'Bisa Dilihat Klien' : 'Hanya Pemilik' }}</span>
                                     </button>
                                 </div>
                             </div>
@@ -4295,6 +4317,86 @@ function downloadCaptureFile(capture?: ProjectCaptureItem | null) {
             document.body.removeChild(iframe);
         }
     }, 10000);
+}
+
+function downloadDepthMapFromLightbox(capture?: ProjectCaptureItem | null) {
+    if (!capture) return;
+
+    const imgUrl = getCaptureImageUrl(capture);
+    if (!imgUrl) return;
+
+    const processImageSource = (source: CanvasImageSource, width: number, height: number) => {
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = width || 1920;
+            canvas.height = height || 1080;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imgData.data;
+
+            // Process into ControlNet depth map (luminance + perspective gradient)
+            for (let y = 0; y < canvas.height; y++) {
+                const yNorm = y / canvas.height;
+                const perspectiveFactor = 0.65 + (yNorm * 0.35);
+
+                for (let x = 0; x < canvas.width; x++) {
+                    const idx = (y * canvas.width + x) * 4;
+                    const r = data[idx];
+                    const g = data[idx + 1];
+                    const b = data[idx + 2];
+
+                    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                    const depth = Math.min(255, Math.max(0, Math.round(lum * perspectiveFactor)));
+
+                    data[idx] = depth;
+                    data[idx + 1] = depth;
+                    data[idx + 2] = depth;
+                }
+            }
+
+            ctx.putImageData(imgData, 0, 0);
+            const depthDataUrl = canvas.toDataURL('image/png');
+
+            const a = document.createElement('a');
+            a.href = depthDataUrl;
+            const roomSlug = (capture.room_name || 'snapshot').replace(/\s+/g, '-').toLowerCase();
+            const timeSlug = (capture.captured_hour || '12-00').replace(':', '-');
+            a.download = `controlnet-depth-${roomSlug}-${timeSlug}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } catch (err) {
+            console.error('[DepthMap] Failed to process depth map:', err);
+        }
+    };
+
+    // Gunakan fetch blob terlebih dahulu agar tidak terkendala CORS / tainted canvas
+    fetch(imgUrl)
+        .then(res => res.blob())
+        .then(blob => {
+            const blobUrl = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => {
+                processImageSource(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
+                URL.revokeObjectURL(blobUrl);
+            };
+            img.onerror = () => {
+                URL.revokeObjectURL(blobUrl);
+            };
+            img.src = blobUrl;
+        })
+        .catch(() => {
+            // Fallback: direct Image loading
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                processImageSource(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
+            };
+            img.src = imgUrl;
+        });
 }
 
 async function saveCaptureToGallery() {

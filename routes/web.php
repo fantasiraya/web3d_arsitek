@@ -100,6 +100,9 @@ Route::middleware(['auth', 'project.access'])->group(function () {
     Route::post('/projects/{project}/captures/{capture}/ai-render', [ProjectCaptureController::class, 'uploadAiRender'])->name('projects.captures.ai-render.upload');
     Route::post('/projects/{project}/captures/{capture}/generate-ai', [ProjectCaptureController::class, 'generateAiRender'])->name('projects.captures.ai-render.generate');
     Route::delete('/projects/{project}/captures/{capture}/ai-render', [ProjectCaptureController::class, 'deleteAiRender'])->name('projects.captures.ai-render.delete');
+    Route::post('/projects/{project}/captures/{capture}/image', [ProjectCaptureController::class, 'replaceImage'])->name('projects.captures.image.replace');
+    Route::post('/projects/{project}/captures/{capture}/key-plan-image', [ProjectCaptureController::class, 'uploadKeyPlanImage'])->name('projects.captures.key-plan-image.upload');
+    Route::delete('/projects/{project}/captures/{capture}/key-plan-image', [ProjectCaptureController::class, 'deleteKeyPlanImage'])->name('projects.captures.key-plan-image.delete');
     Route::patch('/projects/{project}/sun-settings', [ProjectCaptureController::class, 'updateSunSettings'])->name('projects.sun-settings.update');
 });
 
@@ -179,6 +182,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/drawings/{sheet}', [DrawingSheetController::class, 'destroy'])->name('drawings.destroy');
     Route::post('/drawings/{sheet}/sync', [DrawingElementController::class, 'sync'])->name('drawings.sync');
     Route::post('/drawings/{sheet}/sync-captures', [DrawingSheetController::class, 'syncCaptures'])->name('drawings.sync-captures');
+    Route::post('/drawings/{sheet}/image', [DrawingSheetController::class, 'uploadImage'])->name('drawings.image.upload');
+    Route::delete('/drawings/{sheet}/image', [DrawingSheetController::class, 'deleteImage'])->name('drawings.image.delete');
     Route::get('/drawings/{sheet}/export-dxf', [DrawingSheetController::class, 'exportDxf'])->name('drawings.export-dxf');
     Route::match(['get', 'post'], '/drawings/{sheet}/export-svg', [DrawingSheetController::class, 'exportSvg'])->name('drawings.export-svg');
     Route::get('/projects/{project}/booklet', [\App\Domains\Drawing\Controllers\BookletController::class, 'show'])->name('projects.booklet');

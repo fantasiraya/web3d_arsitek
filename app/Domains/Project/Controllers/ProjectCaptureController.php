@@ -14,6 +14,8 @@ use App\Domains\Project\Requests\UpdateProjectSunSettingsRequest;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ProjectCaptureController extends Controller
 {
@@ -161,6 +163,108 @@ class ProjectCaptureController extends Controller
         ]);
     }
 
+    public function replaceImage(Request $request, string $projectId, string $captureId): JsonResponse
+    {
+        $project = Project::findOrFail($projectId);
+        $user = $request->user();
+
+        if (! $user || $project->user_id !== $user->id) {
+            abort(403, 'Hanya arsitek pemilik proyek yang dapat memperbarui gambar.');
+        }
+
+        $capture = ProjectCapture::where('project_id', $project->id)->findOrFail($captureId);
+
+        $request->validate([
+            'image' => ['required', 'file', 'image', 'max:20480'],
+        ]);
+
+        $file = $request->file('image');
+
+        if ($capture->file_path && Storage::disk('public')->exists($capture->file_path)) {
+            Storage::disk('public')->delete($capture->file_path);
+        }
+
+        $extension = $file->getClientOriginalExtension() ?: 'png';
+        $filename = 'capture_' . Str::uuid() . '.' . $extension;
+        $path = $file->storeAs("projects/{$project->id}/captures", $filename, 'public');
+
+        // Jika ada render AI lama, hapus juga agar visual langsung ter-update ke gambar terbaru
+        if ($capture->ai_rendered_path && Storage::disk('public')->exists($capture->ai_rendered_path)) {
+            Storage::disk('public')->delete($capture->ai_rendered_path);
+        }
+
+        $capture->update([
+            'file_path'        => $path,
+            'file_size_bytes'  => $file->getSize(),
+            'ai_rendered_path' => null,
+        ]);
+
+        return response()->json([
+            'message' => 'Gambar berhasil diperbarui.',
+            'data'    => $capture->fresh(),
+        ]);
+    }
+
+    public function uploadKeyPlanImage(Request $request, string $projectId, string $captureId): JsonResponse
+    {
+        $project = Project::findOrFail($projectId);
+        $user = $request->user();
+
+        if (! $user || $project->user_id !== $user->id) {
+            abort(403, 'Hanya arsitek pemilik proyek yang dapat memperbarui denah 2D ruangan.');
+        }
+
+        $capture = ProjectCapture::where('project_id', $project->id)->findOrFail($captureId);
+
+        $request->validate([
+            'image' => ['required', 'file', 'image', 'max:20480'],
+        ]);
+
+        $file = $request->file('image');
+
+        if ($capture->key_plan_image_path && Storage::disk('public')->exists($capture->key_plan_image_path)) {
+            Storage::disk('public')->delete($capture->key_plan_image_path);
+        }
+
+        $extension = $file->getClientOriginalExtension() ?: 'png';
+        $filename = 'keyplan_' . Str::uuid() . '.' . $extension;
+        $path = $file->storeAs("projects/{$project->id}/captures/keyplans", $filename, 'public');
+
+        $capture->update([
+            'key_plan_image_path' => $path,
+        ]);
+
+        return response()->json([
+            'message' => 'Denah 2D ruangan berhasil diperbarui.',
+            'data'    => $capture->fresh(),
+        ]);
+    }
+
+    public function deleteKeyPlanImage(Request $request, string $projectId, string $captureId): JsonResponse
+    {
+        $project = Project::findOrFail($projectId);
+        $user = $request->user();
+
+        if (! $user || $project->user_id !== $user->id) {
+            abort(403, 'Hanya arsitek pemilik proyek yang dapat menghapus denah 2D ruangan.');
+        }
+
+        $capture = ProjectCapture::where('project_id', $project->id)->findOrFail($captureId);
+
+        if ($capture->key_plan_image_path && Storage::disk('public')->exists($capture->key_plan_image_path)) {
+            Storage::disk('public')->delete($capture->key_plan_image_path);
+        }
+
+        $capture->update([
+            'key_plan_image_path' => null,
+        ]);
+
+        return response()->json([
+            'message' => 'Denah 2D ruangan berhasil dihapus, kembali ke denah otomatis.',
+            'data'    => $capture->fresh(),
+        ]);
+    }
+
     public function generateAiRender(
         Request $request,
         string $projectId,
@@ -172,7 +276,8 @@ class ProjectCaptureController extends Controller
 
         $validated = $request->validate([
             'image'        => ['nullable', 'file', 'image', 'max:20480'],
-            'prompt'       => ['nullable', 'string', 'max:2000'],
+            'depth_map'    => ['nullable', 'file', 'image', 'max:20480'],
+            'prompt'       => ['nullable', 'string', 'max:5000'],
             'mood'         => ['nullable', 'string', 'max:255'],
             'aspect_ratio' => ['nullable', 'string', 'in:16:9,4:3,1:1'],
         ]);
@@ -183,7 +288,8 @@ class ProjectCaptureController extends Controller
                 $project,
                 $capture,
                 $validated,
-                $request->file('image')
+                $request->file('image'),
+                $request->file('depth_map')
             );
 
             return response()->json([

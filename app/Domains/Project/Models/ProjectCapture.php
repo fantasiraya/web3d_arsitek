@@ -50,6 +50,8 @@ class ProjectCapture extends Model
         'room_name',
         'captured_hour',
         'file_path',
+        'depth_map_path',
+        'key_plan_image_path',
         'ai_rendered_path',
         'file_size_bytes',
         'width',
@@ -73,6 +75,8 @@ class ProjectCapture extends Model
 
     protected $appends = [
         'url',
+        'depth_map_url',
+        'key_plan_image_url',
         'ai_rendered_url',
     ];
 
@@ -87,6 +91,32 @@ class ProjectCapture extends Model
         }
 
         return '/storage/' . ltrim($this->file_path, '/');
+    }
+
+    public function getDepthMapUrlAttribute(): ?string
+    {
+        if (empty($this->depth_map_path)) {
+            return null;
+        }
+
+        if (str_starts_with($this->depth_map_path, 'http://') || str_starts_with($this->depth_map_path, 'https://')) {
+            return $this->depth_map_path;
+        }
+
+        return '/storage/' . ltrim($this->depth_map_path, '/');
+    }
+
+    public function getKeyPlanImageUrlAttribute(): ?string
+    {
+        if (empty($this->key_plan_image_path)) {
+            return null;
+        }
+
+        if (str_starts_with($this->key_plan_image_path, 'http://') || str_starts_with($this->key_plan_image_path, 'https://')) {
+            return $this->key_plan_image_path;
+        }
+
+        return '/storage/' . ltrim($this->key_plan_image_path, '/');
     }
 
     public function getAiRenderedUrlAttribute(): ?string
@@ -128,6 +158,12 @@ class ProjectCapture extends Model
         static::deleting(function (ProjectCapture $capture): void {
             if ($capture->file_path && Storage::disk('public')->exists($capture->file_path)) {
                 Storage::disk('public')->delete($capture->file_path);
+            }
+            if ($capture->depth_map_path && Storage::disk('public')->exists($capture->depth_map_path)) {
+                Storage::disk('public')->delete($capture->depth_map_path);
+            }
+            if ($capture->key_plan_image_path && Storage::disk('public')->exists($capture->key_plan_image_path)) {
+                Storage::disk('public')->delete($capture->key_plan_image_path);
             }
             if ($capture->ai_rendered_path && Storage::disk('public')->exists($capture->ai_rendered_path)) {
                 Storage::disk('public')->delete($capture->ai_rendered_path);
