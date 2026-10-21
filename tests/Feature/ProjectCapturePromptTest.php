@@ -3,6 +3,11 @@
 use App\Domains\Auth\Models\User;
 use App\Domains\Project\Models\Project;
 use App\Domains\Project\Models\ProjectCapture;
+use Illuminate\Support\Facades\Storage;
+
+beforeEach(function () {
+    Storage::fake('public');
+});
 
 test('architect can save capture with prompt', function () {
     $user = User::factory()->create();

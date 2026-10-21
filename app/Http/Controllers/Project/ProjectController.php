@@ -111,7 +111,7 @@ class ProjectController extends Controller
             'client_name'          => ['nullable', 'string', 'max:255'],
             'client_address'       => ['nullable', 'string', 'max:1000'],
             'max_revisions_allowed' => ['sometimes', 'integer', 'min:1', 'max:50'],
-            'file'                 => ['nullable', 'file', "max:{$maxKilobytes}"],
+            'file'                 => ['nullable', 'file', 'mimes:glb,gltf', "max:{$maxKilobytes}"],
         ], [
             'file.max' => "Ukuran file melebihi batas paket Anda ({$maxMb} MB).",
         ]);

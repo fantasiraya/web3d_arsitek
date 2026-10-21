@@ -164,7 +164,7 @@
                 <!-- Galeri Capture toggle -->
                 <button
                     type="button"
-                    @click="isGalleryOpen = !isGalleryOpen; isChatOpen = false; isDrawerOpen = false; showRabPanel = false"
+                    @click="toggleGallery"
                     class="relative flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
                     :class="isGalleryOpen && 'border-amber-500/50 bg-amber-500/10 text-amber-300'"
                     title="Galeri Hasil Ambil Gambar 3D"
@@ -2327,9 +2327,10 @@
                                 @click="activeLightboxCapture = capture"
                             >
                                 <img
-                                    :src="capture.url"
+                                    :src="getCaptureImageUrl(capture)"
                                     :alt="capture.room_name"
                                     class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                    @error="onCaptureImgError($event, capture)"
                                 />
                                 <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity flex items-end justify-between p-2.5">
                                     <div class="flex items-center gap-1.5 min-w-0">
@@ -2495,9 +2496,10 @@
 
                             <!-- Centered Responsive Image -->
                             <img
-                                :src="activeLightboxCapture.url"
+                                :src="getCaptureImageUrl(activeLightboxCapture)"
                                 :alt="activeLightboxCapture.room_name"
                                 class="max-h-[46vh] lg:max-h-[80vh] w-auto max-w-full rounded-2xl border border-white/10 shadow-2xl object-contain transition-all duration-200"
+                                @error="onCaptureImgError($event, activeLightboxCapture)"
                             />
 
                             <!-- Image Bottom Floating Badges -->
@@ -3589,7 +3591,7 @@ function generatePromptForCurrentView(providedAnalysis?: Analyzed3DView | null):
         return `Cinematic 4K architectural video (${durationText}, ${paceText}). ${compoundMotion}. Subject: ${subjectName}. Environment: ${moodText}. Optics: ${lensText}. ${strictGeometryText} ${targetGuidance}`;
     }
 
-    const mandatoryPrefix = 'Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Maintain 100% of the exact geometry, camera perspective, section-cut lines, AND THE EXACT COLOR PALETTE of every surface as shown in the reference image.';
+    const mandatoryPrefix = 'Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Transform this 3D model viewport into a magazine-grade, real-life architectural photograph. Maintain 100% of the exact geometry, building massing, camera perspective, section-cut lines, and color palette of every surface, but replace all raw 3D polygon shaders with authentic, tactile physical materials: genuine wood grain, real concrete pores, authentic glass reflections, and smooth painted walls. Masterpiece real-world built structure photograph, NOT a 3D model or CGI illustration.';
 
     const hourStr = captureHour.value || '12:00';
     const hourNum = parseFloat(hourStr.replace(':', '.'));
@@ -3634,11 +3636,11 @@ function generatePromptForCurrentView(providedAnalysis?: Analyzed3DView | null):
             ? `in ${captureRoomName.value}`
             : '';
 
-        return `${mandatoryPrefix} Viewport capture of ${subjectPhrase} ${roomContext} ${projectContext}. Section state: ${clipContext}. Camera framing: ${analysis.perspectiveEn}, ${analysis.shotTypeEn}. Lighting: ${lightingContext}. ${materialsPhrase} ${renderStyle}, highly detailed architecture, cinematic composition.`;
+        return `${mandatoryPrefix} Architectural photograph of ${subjectPhrase} ${roomContext} ${projectContext}. Section state: ${clipContext}. Camera framing: ${analysis.perspectiveEn}, ${analysis.shotTypeEn}. Lighting: ${lightingContext}. ${materialsPhrase} ${renderStyle}, highly detailed architecture, cinematic composition.`;
     }
 
     const room = captureRoomName.value || 'Ruangan Arsitektur';
-    return `${mandatoryPrefix} Viewport capture of ${room} ${projectContext}. Section state: ${clipContext}. Lighting: ${lightingContext}. Preserve authentic visible surface colors and textures. ${renderStyle}, highly detailed interior architecture, cinematic composition, award-winning architectural showcase.`;
+    return `${mandatoryPrefix} Architectural photograph of ${room} ${projectContext}. Section state: ${clipContext}. Lighting: ${lightingContext}. Preserve authentic visible surface colors and textures. ${renderStyle}, highly detailed interior architecture, cinematic composition, award-winning architectural showcase.`;
 }
 
 type TargetModelSyntax = 'universal' | 'midjourney' | 'sdxl' | 'flux';
@@ -3849,6 +3851,38 @@ async function loadCaptures() {
         }
     } catch (err) {
         console.error('[Captures] load error:', err);
+    }
+}
+
+function toggleGallery() {
+    isGalleryOpen.value = !isGalleryOpen.value;
+    if (isGalleryOpen.value) {
+        isChatOpen.value = false;
+        isDrawerOpen.value = false;
+        showRabPanel.value = false;
+        loadCaptures();
+    }
+}
+
+function getCaptureImageUrl(capture: ProjectCaptureItem | null): string {
+    if (!capture) return '';
+    if (capture.file_path) {
+        const clean = capture.file_path.replace(/^\/?storage\//, '').replace(/^\/+/, '');
+        return `/storage/${clean}`;
+    }
+    if (capture.url) {
+        return capture.url.replace(/^https?:\/\/[^/]+(?=\/storage)/, '');
+    }
+    return '';
+}
+
+function onCaptureImgError(event: Event, capture: ProjectCaptureItem | null) {
+    if (!capture || !capture.file_path) return;
+    const img = event.target as HTMLImageElement;
+    const clean = capture.file_path.replace(/^\/?storage\//, '').replace(/^\/+/, '');
+    const fallbackUrl = `/storage/${clean}`;
+    if (img && img.src !== window.location.origin + fallbackUrl) {
+        img.src = fallbackUrl;
     }
 }
 

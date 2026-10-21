@@ -254,13 +254,14 @@ TEXT;
         return <<<TEXT
 You are an expert Architectural Visualization Prompt Engineer. Analyze the attached 3D .glb viewport screenshot and generate ONE single image-to-image rendering prompt in English.
 
-CRITICAL RULES FOR STRUCTURE & COLOR ACCURACY:
+CRITICAL RULES FOR PHOTOREALISM & COLOR ACCURACY:
 1. Start the prompt with this exact mandatory command:
-   "Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Maintain 100% of the exact geometry, camera perspective, section-cut lines, AND THE EXACT COLOR PALETTE of every surface as shown in the reference image."
-2. EXACT COLOR MAPPING: Look closely at the colors in the 3D screenshot. Explicitly map each part of the building to its exact visible color shade (e.g., "keep the off-white walls off-white", "preserve the light beige floor tiles", "maintain the dark charcoal window frames", "keep the warm honey-oak wood color on the ceiling").
-3. DO NOT invent new materials that change the original color (e.g., if a wall is plain white in the 3D image, describe it as "smooth white painted stucco wall", NEVER change it to grey concrete or red brick).
-4. NEUTRALIZE LIGHTING COLOR CAST: Describe the lighting in terms of shadow direction and brightness ONLY, adding "neutral white balance, accurate true-to-life surface colors without heavy color tinting".
-5. Output ONLY the final prompt text without markdown or explanations.
+   "Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Transform this 3D model viewport into a magazine-grade, real-life architectural photograph. Maintain 100% of the exact geometry, camera perspective, section-cut lines, and color palette of every surface, but replace all raw 3D polygon shaders with authentic, tactile physical materials."
+2. EXACT COLOR & MATERIAL MAPPING: Look closely at visible surfaces in the 3D screenshot. Explicitly map each part of the building to authentic real-world materials while preserving its visible color shade (e.g., "smooth matte off-white painted stucco walls", "honed light beige travertine floor tiles with subtle grout lines", "fine natural oak wood paneling with realistic grain", "powder-coated dark charcoal aluminum window frames with crystal-clear architectural glass reflections").
+3. REALISTIC PHYSICAL TEXTURES: Transform flat computer-generated polygons into realistic physical architectural materials with subtle micro-textures, real-life material depth, genuine wood grain, authentic stone pores, and natural paint finishes. Ensure the image looks like an actual built structure photographed in the real world, NEVER a 3D CAD model, cartoon, or computer rendering.
+4. NEUTRALIZE LIGHTING & SHADOWS: Describe natural architectural illumination: "crisp natural daylight with soft geometric shadows, neutral white balance, accurate true-to-life surface colors without heavy color tinting, subtle ambient occlusion in corners".
+5. Conclude with camera specs: "Shot on Hasselblad H6D-100c, 35mm lens, f/8, natural soft illumination, Architectural Digest magazine photograph."
+6. Output ONLY the final prompt text without markdown, quotes, or conversational explanations.
 TEXT;
     }
 
@@ -411,8 +412,8 @@ PROMPT;
     protected function callGemini(array $config, string $systemInstruction, string $userPrompt, array $images): ?string
     {
         $apiKey = $config['api_key'];
-        $model = $config['model'] ?: 'gemini-2.5-flash';
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
+        $primaryModel = $config['model'] ?: 'gemini-3.8-flash';
+        $modelsToTry = array_unique([$primaryModel, 'gemini-3.8-flash', 'gemini-3.7-flash']);
 
         $parts = [
             ['text' => $userPrompt],
@@ -427,7 +428,7 @@ PROMPT;
             ];
         }
 
-        $response = Http::timeout(30)->post($url, [
+        $payload = [
             'system_instruction' => [
                 'parts' => [
                     ['text' => $systemInstruction],
@@ -443,16 +444,28 @@ PROMPT;
                 'temperature'     => 0.2,
                 'maxOutputTokens' => 1024,
             ],
-        ]);
+        ];
 
-        if ($response->successful()) {
-            return $response->json('candidates.0.content.parts.0.text');
+        foreach ($modelsToTry as $model) {
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
+            try {
+                $response = Http::timeout(60)->post($url, $payload);
+
+                if ($response->successful()) {
+                    $text = $response->json('candidates.0.content.parts.0.text');
+                    if (!empty($text)) {
+                        return $text;
+                    }
+                }
+
+                Log::warning("Gemini Vision API error ({$model})", [
+                    'status' => $response->status(),
+                    'body'   => substr($response->body(), 0, 500),
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning("Gemini Vision API exception ({$model}): " . $e->getMessage());
+            }
         }
-
-        Log::warning('Gemini Vision API error', [
-            'status' => $response->status(),
-            'body'   => substr($response->body(), 0, 500),
-        ]);
 
         return null;
     }
@@ -597,7 +610,7 @@ PROMPT;
             return $cleanedText;
         }
 
-        $mandatoryPrefix = 'Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Maintain 100% of the exact geometry, camera perspective, section-cut lines, AND THE EXACT COLOR PALETTE of every surface as shown in the reference image.';
+        $mandatoryPrefix = 'Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Transform this 3D model viewport into a magazine-grade, real-life architectural photograph. Maintain 100% of the exact geometry, camera perspective, section-cut lines, and color palette of every surface, but replace all raw 3D polygon shaders with authentic, tactile physical materials.';
         if (!str_starts_with($cleanedText, 'Strict image-to-image')) {
             $cleanedText = $mandatoryPrefix . ' ' . $cleanedText;
         }
@@ -660,8 +673,8 @@ PROMPT;
             return "Cinematic 4K architectural video. {$motionPhrase} through {$subject} {$projName}. {$cutKeywords}. Duration: {$duration} continuous uncut take. Pacing: {$pacePhrase}. Lighting & Atmosphere: {$moodPhrase}. {$matPhrase} {$lensPhrase}, {$geometryRule}";
         }
 
-        $mandatoryPrefix = 'Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Maintain 100% of the exact geometry, camera perspective, section-cut lines, AND THE EXACT COLOR PALETTE of every surface as shown in the reference image.';
+        $mandatoryPrefix = 'Strict image-to-image architectural photorealistic rendering of the attached 3D reference image. Transform this 3D model viewport into a magazine-grade, real-life architectural photograph. Maintain 100% of the exact geometry, camera perspective, section-cut lines, and color palette of every surface, but replace all untextured 3D polygons with authentic physical real-world materials: genuine wood grain, authentic concrete pores, clear glass reflections, and smooth painted walls.';
 
-        return "{$mandatoryPrefix} Viewport capture of {$subject} {$projName}. {$cutKeywords}. Camera perspective: {$angleKeywords}. Lighting: {$lightingKeywords}. {$matPhrase} Shot on Hasselblad H6D-100c, 35mm lens, f/8, ambient occlusion crevices, raytraced global illumination, 8k resolution, award-winning architectural showcase.";
+        return "{$mandatoryPrefix} Architectural space of {$subject} {$projName}. {$cutKeywords}. Camera perspective: {$angleKeywords}. Lighting: {$lightingKeywords}. {$matPhrase} Masterpiece 8k architectural photography, shot on Hasselblad H6D-100c, 35mm lens, f/8, realistic physical textures, natural soft illumination, ambient occlusion crevices, Architectural Digest magazine quality photograph.";
     }
 }

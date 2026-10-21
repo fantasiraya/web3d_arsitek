@@ -78,12 +78,28 @@ class ProjectCapture extends Model
 
     public function getUrlAttribute(): string
     {
-        return Storage::disk('public')->url($this->file_path);
+        if (empty($this->file_path)) {
+            return '';
+        }
+
+        if (str_starts_with($this->file_path, 'http://') || str_starts_with($this->file_path, 'https://')) {
+            return $this->file_path;
+        }
+
+        return '/storage/' . ltrim($this->file_path, '/');
     }
 
     public function getAiRenderedUrlAttribute(): ?string
     {
-        return $this->ai_rendered_path ? Storage::disk('public')->url($this->ai_rendered_path) : null;
+        if (empty($this->ai_rendered_path)) {
+            return null;
+        }
+
+        if (str_starts_with($this->ai_rendered_path, 'http://') || str_starts_with($this->ai_rendered_path, 'https://')) {
+            return $this->ai_rendered_path;
+        }
+
+        return '/storage/' . ltrim($this->ai_rendered_path, '/');
     }
 
     public function project(): BelongsTo
@@ -109,7 +125,7 @@ class ProjectCapture extends Model
 
     protected static function booted(): void
     {
-        static::deleted(function (ProjectCapture $capture): void {
+        static::deleting(function (ProjectCapture $capture): void {
             if ($capture->file_path && Storage::disk('public')->exists($capture->file_path)) {
                 Storage::disk('public')->delete($capture->file_path);
             }

@@ -109,6 +109,17 @@ class User extends Authenticatable implements PasskeyUser, MustVerifyEmail
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::deleting(function (User $user): void {
+            $user->projects()->each(fn (Project $project) => $project->delete());
+
+            if ($user->avatar && ! str_starts_with($user->avatar, 'http') && \Illuminate\Support\Facades\Storage::disk('public')->exists($user->avatar)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($user->avatar);
+            }
+        });
+    }
+
     /**
      * Get the default guard name for the model.
      */

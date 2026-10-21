@@ -81,8 +81,10 @@ class Project extends Model
             //    so ProjectVersion::deleting hook fires for every version.
             $project->versions()->each(fn (ProjectVersion $v) => $v->delete());
 
-            // 2. Delete the project-level file_path (used by the older upload path
-            //    projects/models/{file}.glb stored directly on the project row).
+            // 2. Explicitly delete each ProjectCapture file via Eloquent
+            $project->captures()->each(fn (ProjectCapture $c) => $c->delete());
+
+            // 3. Delete the project-level file_path (and its draco variant if present)
             $path = $project->file_path;
             if (!empty($path) && $disk->exists($path)) {
                 $deleted = $disk->delete($path);
@@ -91,13 +93,17 @@ class Project extends Model
                 }
             }
 
-            // 3. Delete the entire project folder  projects/{id}/
-            //    This catches any orphaned files not tracked in DB
-            //    (e.g. original GLB left over before Draco compression committed).
-            $projectFolder = "projects/{$project->id}";
-            if ($disk->exists($projectFolder)) {
-                $disk->deleteDirectory($projectFolder);
+            if (!empty($path) && !str_ends_with($path, '_draco.glb')) {
+                $dracoPath = preg_replace('/\.gl[bt]f?$/i', '_draco.glb', $path);
+                if ($dracoPath && $disk->exists($dracoPath)) {
+                    $disk->delete($dracoPath);
+                }
             }
+
+            // 4. Delete the entire project folder projects/{id}/
+            //    This catches all captures, versions, and orphaned subfiles.
+            $projectFolder = "projects/{$project->id}";
+            $disk->deleteDirectory($projectFolder);
         });
     }
 
