@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Project;
 
 use App\Domains\Billing\Services\SubscriptionLimitService;
 use App\Domains\Project\Actions\CreateProjectAction;
+use App\Domains\Project\Actions\ExtractSkpThumbnailAction;
 use App\Domains\Project\Actions\InviteClientAction;
 use App\Domains\Project\Actions\RevokeClientAccessAction;
 use App\Domains\Project\Actions\UploadProjectFileAction;
@@ -14,12 +15,15 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ProjectController extends Controller
 {
     public function __construct(
         protected CreateProjectAction $createProjectAction,
         protected UploadProjectFileAction $uploadProjectFileAction,
+        protected ExtractSkpThumbnailAction $extractSkpThumbnailAction,
         protected InviteClientAction $inviteClientAction,
         protected RevokeClientAccessAction $revokeClientAccessAction,
         protected SubscriptionLimitService $limitService
@@ -47,6 +51,25 @@ class ProjectController extends Controller
     {
         $user = $request->user();
 
+        // ── 0. Cek jika upload gagal karena batasan PHP server ──
+        $contentLength = (int) $request->server('CONTENT_LENGTH', 0);
+        if ($contentLength > 0 && empty($request->all()) && empty($request->allFiles())) {
+            $postMax = ini_get('post_max_size');
+            return back()->withErrors([
+                'file' => "Ukuran upload melebihi batas konfigurasi server PHP (post_max_size: {$postMax}). Silakan jalankan server dengan 'composer run serve' atau perbesar batas upload.",
+            ])->withInput();
+        }
+
+        if ($request->hasFile('file') && ! $request->file('file')->isValid()) {
+            $err = $request->file('file')->getError();
+            if ($err === UPLOAD_ERR_INI_SIZE) {
+                $uploadMax = ini_get('upload_max_filesize');
+                return back()->withErrors([
+                    'file' => "Ukuran file melebihi batas upload PHP server ({$uploadMax}). Silakan jalankan server dengan 'composer run serve' atau perbesar upload_max_filesize di php.ini.",
+                ])->withInput();
+            }
+        }
+
         // ── 1. Cek project limit SEBELUM upload file ──────────
         $canCreate = $this->limitService->canCreateProject($user);
         if (! $canCreate['allowed']) {
@@ -59,18 +82,34 @@ class ProjectController extends Controller
         $maxKilobytes = $maxMb * 1024;
 
         $validated = $request->validate([
-            'title'                => ['required', 'string', 'max:255'],
-            'description'          => ['nullable', 'string', 'max:1000'],
-            'client_name'          => ['nullable', 'string', 'max:255'],
-            'client_address'       => ['nullable', 'string', 'max:1000'],
+            'title'                 => ['required', 'string', 'max:255'],
+            'description'           => ['nullable', 'string', 'max:1000'],
+            'client_name'           => ['nullable', 'string', 'max:255'],
+            'client_address'        => ['nullable', 'string', 'max:1000'],
             'max_revisions_allowed' => ['nullable', 'integer', 'min:1', 'max:20'],
-            'file'                 => ['required', 'file', 'mimes:glb,gltf', "max:{$maxKilobytes}"],
+            'file'                  => [
+                'required',
+                'file',
+                function ($attribute, $value, $fail) {
+                    if (! $value instanceof \Illuminate\Http\UploadedFile) {
+                        return;
+                    }
+                    $ext = strtolower($value->getClientOriginalExtension());
+                    if (! in_array($ext, ['glb', 'gltf', 'skp'])) {
+                        $fail('Format file harus berupa .glb atau .skp (SketchUp).');
+                    }
+                },
+                "max:{$maxKilobytes}",
+            ],
         ], [
-            'file.max' => "Ukuran file melebihi batas paket Anda ({$maxMb} MB). Upgrade paket untuk batas lebih besar.",
+            'file.required' => 'File model 3D (.glb atau .skp) wajib diunggah.',
+            'file.max'      => "Ukuran file melebihi batas paket Anda ({$maxMb} MB). Upgrade paket untuk batas lebih besar.",
         ]);
 
         // ── 3. Upload file ke storage ──────────────────────────
-        $path          = $file->store('projects/models', 'public');
+        $ext           = strtolower($file->getClientOriginalExtension() ?: 'glb');
+        $filename      = Str::random(40) . '.' . $ext;
+        $path          = $file->storeAs('projects/models', $filename, 'public');
         $fileSizeBytes = $file->getSize() ?: 0;
 
         // ── 4. Buat project record ─────────────────────────────
@@ -85,8 +124,13 @@ class ProjectController extends Controller
             'max_revisions_allowed' => $validated['max_revisions_allowed'] ?? 3,
         ]);
 
+        // ── 5. Jika file SketchUp (.skp), ekstrak thumbnail + konversi ke 3D GLB ──
+        if ($ext === 'skp') {
+            $this->extractSkpThumbnailAction->execute($project, $user, Storage::disk('public')->path($path));
+            app(\App\Domains\Project\Actions\ConvertSkpToGlbAction::class)->execute($path);
+        }
 
-        // ── 5. Simpan version record + queue Draco compression ─
+        // ── 6. Simpan version record + queue Draco compression (GLB only) ─
         $this->uploadProjectFileAction->execute($project, $user, $file);
 
         return back()->with('success', 'Proyek 3D berhasil dibuat dan siap ditinjau!');
@@ -106,12 +150,25 @@ class ProjectController extends Controller
         $maxKilobytes = $maxMb * 1024;
 
         $validated = $request->validate([
-            'title'                => ['sometimes', 'string', 'max:255'],
-            'description'          => ['nullable', 'string', 'max:1000'],
-            'client_name'          => ['nullable', 'string', 'max:255'],
-            'client_address'       => ['nullable', 'string', 'max:1000'],
+            'title'                 => ['sometimes', 'string', 'max:255'],
+            'description'           => ['nullable', 'string', 'max:1000'],
+            'client_name'           => ['nullable', 'string', 'max:255'],
+            'client_address'        => ['nullable', 'string', 'max:1000'],
             'max_revisions_allowed' => ['sometimes', 'integer', 'min:1', 'max:50'],
-            'file'                 => ['nullable', 'file', 'mimes:glb,gltf', "max:{$maxKilobytes}"],
+            'file'                  => [
+                'nullable',
+                'file',
+                function ($attribute, $value, $fail) {
+                    if (! $value instanceof \Illuminate\Http\UploadedFile) {
+                        return;
+                    }
+                    $ext = strtolower($value->getClientOriginalExtension());
+                    if (! in_array($ext, ['glb', 'gltf', 'skp'])) {
+                        $fail('Format file harus berupa .glb atau .skp (SketchUp).');
+                    }
+                },
+                "max:{$maxKilobytes}",
+            ],
         ], [
             'file.max' => "Ukuran file melebihi batas paket Anda ({$maxMb} MB).",
         ]);
@@ -155,14 +212,40 @@ class ProjectController extends Controller
                         $disk->delete($oldDraco);
                     }
                 }
+
+                // If old file was .skp, delete its converted .glb
+                if (str_ends_with(strtolower($oldPath), '.skp')) {
+                    $oldConvertedGlb = preg_replace('/\.skp$/i', '.glb', $oldPath);
+                    if ($oldConvertedGlb && $disk->exists($oldConvertedGlb)) {
+                        $disk->delete($oldConvertedGlb);
+                    }
+                }
             }
 
-            $path          = $file->store('projects/models', 'public');
+            // Invalidate/delete old captures with code THUMB and SKP-01 because the 3D model geometry has changed
+            $oldThumbCaptures = \App\Domains\Project\Models\ProjectCapture::where('project_id', $project->id)
+                ->whereIn('code', ['THUMB', 'SKP-01'])
+                ->get();
+            foreach ($oldThumbCaptures as $oldCap) {
+                if (!empty($oldCap->file_path) && $disk->exists($oldCap->file_path)) {
+                    $disk->delete($oldCap->file_path);
+                }
+                $oldCap->delete();
+            }
+
+            $ext           = strtolower($file->getClientOriginalExtension() ?: 'glb');
+            $filename      = Str::random(40) . '.' . $ext;
+            $path          = $file->storeAs('projects/models', $filename, 'public');
             $fileSizeBytes = $file->getSize() ?: 0;
 
             $updateData['file_path']           = $path;
             $updateData['file_size_bytes']      = $fileSizeBytes;
             $updateData['is_draco_compressed']  = false;
+
+            if ($ext === 'skp') {
+                $this->extractSkpThumbnailAction->execute($project, $request->user(), $disk->path($path));
+                app(\App\Domains\Project\Actions\ConvertSkpToGlbAction::class)->execute($path);
+            }
 
             // Upload new version record & queue draco compression
             $this->uploadProjectFileAction->execute($project, $request->user(), $file);
@@ -180,6 +263,66 @@ class ProjectController extends Controller
         }
 
         return back()->with('success', 'Data proyek berhasil diperbarui.');
+    }
+
+    /**
+     * Update project 3D thumbnail / snapshot.
+     */
+    public function updateThumbnail(Request $request, Project $project): JsonResponse
+    {
+        $user = $request->user();
+        if ($project->user_id !== $user->id) {
+            abort(403, 'Hanya arsitek pemilik proyek yang dapat memperbarui snapshot.');
+        }
+
+        $dataUrl = $request->input('image');
+        if (! is_string($dataUrl) || ! preg_match('/^data:image\/(\w+);base64,/', $dataUrl, $type)) {
+            return response()->json(['message' => 'Format gambar tidak valid.'], 422);
+        }
+
+        $data = substr($dataUrl, strpos($dataUrl, ',') + 1);
+        $data = base64_decode($data);
+        if (! $data) {
+            return response()->json(['message' => 'Gagal membaca data gambar.'], 422);
+        }
+
+        $ext = strtolower($type[1]) === 'jpeg' ? 'jpg' : strtolower($type[1]);
+        $filename = 'thumb_' . Str::random(16) . '.' . $ext;
+        $dir = "projects/{$project->id}/captures";
+        $relativePath = "{$dir}/{$filename}";
+
+        Storage::disk('public')->put($relativePath, $data);
+
+        // Delete previous THUMB captures for this project to keep storage clean and latest authoritative
+        $oldCaptures = \App\Domains\Project\Models\ProjectCapture::where('project_id', $project->id)
+            ->where('code', 'THUMB')
+            ->get();
+        foreach ($oldCaptures as $old) {
+            if (!empty($old->file_path) && Storage::disk('public')->exists($old->file_path)) {
+                Storage::disk('public')->delete($old->file_path);
+            }
+            $old->delete();
+        }
+
+        \App\Domains\Project\Models\ProjectCapture::create([
+            'id'                    => (string) Str::uuid(),
+            'code'                  => 'THUMB',
+            'project_id'            => $project->id,
+            'user_id'               => $user->id,
+            'title'                 => 'Snapshot Model 3D',
+            'room_name'             => 'Pratinjau Utama',
+            'captured_hour'         => '12:00',
+            'file_path'             => $relativePath,
+            'file_size_bytes'       => strlen($data),
+            'width'                 => 1280,
+            'height'                => 720,
+            'is_visible_to_clients' => true,
+        ]);
+
+        return response()->json([
+            'success'       => true,
+            'thumbnail_url' => "/storage/{$relativePath}",
+        ]);
     }
 
     /**

@@ -27,6 +27,12 @@ class DracoCompressionJob implements ShouldQueue
         $disk = Storage::disk('public');
         $originalRelativePath = $this->projectVersion->file_path;
 
+        $ext = strtolower(pathinfo($originalRelativePath, PATHINFO_EXTENSION));
+        if (! in_array($ext, ['glb', 'gltf'])) {
+            // Skip compression for non-glTF models (e.g. .skp)
+            return;
+        }
+
         if (! $disk->exists($originalRelativePath)) {
             Log::error("DracoCompressionJob: File not found for ProjectVersion {$this->projectVersion->id}");
 

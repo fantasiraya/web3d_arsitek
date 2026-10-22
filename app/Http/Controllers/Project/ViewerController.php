@@ -53,6 +53,27 @@ class ViewerController extends Controller
             $project->current_revision_count = $actualCount;
         }
 
+        $thumbnail = \App\Domains\Project\Models\ProjectCapture::where('project_id', $project->id)
+            ->where('is_visible_to_clients', true)
+            ->orderBy('created_at', 'desc')
+            ->value('file_path');
+
+        if (! $thumbnail) {
+            $thumbnail = \App\Domains\Project\Models\ProjectCapture::where('project_id', $project->id)
+                ->orderBy('created_at', 'desc')
+                ->value('file_path');
+        }
+
+        $project->setAttribute('thumbnail_url', $thumbnail ? "/storage/{$thumbnail}" : null);
+
+        // Jika file berformat .skp, periksa atau generate file 3D .glb otomatis
+        if (str_ends_with(strtolower((string) $project->file_path), '.skp')) {
+            $convertedGlb = app(\App\Domains\Project\Actions\ConvertSkpToGlbAction::class)->execute($project->file_path);
+            if ($convertedGlb) {
+                $project->setAttribute('converted_glb_path', $convertedGlb);
+            }
+        }
+
         $user    = $request->user();
         $isOwner = $project->user_id === $user?->id;
 

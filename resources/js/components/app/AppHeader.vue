@@ -37,8 +37,41 @@ const logout = () => {
     router.post('/logout')
 }
 
+// Props
+interface AppHeaderProps {
+    canCreate?: boolean;
+    title?: string;
+    breadcrumbs?: any;
+}
+
+const props = withDefaults(defineProps<AppHeaderProps>(), {
+    canCreate: undefined,
+});
+
 // Emit event to parent
-const emit = defineEmits(['create-project'])
+const emit = defineEmits(['create-project']);
+
+// Status izin buat proyek baru (kuota)
+const canCreateProject = computed(() => {
+    // 1. Jika dioper eksplisit lewat props, gunakan prop
+    if (props.canCreate !== undefined) {
+        return Boolean(props.canCreate);
+    }
+    // 2. Ambil dari stats page props (misal di Dashboard.vue)
+    const stats = (page.props as any).stats;
+    if (stats && typeof stats.can_create_project === 'boolean') {
+        return stats.can_create_project;
+    }
+    // 3. Ambil dari canCreate page props (misal di Projects/Index.vue)
+    if (typeof (page.props as any).canCreate === 'boolean') {
+        return (page.props as any).canCreate;
+    }
+    // 4. Bandingkan owned_count vs max_projects jika tersedia
+    if (stats && typeof stats.owned_count === 'number' && typeof stats.max_projects === 'number') {
+        return stats.owned_count < stats.max_projects;
+    }
+    return true;
+});
 
 // Click outside handler
 const handleClickOutside = (event: MouseEvent) => {
@@ -109,8 +142,16 @@ const handleClickOutside = (event: MouseEvent) => {
 
             <!-- Primary Action CTA -->
             <button 
-                @click="emit('create-project')"
-                class="hidden sm:flex px-4 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-[#0b0c10] font-medium text-xs hover:bg-slate-700 dark:hover:bg-[#c4e7ff] hover:shadow-[0_0_20px_rgba(56,189,248,0.2)] active:scale-[0.98] transition-all items-center gap-2"
+                type="button"
+                @click="canCreateProject && emit('create-project')"
+                :disabled="!canCreateProject"
+                :class="[
+                    'hidden sm:flex px-4 py-2 rounded-xl font-medium text-xs items-center gap-2 transition-all select-none',
+                    canCreateProject
+                        ? 'bg-slate-900 dark:bg-white text-white dark:text-[#0b0c10] hover:bg-slate-700 dark:hover:bg-[#c4e7ff] hover:shadow-[0_0_20px_rgba(56,189,248,0.2)] active:scale-[0.98] cursor-pointer'
+                        : 'bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-neutral-500 cursor-not-allowed opacity-50 shadow-none pointer-events-none'
+                ]"
+                :title="!canCreateProject ? 'Kuota proyek penuh. Upgrade paket untuk menambah proyek.' : 'Buat Proyek 3D Baru'"
             >
                 <Plus class="h-[17px] w-[17px]" :stroke-width="2.5" />
                 <span class="font-semibold tracking-tight">Buat Proyek 3D</span>

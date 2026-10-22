@@ -7,12 +7,15 @@ use App\Domains\Project\Jobs\DracoCompressionJob;
 use App\Domains\Project\Models\Project;
 use App\Domains\Project\Models\ProjectVersion;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Str;
 
 class UploadProjectFileAction
 {
     public function execute(Project $project, User $uploader, UploadedFile $file): ProjectVersion
     {
-        $path = $file->store("projects/{$project->id}/versions", 'public');
+        $ext = strtolower($file->getClientOriginalExtension() ?: 'glb');
+        $filename = Str::random(40) . '.' . $ext;
+        $path = $file->storeAs("projects/{$project->id}/versions", $filename, 'public');
 
         $version = ProjectVersion::create([
             'project_id' => $project->id,
@@ -23,8 +26,12 @@ class UploadProjectFileAction
             'changelog' => 'Uploaded new version',
         ]);
 
-        // Dispatch Draco Compression if environment supports it
-        DracoCompressionJob::dispatch($version);
+        // Dispatch Draco Compression only for GLB/GLTF models
+        if (in_array($ext, ['glb', 'gltf'])) {
+            DracoCompressionJob::dispatch($version);
+        } elseif ($ext === 'skp') {
+            app(\App\Domains\Project\Actions\ConvertSkpToGlbAction::class)->execute($path);
+        }
 
         return $version;
     }

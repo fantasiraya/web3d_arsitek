@@ -210,3 +210,36 @@ test('owner can update max_revisions_allowed on project', function () {
     $response->assertOk();
     expect($project->fresh()->max_revisions_allowed)->toBe(7);
 });
+
+test('user can update comment status explicitly with resolve endpoint', function () {
+    $owner = User::factory()->create();
+    $project = Project::factory()->create([
+        'user_id' => $owner->id,
+    ]);
+
+    $comment = Comment::factory()->create([
+        'project_id' => $project->id,
+        'user_id' => $owner->id,
+        'status' => Comment::STATUS_OPEN,
+    ]);
+
+    // Set to resolved
+    $response = $this->actingAs($owner)->patchJson(
+        route('projects.comments.resolve', ['project' => $project->id, 'comment' => $comment->id]),
+        ['status' => 'resolved']
+    );
+
+    $response->assertOk()
+        ->assertJsonPath('data.status', 'resolved');
+    expect($comment->fresh()->status)->toBe('resolved');
+
+    // Drag/move back to open
+    $response2 = $this->actingAs($owner)->patchJson(
+        route('projects.comments.resolve', ['project' => $project->id, 'comment' => $comment->id]),
+        ['status' => 'open']
+    );
+
+    $response2->assertOk()
+        ->assertJsonPath('data.status', 'open');
+    expect($comment->fresh()->status)->toBe('open');
+});

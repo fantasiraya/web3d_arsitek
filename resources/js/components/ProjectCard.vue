@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import {
     AlertTriangle,
@@ -13,6 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import Project3DPreview from '@/components/Project3DPreview.vue';
+import { enqueueAutoCapture, releaseAutoCapture, removeFromCaptureQueue } from '@/lib/snapshotQueue';
 
 export interface ProjectClientItem {
     id: string;
@@ -50,28 +51,144 @@ const emit = defineEmits<{
 }>();
 
 const is3DActive = ref(false);
+const isAutoCapturing = ref(false);
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+let captureTimeout: ReturnType<typeof setTimeout> | null = null;
 const localThumbnail = ref<string | null>(null);
 
-onMounted(() => {
-    if (!props.project.thumbnail_url) {
-        try {
-            const cached = localStorage.getItem(`project_thumb_${props.project.id}`);
-            if (cached) localThumbnail.value = cached;
-        } catch (e) {}
-    }
+const isSkp = computed(() => !!props.project.file_path?.toLowerCase().endsWith('.skp'));
+
+const isPlaceholderThumb = computed(() => {
+    const url = props.project.thumbnail_url;
+    return !url || url.includes('skp_thumb_');
 });
 
-function onSnapshot(dataUrl: string) {
-    if (!props.project.thumbnail_url && !localThumbnail.value) {
-        localThumbnail.value = dataUrl;
-        try {
-            localStorage.setItem(`project_thumb_${props.project.id}`, dataUrl);
-        } catch (e) {}
+function getCacheKey(projectId: string, filePath?: string): string {
+    if (!filePath) return `project_thumb_${projectId}`;
+    const cleanPath = filePath.replace(/[^a-zA-Z0-9_-]/g, '_');
+    return `project_thumb_${projectId}_${cleanPath}`;
+}
+
+const cacheKey = computed(() => getCacheKey(props.project.id, props.project.file_path));
+
+function loadCachedThumbnail(): boolean {
+    if (!props.project.file_path) {
+        localThumbnail.value = null;
+        return false;
+    }
+    try {
+        const cached = localStorage.getItem(cacheKey.value);
+        if (cached) {
+            localThumbnail.value = cached;
+            return true;
+        }
+    } catch (e) {}
+    localThumbnail.value = null;
+    return false;
+}
+
+function finishAutoCapture() {
+    if (captureTimeout) {
+        clearTimeout(captureTimeout);
+        captureTimeout = null;
+    }
+    isAutoCapturing.value = false;
+    releaseAutoCapture(props.project.id);
+}
+
+function checkAndTriggerAutoSnapshot() {
+    if (!props.project.file_path) return;
+
+    // 1. Cek apakah ada snapshot tersimpan di browser untuk file_path saat ini
+    const hasCached = loadCachedThumbnail();
+    if (hasCached) return;
+
+    // 2. Jika di database sudah ada real snapshot (bukan placeholder skp_thumb), tidak perlu auto capture
+    if (!isPlaceholderThumb.value) return;
+
+    // 3. Masukkan ke antrean auto-capture latar belakang
+    enqueueAutoCapture(props.project.id, () => {
+        isAutoCapturing.value = true;
+
+        if (captureTimeout) clearTimeout(captureTimeout);
+        captureTimeout = setTimeout(() => {
+            finishAutoCapture();
+        }, 8000);
+    });
+}
+
+onMounted(() => {
+    checkAndTriggerAutoSnapshot();
+});
+
+onBeforeUnmount(() => {
+    if (hoverTimer) {
+        clearTimeout(hoverTimer);
+        hoverTimer = null;
+    }
+    if (captureTimeout) {
+        clearTimeout(captureTimeout);
+        captureTimeout = null;
+    }
+    removeFromCaptureQueue(props.project.id);
+});
+
+// Pantau perubahan file_path (misal saat edit file proyek atau re-upload)
+watch(
+    () => props.project.file_path,
+    (newPath, oldPath) => {
+        if (newPath !== oldPath) {
+            localThumbnail.value = null;
+            checkAndTriggerAutoSnapshot();
+        }
+    }
+);
+
+// Pantau perubahan thumbnail_url di props
+watch(
+    () => props.project.thumbnail_url,
+    () => {
+        checkAndTriggerAutoSnapshot();
+    }
+);
+
+async function uploadSnapshotToServer(dataUrl: string) {
+    try {
+        await fetch(`/projects/${props.project.id}/thumbnail`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({ image: dataUrl }),
+        });
+    } catch (e) {
+        // Silent fail, client already has localThumbnail
     }
 }
 
-const effectiveThumbnail = computed(() => props.project.thumbnail_url || localThumbnail.value);
+function onSnapshot(dataUrl: string) {
+    if (!dataUrl) return;
+    localThumbnail.value = dataUrl;
+    try {
+        localStorage.setItem(cacheKey.value, dataUrl);
+    } catch (e) {}
+
+    finishAutoCapture();
+
+    // Jika thumbnail di database belum ada snapshot riil, simpan ke server
+    if (isPlaceholderThumb.value) {
+        uploadSnapshotToServer(dataUrl);
+    }
+}
+
+function onPreviewError() {
+    finishAutoCapture();
+}
+
+const effectiveThumbnail = computed(() => localThumbnail.value || props.project.thumbnail_url);
 
 function onBannerMouseEnter() {
     if (!props.project.file_path) return;
@@ -123,16 +240,19 @@ function formatBytes(bytes: number): string {
                     class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-black/40 pointer-events-none"
                 ></div>
 
-                <!-- 3D WebGL Preview mounted only while hovering -->
+                <!-- 3D WebGL Preview (mounted when hovering OR during background auto-capture) -->
                 <Project3DPreview
-                    v-if="is3DActive && project.file_path"
+                    v-if="(is3DActive || isAutoCapturing) && project.file_path"
+                    :key="project.file_path"
                     :file-path="project.file_path"
                     :is-draco="project.is_draco_compressed"
-                    class="absolute inset-0 z-10 w-full h-full"
+                    class="absolute inset-0 z-10 w-full h-full transition-opacity duration-300"
+                    :class="[is3DActive ? 'opacity-100' : 'opacity-0 pointer-events-none']"
                     @snapshot="onSnapshot"
+                    @error="onPreviewError"
                 />
 
-                <!-- Default Static Icon when no snapshot and not hovering -->
+                <!-- Default Static Icon when no snapshot and not active -->
                 <Box
                     v-if="!effectiveThumbnail && !is3DActive"
                     class="h-16 w-16 opacity-20 transition-transform duration-500 group-hover:scale-110 group-hover:opacity-30"
@@ -141,15 +261,19 @@ function formatBytes(bytes: number): string {
                 <!-- Hover hint when 3D available -->
                 <div
                     v-if="!is3DActive && project.file_path"
-                    class="absolute bottom-2 left-3 z-20 text-[10px] text-white/90 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/20 opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none flex items-center gap-1"
+                    class="absolute bottom-2 left-3 z-20 text-[10px] text-white/90 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/20 opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none flex items-center gap-1.5"
                 >
-                    <Box class="h-3 w-3 text-indigo-400" />
+                    <span v-if="isSkp" class="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                    <Box v-else class="h-3 w-3 text-indigo-400" />
                     <span>Arahkan mouse untuk 3D</span>
                 </div>
 
                 <!-- Badges -->
                 <div class="absolute top-3 left-3 z-20 flex flex-wrap gap-1.5 pointer-events-none">
-                    <Badge class="bg-black/60 text-white backdrop-blur-xl text-[11px] border border-white/20">
+                    <Badge v-if="isSkp" class="bg-red-600/90 text-white backdrop-blur-xl text-[11px] border border-red-400/40 font-medium">
+                        SketchUp .SKP
+                    </Badge>
+                    <Badge v-else class="bg-black/60 text-white backdrop-blur-xl text-[11px] border border-white/20">
                         3D GLB
                     </Badge>
                     <Badge
@@ -298,4 +422,3 @@ function formatBytes(bytes: number): string {
         </div>
     </div>
 </template>
-

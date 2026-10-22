@@ -307,19 +307,21 @@ const fileInputRef = ref<HTMLInputElement | null>(null);
 const selectedFileName = ref('');
 const selectedFileSize = ref('');
 const fileError = ref('');
+const isDraggingCreate = ref(false);
 
-function onFileSelected(e: Event) {
-    fileError.value = '';
-    const target = e.target as HTMLInputElement;
-    if (target.files && target.files[0]) {
-        const file = target.files[0];
-        const sizeMb = file.size / (1024 * 1024);
+function handleFileSelection(file: File | undefined, mode: 'create' | 'edit') {
+    if (!file) return;
+
+    const sizeMb = file.size / (1024 * 1024);
+    const ext = file.name.split('.').pop()?.toLowerCase();
+
+    if (mode === 'create') {
+        fileError.value = '';
         selectedFileName.value = file.name;
         selectedFileSize.value = sizeMb.toFixed(2) + ' MB';
 
-        const ext = file.name.split('.').pop()?.toLowerCase();
-        if (ext !== 'glb' && ext !== 'gltf') {
-            fileError.value = 'Format file tidak didukung! Mohon pilih file 3D (.glb atau .gltf).';
+        if (ext !== 'glb' && ext !== 'skp' && ext !== 'gltf') {
+            fileError.value = 'Format file tidak didukung! Mohon pilih file 3D (.glb atau .skp).';
             createForm.file = null;
             return;
         }
@@ -331,7 +333,37 @@ function onFileSelected(e: Event) {
         }
 
         createForm.file = file;
+    } else {
+        editFileError.value = '';
+        editSelectedFileName.value = file.name;
+        editSelectedFileSize.value = sizeMb.toFixed(2) + ' MB';
+
+        if (ext !== 'glb' && ext !== 'skp' && ext !== 'gltf') {
+            editFileError.value = 'Format file tidak didukung! Mohon pilih file 3D (.glb atau .skp).';
+            editForm.file = null;
+            return;
+        }
+
+        if (sizeMb > 100) {
+            editFileError.value = `Ukuran file (${sizeMb.toFixed(1)} MB) terlalu besar! Maksimal 100 MB.`;
+            editForm.file = null;
+            return;
+        }
+
+        editForm.file = file;
     }
+}
+
+function onFileSelected(e: Event) {
+    const target = e.target as HTMLInputElement;
+    handleFileSelection(target.files?.[0], 'create');
+    target.value = '';
+}
+
+function onFileDropCreate(e: DragEvent) {
+    isDraggingCreate.value = false;
+    const file = e.dataTransfer?.files?.[0];
+    handleFileSelection(file, 'create');
 }
 
 function submitCreateProject() {
@@ -339,12 +371,17 @@ function submitCreateProject() {
 
     createForm.post('/projects', {
         preserveScroll: true,
+        forceFormData: true,
         onSuccess: () => {
             isCreateModalOpen.value = false;
             createForm.reset();
             selectedFileName.value = '';
             selectedFileSize.value = '';
             fileError.value = '';
+            toast.success('Proyek 3D berhasil dibuat!');
+        },
+        onError: (err: any) => {
+            toast.error(err.file || err.title || 'Gagal membuat proyek. Periksa ukuran file dan data Anda.');
         },
     });
 }
@@ -363,6 +400,7 @@ const editFileInputRef = ref<HTMLInputElement | null>(null);
 const editSelectedFileName = ref('');
 const editSelectedFileSize = ref('');
 const editFileError = ref('');
+const isDraggingEdit = ref(false);
 
 function openEditModal(project: any) {
     editingProject.value = project;
@@ -378,29 +416,15 @@ function openEditModal(project: any) {
 }
 
 function onEditFileSelected(e: Event) {
-    editFileError.value = '';
     const target = e.target as HTMLInputElement;
-    if (target.files && target.files[0]) {
-        const file = target.files[0];
-        const sizeMb = file.size / (1024 * 1024);
-        editSelectedFileName.value = file.name;
-        editSelectedFileSize.value = sizeMb.toFixed(2) + ' MB';
+    handleFileSelection(target.files?.[0], 'edit');
+    target.value = '';
+}
 
-        const ext = file.name.split('.').pop()?.toLowerCase();
-        if (ext !== 'glb' && ext !== 'gltf') {
-            editFileError.value = 'Format file tidak didukung! Mohon pilih file 3D (.glb atau .gltf).';
-            editForm.file = null;
-            return;
-        }
-
-        if (sizeMb > 100) {
-            editFileError.value = `Ukuran file (${sizeMb.toFixed(1)} MB) terlalu besar! Maksimal 100 MB.`;
-            editForm.file = null;
-            return;
-        }
-
-        editForm.file = file;
-    }
+function onFileDropEdit(e: DragEvent) {
+    isDraggingEdit.value = false;
+    const file = e.dataTransfer?.files?.[0];
+    handleFileSelection(file, 'edit');
 }
 
 function submitEditProject() {
@@ -427,6 +451,10 @@ function submitEditProject() {
             editSelectedFileSize.value = '';
             editFileError.value = '';
             editingProject.value = null;
+            toast.success('Data proyek berhasil diperbarui!');
+        },
+        onError: (err: any) => {
+            toast.error(err.file || err.title || 'Gagal mengubah data proyek.');
         },
     });
 }
@@ -663,6 +691,7 @@ const { isLoading } = usePageLoading(80);
             
             <!-- Header Component -->
             <AppHeader 
+                :can-create="stats ? stats.can_create_project : true"
                 @create-project="isCreateModalOpen = true"
             />
 
@@ -1072,98 +1101,107 @@ const { isLoading } = usePageLoading(80);
 
             <!-- MODAL: BUAT PROYEK BARU -->
             <Dialog :open="isCreateModalOpen" @update:open="isCreateModalOpen = $event">
-                <DialogContent class="sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle class="flex items-center gap-2">
+                <DialogContent class="sm:max-w-xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+                    <DialogHeader class="px-6 pt-6 pb-3 shrink-0 border-b border-border/40">
+                        <DialogTitle class="flex items-center gap-2 text-lg">
                             <Box class="h-5 w-5 text-primary" /> Buat Proyek 3D Baru
                         </DialogTitle>
                         <DialogDescription>
-                            Unggah model 3D berformat <code>.glb</code> atau <code>.gltf</code> untuk mulai berkolaborasi dengan Klien Anda.
+                            Unggah model 3D berformat <code>.glb</code> atau <code>.skp</code> (SketchUp) untuk mulai berkolaborasi dengan Klien Anda.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <form @submit.prevent="submitCreateProject" class="space-y-4 py-2">
-                        <!-- Judul Proyek -->
-                        <div class="space-y-1.5">
-                            <Label for="title">Judul Proyek <span class="text-rose-500">*</span></Label>
-                            <Input
-                                id="title"
-                                v-model="createForm.title"
-                                placeholder="Contoh: Desain Villa Modern Canggu"
-                                required
-                            />
-                            <p v-if="createForm.errors.title" class="text-xs text-rose-500">
-                                {{ createForm.errors.title }}
-                            </p>
-                        </div>
-
-                        <!-- Deskripsi -->
-                        <div class="space-y-1.5">
-                            <Label for="description">Deskripsi Proyek (Opsional)</Label>
-                            <textarea
-                                id="description"
-                                v-model="createForm.description"
-                                placeholder="Catatan konsep arsitektur, lokasi, atau arahan khusus klien..."
-                                rows="2"
-                                class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                            ></textarea>
-                        </div>
-
-                        <!-- Batas Maksimal Revisi Klien -->
-                        <div class="space-y-1.5">
-                            <div class="flex items-center justify-between">
-                                <Label for="max_revisions">Batas Revisi Klien</Label>
-                                <span class="text-xs text-muted-foreground">Default: 3x</span>
-                            </div>
-                            <Input
-                                id="max_revisions"
-                                type="number"
-                                v-model.number="createForm.max_revisions_allowed"
-                                min="1"
-                                max="10"
-                                required
-                            />
-                            <p class="text-[11px] text-muted-foreground">
-                                Klien akan dibatasi hanya dapat membuat thread revisi baru hingga batas ini tercapai.
-                            </p>
-                        </div>
-
-                        <!-- File Upload Input -->
-                        <div class="space-y-1.5">
-                            <Label>File Model 3D (.glb / .gltf) <span class="text-rose-500">*</span></Label>
-                            <input
-                                ref="fileInputRef"
-                                type="file"
-                                accept=".glb,.gltf"
-                                @change="onFileSelected"
-                                class="hidden"
-                                required
-                            />
-                            <div
-                                @click="fileInputRef?.click()"
-                                class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-input p-6 text-center cursor-pointer hover:border-primary/60 hover:bg-primary/5 transition"
-                            >
-                                <FileUp class="h-8 w-8 text-muted-foreground mb-2" />
-                                <div v-if="selectedFileName" class="text-sm font-semibold text-primary">
-                                    {{ selectedFileName }} ({{ selectedFileSize }})
-                                </div>
-                                <div v-else class="text-sm font-medium">
-                                    Klik untuk memilih file 3D (.glb)
-                                </div>
-                                <p class="text-[11px] text-muted-foreground mt-1">
-                                    Mendukung model hingga 100 MB
+                    <form @submit.prevent="submitCreateProject" class="flex flex-col flex-1 min-h-0 overflow-hidden">
+                        <div class="space-y-4 px-6 py-4 overflow-y-auto flex-1">
+                            <!-- Judul Proyek -->
+                            <div class="space-y-1.5">
+                                <Label for="title">Judul Proyek <span class="text-rose-500">*</span></Label>
+                                <Input
+                                    id="title"
+                                    v-model="createForm.title"
+                                    placeholder="Contoh: Desain Villa Modern Canggu"
+                                    required
+                                />
+                                <p v-if="createForm.errors.title" class="text-xs text-rose-500">
+                                    {{ createForm.errors.title }}
                                 </p>
                             </div>
 
-                            <p v-if="fileError" class="text-xs font-semibold text-rose-500 mt-1">
-                                {{ fileError }}
-                            </p>
-                            <p v-if="createForm.errors.file" class="text-xs font-semibold text-rose-500 mt-1">
-                                {{ createForm.errors.file }}
-                            </p>
+                            <!-- Deskripsi -->
+                            <div class="space-y-1.5">
+                                <Label for="description">Deskripsi Proyek (Opsional)</Label>
+                                <textarea
+                                    id="description"
+                                    v-model="createForm.description"
+                                    placeholder="Catatan konsep arsitektur, lokasi, atau arahan khusus klien..."
+                                    rows="2"
+                                    class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                ></textarea>
+                            </div>
+
+                            <!-- Batas Maksimal Revisi Klien -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <Label for="max_revisions">Batas Revisi Klien</Label>
+                                    <span class="text-xs text-muted-foreground">Default: 3x</span>
+                                </div>
+                                <Input
+                                    id="max_revisions"
+                                    type="number"
+                                    v-model.number="createForm.max_revisions_allowed"
+                                    min="1"
+                                    max="10"
+                                    required
+                                />
+                                <p class="text-[11px] text-muted-foreground">
+                                    Klien akan dibatasi hanya dapat membuat thread revisi baru hingga batas ini tercapai.
+                                </p>
+                            </div>
+
+                            <!-- File Upload Input -->
+                            <div class="space-y-1.5">
+                                <Label>File Model 3D (.glb / .skp) <span class="text-rose-500">*</span></Label>
+                                <input
+                                    ref="fileInputRef"
+                                    type="file"
+                                    accept=".glb,.skp,.gltf,.GLB,.SKP,.GLTF"
+                                    @change="onFileSelected"
+                                    class="hidden"
+                                />
+                                <div
+                                    @click="fileInputRef?.click()"
+                                    @dragover.prevent="isDraggingCreate = true"
+                                    @dragleave.prevent="isDraggingCreate = false"
+                                    @drop.prevent="onFileDropCreate"
+                                    :class="[
+                                        'flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center cursor-pointer transition',
+                                        isDraggingCreate
+                                            ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                                            : 'border-input hover:border-primary/60 hover:bg-primary/5'
+                                    ]"
+                                >
+                                    <FileUp class="h-8 w-8 text-muted-foreground mb-2" />
+                                    <div v-if="selectedFileName" class="text-sm font-semibold text-primary">
+                                        {{ selectedFileName }} ({{ selectedFileSize }})
+                                    </div>
+                                    <div v-else class="text-sm font-medium">
+                                        Klik atau tarik (drag & drop) file 3D (.glb / .skp) ke sini
+                                    </div>
+                                    <p class="text-[11px] text-muted-foreground mt-1">
+                                        Mendukung model <strong>.glb</strong> dan SketchUp <strong>.skp</strong> hingga 100 MB
+                                    </p>
+                                </div>
+
+                                <p v-if="fileError" class="text-xs font-semibold text-rose-500 mt-1">
+                                    {{ fileError }}
+                                </p>
+                                <p v-if="createForm.errors.file" class="text-xs font-semibold text-rose-500 mt-1">
+                                    {{ createForm.errors.file }}
+                                </p>
+                            </div>
                         </div>
 
-                        <DialogFooter class="gap-2 sm:gap-0 pt-3">
+                        <DialogFooter class="px-6 py-4 border-t border-border/40 shrink-0 bg-background/80 backdrop-blur-sm gap-2 sm:gap-0">
                             <Button
                                 type="button"
                                 variant="outline"
@@ -1185,106 +1223,116 @@ const { isLoading } = usePageLoading(80);
 
             <!-- MODAL: EDIT PROYEK -->
             <Dialog :open="isEditModalOpen" @update:open="isEditModalOpen = $event">
-                <DialogContent class="sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle class="flex items-center gap-2">
+                <DialogContent class="sm:max-w-xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+                    <DialogHeader class="px-6 pt-6 pb-3 shrink-0 border-b border-border/40">
+                        <DialogTitle class="flex items-center gap-2 text-lg">
                             <Pencil class="h-5 w-5 text-primary" /> Edit Data Proyek 3D
                         </DialogTitle>
                         <DialogDescription>
-                            Perbarui informasi proyek atau ganti file model 3D (.glb / .gltf) yang telah diunggah.
+                            Perbarui informasi proyek atau ganti file model 3D (format <code>.glb</code> atau <code>.skp</code>).
                         </DialogDescription>
                     </DialogHeader>
 
-                    <form @submit.prevent="submitEditProject" class="space-y-4 py-2">
-                        <!-- Judul Proyek -->
-                        <div class="space-y-1.5">
-                            <Label for="edit_title">Judul Proyek <span class="text-rose-500">*</span></Label>
-                            <Input
-                                id="edit_title"
-                                v-model="editForm.title"
-                                placeholder="Contoh: Desain Villa Modern Canggu"
-                                required
-                            />
-                            <p v-if="editForm.errors.title" class="text-xs text-rose-500">
-                                {{ editForm.errors.title }}
-                            </p>
-                        </div>
-
-                        <!-- Deskripsi -->
-                        <div class="space-y-1.5">
-                            <Label for="edit_description">Deskripsi Proyek (Opsional)</Label>
-                            <textarea
-                                id="edit_description"
-                                v-model="editForm.description"
-                                placeholder="Catatan konsep arsitektur, lokasi, atau arahan khusus klien..."
-                                rows="2"
-                                class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                            ></textarea>
-                            <p v-if="editForm.errors.description" class="text-xs text-rose-500">
-                                {{ editForm.errors.description }}
-                            </p>
-                        </div>
-
-                        <!-- Batas Maksimal Revisi Klien -->
-                        <div class="space-y-1.5">
-                            <div class="flex items-center justify-between">
-                                <Label for="edit_max_revisions">Batas Revisi Klien</Label>
-                                <span class="text-xs text-muted-foreground">Saat ini terpakai: {{ editingProject?.current_revision_count ?? 0 }}</span>
-                            </div>
-                            <Input
-                                id="edit_max_revisions"
-                                type="number"
-                                v-model.number="editForm.max_revisions_allowed"
-                                min="1"
-                                max="50"
-                                required
-                            />
-                            <p class="text-[11px] text-muted-foreground">
-                                Klien akan dibatasi hanya dapat membuat thread revisi baru hingga batas ini tercapai.
-                            </p>
-                            <p v-if="editForm.errors.max_revisions_allowed" class="text-xs text-rose-500">
-                                {{ editForm.errors.max_revisions_allowed }}
-                            </p>
-                        </div>
-
-                        <!-- File Upload Input (Opsional saat Edit) -->
-                        <div class="space-y-1.5">
-                            <div class="flex items-center justify-between">
-                                <Label>Ganti File Model 3D (.glb / .gltf)</Label>
-                                <span class="text-xs text-muted-foreground">Opsional</span>
-                            </div>
-                            <input
-                                ref="editFileInputRef"
-                                type="file"
-                                accept=".glb,.gltf"
-                                @change="onEditFileSelected"
-                                class="hidden"
-                            />
-                            <div
-                                @click="editFileInputRef?.click()"
-                                class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-input p-6 text-center cursor-pointer hover:border-primary/60 hover:bg-primary/5 transition"
-                            >
-                                <FileUp class="h-8 w-8 text-muted-foreground mb-2" />
-                                <div v-if="editSelectedFileName" class="text-sm font-semibold text-primary">
-                                    {{ editSelectedFileName }} ({{ editSelectedFileSize }})
-                                </div>
-                                <div v-else class="text-sm font-medium">
-                                    Klik jika ingin mengganti file model 3D saat ini ({{ formatBytes(editingProject?.file_size_bytes ?? 0) }})
-                                </div>
-                                <p class="text-[11px] text-muted-foreground mt-1">
-                                    Biarkan kosong jika tidak ingin mengubah file 3D
+                    <form @submit.prevent="submitEditProject" class="flex flex-col flex-1 min-h-0 overflow-hidden">
+                        <div class="space-y-4 px-6 py-4 overflow-y-auto flex-1">
+                            <!-- Judul Proyek -->
+                            <div class="space-y-1.5">
+                                <Label for="edit_title">Judul Proyek <span class="text-rose-500">*</span></Label>
+                                <Input
+                                    id="edit_title"
+                                    v-model="editForm.title"
+                                    placeholder="Contoh: Desain Villa Modern Canggu"
+                                    required
+                                />
+                                <p v-if="editForm.errors.title" class="text-xs text-rose-500">
+                                    {{ editForm.errors.title }}
                                 </p>
                             </div>
 
-                            <p v-if="editFileError" class="text-xs font-semibold text-rose-500 mt-1">
-                                {{ editFileError }}
-                            </p>
-                            <p v-if="editForm.errors.file" class="text-xs font-semibold text-rose-500 mt-1">
-                                {{ editForm.errors.file }}
-                            </p>
+                            <!-- Deskripsi -->
+                            <div class="space-y-1.5">
+                                <Label for="edit_description">Deskripsi Proyek (Opsional)</Label>
+                                <textarea
+                                    id="edit_description"
+                                    v-model="editForm.description"
+                                    placeholder="Catatan konsep arsitektur, lokasi, atau arahan khusus klien..."
+                                    rows="2"
+                                    class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                ></textarea>
+                                <p v-if="editForm.errors.description" class="text-xs text-rose-500">
+                                    {{ editForm.errors.description }}
+                                </p>
+                            </div>
+
+                            <!-- Batas Maksimal Revisi Klien -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <Label for="edit_max_revisions">Batas Revisi Klien</Label>
+                                    <span class="text-xs text-muted-foreground">Saat ini terpakai: {{ editingProject?.current_revision_count ?? 0 }}</span>
+                                </div>
+                                <Input
+                                    id="edit_max_revisions"
+                                    type="number"
+                                    v-model.number="editForm.max_revisions_allowed"
+                                    min="1"
+                                    max="50"
+                                    required
+                                />
+                                <p class="text-[11px] text-muted-foreground">
+                                    Klien akan dibatasi hanya dapat membuat thread revisi baru hingga batas ini tercapai.
+                                </p>
+                                <p v-if="editForm.errors.max_revisions_allowed" class="text-xs text-rose-500">
+                                    {{ editForm.errors.max_revisions_allowed }}
+                                </p>
+                            </div>
+
+                            <!-- File Upload Input (Opsional saat Edit) -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <Label>Ganti File Model 3D (.glb / .skp)</Label>
+                                    <span class="text-xs text-muted-foreground">Opsional</span>
+                                </div>
+                                <input
+                                    ref="editFileInputRef"
+                                    type="file"
+                                    accept=".glb,.skp,.gltf,.GLB,.SKP,.GLTF"
+                                    @change="onEditFileSelected"
+                                    class="hidden"
+                                />
+                                <div
+                                    @click="editFileInputRef?.click()"
+                                    @dragover.prevent="isDraggingEdit = true"
+                                    @dragleave.prevent="isDraggingEdit = false"
+                                    @drop.prevent="onFileDropEdit"
+                                    :class="[
+                                        'flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center cursor-pointer transition',
+                                        isDraggingEdit
+                                            ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                                            : 'border-input hover:border-primary/60 hover:bg-primary/5'
+                                    ]"
+                                >
+                                    <FileUp class="h-8 w-8 text-muted-foreground mb-2" />
+                                    <div v-if="editSelectedFileName" class="text-sm font-semibold text-primary">
+                                        {{ editSelectedFileName }} ({{ editSelectedFileSize }})
+                                    </div>
+                                    <div v-else class="text-sm font-medium">
+                                        Klik atau tarik file untuk mengganti model 3D saat ini ({{ formatBytes(editingProject?.file_size_bytes ?? 0) }})
+                                    </div>
+                                    <p class="text-[11px] text-muted-foreground mt-1">
+                                        Biarkan kosong jika tidak ingin mengubah file (.glb dan .skp didukung hingga 100 MB)
+                                    </p>
+                                </div>
+
+                                <p v-if="editFileError" class="text-xs font-semibold text-rose-500 mt-1">
+                                    {{ editFileError }}
+                                </p>
+                                <p v-if="editForm.errors.file" class="text-xs font-semibold text-rose-500 mt-1">
+                                    {{ editForm.errors.file }}
+                                </p>
+                            </div>
                         </div>
 
-                        <DialogFooter class="gap-2 sm:gap-0 pt-3">
+                        <DialogFooter class="px-6 py-4 border-t border-border/40 shrink-0 bg-background/80 backdrop-blur-sm gap-2 sm:gap-0">
                             <Button
                                 type="button"
                                 variant="outline"

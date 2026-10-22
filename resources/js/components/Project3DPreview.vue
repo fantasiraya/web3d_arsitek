@@ -13,6 +13,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'snapshot', dataUrl: string): void;
+    (e: 'error', err?: any): void;
 }>();
 
 const containerRef = ref<HTMLDivElement | null>(null);
@@ -83,9 +84,14 @@ function initThree() {
     loader.setDRACOLoader(dracoLoader);
 
     // 7. Load GLB
-    const modelUrl = props.filePath.startsWith('/') || props.filePath.startsWith('http')
-        ? props.filePath
-        : `/storage/${props.filePath}`;
+    let targetPath = props.filePath;
+    if (targetPath.toLowerCase().endsWith('.skp')) {
+        targetPath = targetPath.replace(/\.skp$/i, '.glb');
+    }
+
+    const modelUrl = targetPath.startsWith('/') || targetPath.startsWith('http')
+        ? targetPath
+        : `/storage/${targetPath}`;
 
     loader.load(
         modelUrl,
@@ -124,6 +130,7 @@ function initThree() {
             console.warn('[Project3DPreview] Error loading GLB:', err);
             isLoading.value = false;
             hasError.value = true;
+            emit('error', err);
         }
     );
 

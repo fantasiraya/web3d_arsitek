@@ -25,11 +25,6 @@ class PinCommentController extends Controller
         $project = Project::findOrFail($projectId);
         $author  = $request->user();
 
-        // Super admin tidak boleh tambah pin
-        if ($this->isSuperAdmin($author)) {
-            abort(403, 'Super admin tidak diizinkan menambahkan pin komentar.');
-        }
-
         $comment = $this->action->execute($project, $author, $request->validated());
 
         if ($request->wantsJson() && ! $request->header('X-Inertia')) {
@@ -81,18 +76,27 @@ class PinCommentController extends Controller
         $comment     = Comment::where('project_id', $project->id)->findOrFail($commentId);
         $currentUser = $request->user();
 
-        // Super admin tidak boleh tandai selesai
-        if ($this->isSuperAdmin($currentUser)) {
-            abort(403, 'Super admin tidak diizinkan mengubah status pin.');
-        }
+        $isClient = \App\Domains\Project\Models\ProjectClient::where('project_id', $project->id)
+            ->where('user_id', $currentUser->id)
+            ->where('status', \App\Domains\Project\Models\ProjectClient::STATUS_ACCEPTED)
+            ->exists();
 
-        if ($currentUser->id !== $comment->user_id && $currentUser->id !== $project->user_id) {
+        $isSuperAdmin = $this->isSuperAdmin($currentUser);
+
+        if ($currentUser->id !== $comment->user_id && $currentUser->id !== $project->user_id && ! $isClient && ! $isSuperAdmin) {
             abort(403, 'Anda tidak memiliki hak akses untuk mengubah status komentar ini.');
         }
 
-        $newStatus = $comment->status === Comment::STATUS_RESOLVED
-            ? Comment::STATUS_OPEN
-            : Comment::STATUS_RESOLVED;
+        if ($request->has('status')) {
+            $validated = $request->validate([
+                'status' => ['required', 'string', 'in:open,resolved,in_progress'],
+            ]);
+            $newStatus = $validated['status'];
+        } else {
+            $newStatus = $comment->status === Comment::STATUS_RESOLVED
+                ? Comment::STATUS_OPEN
+                : Comment::STATUS_RESOLVED;
+        }
 
         $comment->update(['status' => $newStatus]);
 

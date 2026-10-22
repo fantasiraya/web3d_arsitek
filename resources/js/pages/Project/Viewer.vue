@@ -44,157 +44,220 @@
                 </div>
             </div>
 
-            <div class="flex items-center gap-2.5">
-                <!-- Revision Badge -->
-                <RevisionBadge :project="project" :current-count="comments.length" />
-
-                <!-- Pin count toggle -->
+            <!-- ── Header Tools Container with small screen horizontal scroll & navigation buttons ── -->
+            <div class="relative flex items-center min-w-0 flex-1 justify-end max-w-[65vw] sm:max-w-none pl-2">
+                <!-- Left Scroll Arrow Button -->
                 <button
+                    v-if="canScrollToolsLeft"
                     type="button"
-                    @click="isDrawerOpen = !isDrawerOpen"
-                    class="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
+                    @click="scrollToolsLeft"
+                    class="absolute -left-1 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/90 border border-white/30 text-white shadow-xl backdrop-blur-md transition hover:bg-white/20 hover:scale-105"
+                    title="Geser ke kiri"
                 >
-                    <MessageSquare class="h-3.5 w-3.5 text-rose-400" />
-                    <span>{{ comments.length }} Pin</span>
+                    <ChevronLeft class="h-4 w-4" />
                 </button>
 
-                <!-- Fullscreen -->
-                <button
-                    type="button"
-                    @click="toggleFullscreen"
-                    class="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
+                <!-- Scrollable Tools List -->
+                <div
+                    ref="headerToolsContainer"
+                    @scroll="checkToolsOverflow"
+                    class="flex items-center gap-2 sm:gap-2.5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1 max-w-full"
+                    style="scrollbar-width: none; -ms-overflow-style: none;"
                 >
-                    <Minimize2 v-if="isFullscreen" class="h-3.5 w-3.5 text-rose-400" />
-                    <Maximize2 v-else class="h-3.5 w-3.5 text-neutral-300" />
-                    <span class="hidden sm:inline">{{ isFullscreen ? 'Keluar Penuh' : 'Layar Penuh' }}</span>
-                </button>
+                    <!-- SketchUp Badge in Header Tools -->
+                    <div
+                        v-if="isSkpModel"
+                        class="flex items-center gap-1.5 shrink-0 rounded-full bg-red-950/80 border border-red-500/50 px-2.5 py-1 text-xs text-red-200"
+                    >
+                        <span class="h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+                        <span class="font-semibold text-white">SketchUp (.skp)</span>
+                        <button
+                            type="button"
+                            @click="isSkpGuideModalOpen = true"
+                            class="ml-1 rounded-full bg-red-500/30 px-2 py-0.5 text-[10px] text-red-200 hover:bg-red-500/50 transition font-medium"
+                            title="Info format SketchUp"
+                        >
+                            Panduan
+                        </button>
+                    </div>
 
-                <!-- Booklet PDF button -->
-                <Link
-                    :href="`/projects/${project.id}/booklet`"
-                    class="flex items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-600/15 hover:bg-orange-600/30 px-3 py-1.5 text-xs font-semibold text-orange-300 transition shadow-sm"
-                    title="Buka Lembar Kerja & Booklet PDF Standar Studio Arsitek"
-                >
-                    <Layers class="h-3.5 w-3.5 text-orange-400" />
-                    <span class="hidden sm:inline">Booklet PDF</span>
-                </Link>
+                    <!-- Revision Badge -->
+                    <RevisionBadge :project="project" :current-count="comments.length" class="shrink-0" />
 
-                <!-- RAB button — muncul jika ada dokumen RAB yang visible -->
-                <div v-if="hasVisibleRab" class="relative">
+                    <!-- Button Daftar Komentar (Kanban Drag & Drop) -->
                     <button
                         type="button"
-                        @click="showRabPanel = !showRabPanel; isChatOpen = false"
-                        class="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
-                        :class="showRabPanel && 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'"
+                        @click="isCommentsBoardOpen = !isCommentsBoardOpen; isDrawerOpen = false"
+                        class="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10 shrink-0"
+                        :class="isCommentsBoardOpen && 'border-rose-500/50 bg-rose-500/10 text-rose-300 ring-2 ring-rose-500/30'"
+                        title="Buka Daftar Komentar & Board Revisi (Drag & Drop)"
                     >
-                        <ClipboardList class="h-3.5 w-3.5" :class="showRabPanel ? 'text-emerald-400' : 'text-emerald-300'" />
-                        <span class="hidden sm:inline">RAB</span>
-                        <span class="inline-flex items-center justify-center rounded-full bg-emerald-500/80 px-1.5 text-[9px] font-bold text-white min-w-[16px]">
-                            {{ rabDocuments.length }}
+                        <KanbanSquare class="h-3.5 w-3.5 text-rose-400" />
+                        <span class="whitespace-nowrap font-medium">Daftar Komentar</span>
+                        <span class="inline-flex items-center justify-center rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.2 text-[10px] font-bold min-w-[18px]">
+                            {{ comments.length }}
                         </span>
                     </button>
 
-                    <!-- RAB dropdown panel -->
-                    <Transition
-                        enter-active-class="transition-all duration-200 ease-out"
-                        enter-from-class="opacity-0 scale-95 translate-y-1"
-                        enter-to-class="opacity-100 scale-100 translate-y-0"
-                        leave-active-class="transition-all duration-150 ease-in"
-                        leave-from-class="opacity-100 scale-100 translate-y-0"
-                        leave-to-class="opacity-0 scale-95 translate-y-1"
+                    <!-- Pin count toggle (Drawer) -->
+                    <button
+                        type="button"
+                        @click="isDrawerOpen = !isDrawerOpen; isCommentsBoardOpen = false"
+                        class="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10 shrink-0"
+                        :class="isDrawerOpen && 'border-rose-500/40 bg-rose-500/10 text-rose-300'"
                     >
-                        <div
-                            v-if="showRabPanel"
-                            class="absolute right-0 top-10 z-50 w-80 rounded-2xl border border-white/15 bg-black/95 backdrop-blur-2xl shadow-2xl overflow-hidden"
+                        <MessageSquare class="h-3.5 w-3.5 text-rose-400" />
+                        <span class="whitespace-nowrap">{{ comments.length }} Pin</span>
+                    </button>
+
+                    <!-- Fullscreen -->
+                    <button
+                        type="button"
+                        @click="toggleFullscreen"
+                        class="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10 shrink-0"
+                    >
+                        <Minimize2 v-if="isFullscreen" class="h-3.5 w-3.5 text-rose-400" />
+                        <Maximize2 v-else class="h-3.5 w-3.5 text-neutral-300" />
+                        <span class="hidden sm:inline whitespace-nowrap">{{ isFullscreen ? 'Keluar Penuh' : 'Layar Penuh' }}</span>
+                    </button>
+
+                    <!-- Booklet PDF button -->
+                    <Link
+                        :href="`/projects/${project.id}/booklet`"
+                        class="flex items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-600/15 hover:bg-orange-600/30 px-3 py-1.5 text-xs font-semibold text-orange-300 transition shadow-sm shrink-0"
+                        title="Buka Lembar Kerja & Booklet PDF Standar Studio Arsitek"
+                    >
+                        <Layers class="h-3.5 w-3.5 text-orange-400" />
+                        <span class="hidden sm:inline whitespace-nowrap">Booklet PDF</span>
+                    </Link>
+
+                    <!-- RAB button — muncul jika ada dokumen RAB yang visible -->
+                    <div v-if="hasVisibleRab" class="relative shrink-0">
+                        <button
+                            type="button"
+                            @click="showRabPanel = !showRabPanel; isChatOpen = false"
+                            class="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
+                            :class="showRabPanel && 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'"
                         >
-                            <!-- Header -->
-                            <div class="flex items-center justify-between px-4 py-3 border-b border-white/10">
-                                <div class="flex items-center gap-2">
-                                    <ClipboardList class="h-4 w-4 text-emerald-400" />
-                                    <span class="text-sm font-semibold text-white">Rencana Anggaran Biaya</span>
-                                </div>
-                                <button @click="showRabPanel = false" class="text-neutral-500 hover:text-white transition-colors">
-                                    <X class="h-4 w-4" />
-                                </button>
-                            </div>
+                            <ClipboardList class="h-3.5 w-3.5" :class="showRabPanel ? 'text-emerald-400' : 'text-emerald-300'" />
+                            <span class="hidden sm:inline whitespace-nowrap">RAB</span>
+                            <span class="inline-flex items-center justify-center rounded-full bg-emerald-500/80 px-1.5 text-[9px] font-bold text-white min-w-[16px]">
+                                {{ rabDocuments.length }}
+                            </span>
+                        </button>
 
-                            <!-- RAB document list -->
-                            <div class="divide-y divide-white/5 max-h-80 overflow-y-auto">
-                                <Link
-                                    v-for="doc in rabDocuments"
-                                    :key="doc.id"
-                                    :href="`/projects/${project.id}/rab/${doc.id}`"
-                                    class="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors group"
-                                >
-                                    <div class="flex-1 min-w-0">
-                                        <p class="text-sm font-medium text-white truncate">{{ doc.title }}</p>
-                                        <div class="flex items-center gap-2 mt-0.5">
-                                            <span :class="[
-                                                'text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
-                                                doc.status === 'final'
-                                                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                                                    : 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-                                            ]">
-                                                {{ doc.status === 'final' ? 'Final' : 'Draft' }}
-                                            </span>
-                                            <span class="text-[10px] text-neutral-500">{{ doc.items_count }} item</span>
-                                            <span class="text-[10px] font-semibold text-emerald-400">
-                                                {{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(doc.total) }}
-                                            </span>
-                                        </div>
+                        <!-- RAB dropdown panel -->
+                        <Transition
+                            enter-active-class="transition-all duration-200 ease-out"
+                            enter-from-class="opacity-0 scale-95 translate-y-1"
+                            enter-to-class="opacity-100 scale-100 translate-y-0"
+                            leave-active-class="transition-all duration-150 ease-in"
+                            leave-from-class="opacity-100 scale-100 translate-y-0"
+                            leave-to-class="opacity-0 scale-95 translate-y-1"
+                        >
+                            <div
+                                v-if="showRabPanel"
+                                class="absolute right-0 top-10 z-50 w-80 rounded-2xl border border-white/15 bg-black/95 backdrop-blur-2xl shadow-2xl overflow-hidden"
+                            >
+                                <!-- Header -->
+                                <div class="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                                    <div class="flex items-center gap-2">
+                                        <ClipboardList class="h-4 w-4 text-emerald-400" />
+                                        <span class="text-sm font-semibold text-white">Rencana Anggaran Biaya</span>
                                     </div>
-                                    <ExternalLink class="h-3.5 w-3.5 text-neutral-600 group-hover:text-emerald-400 transition-colors shrink-0" />
-                                </Link>
-                            </div>
+                                    <button @click="showRabPanel = false" class="text-neutral-500 hover:text-white transition-colors">
+                                        <X class="h-4 w-4" />
+                                    </button>
+                                </div>
 
-                            <!-- Footer — owner bisa ke halaman RAB project -->
-                            <div v-if="isOwner" class="border-t border-white/10 px-4 py-2.5">
-                                <Link
-                                    :href="`/projects/${project.id}/rab`"
-                                    class="flex items-center justify-center gap-1.5 text-xs text-neutral-400 hover:text-white transition-colors"
-                                >
-                                    <ClipboardList class="h-3.5 w-3.5" />
-                                    Kelola semua dokumen RAB
-                                </Link>
+                                <!-- RAB document list -->
+                                <div class="divide-y divide-white/5 max-h-80 overflow-y-auto">
+                                    <Link
+                                        v-for="doc in rabDocuments"
+                                        :key="doc.id"
+                                        :href="`/projects/${project.id}/rab/${doc.id}`"
+                                        class="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors group"
+                                    >
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm font-medium text-white truncate">{{ doc.title }}</p>
+                                            <div class="flex items-center gap-2 mt-0.5">
+                                                <span :class="[
+                                                    'text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
+                                                    doc.status === 'final'
+                                                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                                        : 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+                                                ]">
+                                                    {{ doc.status === 'final' ? 'Final' : 'Draft' }}
+                                                </span>
+                                                <span class="text-[10px] text-neutral-500">{{ doc.items_count }} item</span>
+                                                <span class="text-[10px] font-semibold text-emerald-400">
+                                                    {{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(doc.total) }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <ExternalLink class="h-3.5 w-3.5 text-neutral-600 group-hover:text-emerald-400 transition-colors shrink-0" />
+                                    </Link>
+                                </div>
+
+                                <!-- Footer — owner bisa ke halaman RAB project -->
+                                <div v-if="isOwner" class="border-t border-white/10 px-4 py-2.5">
+                                    <Link
+                                        :href="`/projects/${project.id}/rab`"
+                                        class="flex items-center justify-center gap-1.5 text-xs text-neutral-400 hover:text-white transition-colors"
+                                    >
+                                        <ClipboardList class="h-3.5 w-3.5" />
+                                        Kelola semua dokumen RAB
+                                    </Link>
+                                </div>
                             </div>
-                        </div>
-                    </Transition>
+                        </Transition>
+                    </div>
+
+                    <!-- Galeri Capture toggle -->
+                    <button
+                        type="button"
+                        @click="toggleGallery"
+                        class="relative flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10 shrink-0"
+                        :class="isGalleryOpen && 'border-amber-500/50 bg-amber-500/10 text-amber-300'"
+                        title="Galeri Hasil Ambil Gambar 3D"
+                    >
+                        <Image class="h-3.5 w-3.5" :class="isGalleryOpen ? 'text-amber-400' : 'text-neutral-300'" />
+                        <span class="hidden sm:inline whitespace-nowrap">Galeri</span>
+                        <span
+                            v-if="captures.length > 0"
+                            class="inline-flex items-center justify-center rounded-full bg-amber-500/80 px-1.5 text-[9px] font-bold text-white min-w-[16px]"
+                        >
+                            {{ captures.length }}
+                        </span>
+                    </button>
+
+                    <!-- Chat toggle -->
+                    <button
+                        type="button"
+                        @click="isChatOpen = !isChatOpen; isDrawerOpen = false; isGalleryOpen = false; isCommentsBoardOpen = false"
+                        class="relative flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10 shrink-0"
+                        :class="isChatOpen && 'border-indigo-500/50 bg-indigo-500/10 text-indigo-300'"
+                    >
+                        <MessageCircle class="h-3.5 w-3.5" :class="isChatOpen ? 'text-indigo-400' : 'text-indigo-300'" />
+                        <span class="hidden sm:inline whitespace-nowrap">Chat</span>
+                        <span
+                            v-if="chatUnread > 0"
+                            class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 text-[9px] font-bold text-white"
+                        >
+                            {{ chatUnread > 9 ? '9+' : chatUnread }}
+                        </span>
+                    </button>
                 </div>
 
-                <!-- Galeri Capture toggle -->
+                <!-- Right Scroll Arrow Button (mengarahkan / geser ke kanan kalau masih ada tools lainnya) -->
                 <button
+                    v-if="canScrollToolsRight"
                     type="button"
-                    @click="toggleGallery"
-                    class="relative flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
-                    :class="isGalleryOpen && 'border-amber-500/50 bg-amber-500/10 text-amber-300'"
-                    title="Galeri Hasil Ambil Gambar 3D"
+                    @click="scrollToolsRight"
+                    class="absolute -right-1 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-rose-600 border border-white/30 text-white shadow-xl backdrop-blur-md transition hover:bg-rose-500 hover:scale-105 animate-pulse"
+                    title="Geser ke kanan untuk melihat tools lainnya"
                 >
-                    <Image class="h-3.5 w-3.5" :class="isGalleryOpen ? 'text-amber-400' : 'text-neutral-300'" />
-                    <span class="hidden sm:inline">Galeri</span>
-                    <span
-                        v-if="captures.length > 0"
-                        class="inline-flex items-center justify-center rounded-full bg-amber-500/80 px-1.5 text-[9px] font-bold text-white min-w-[16px]"
-                    >
-                        {{ captures.length }}
-                    </span>
-                </button>
-
-                <!-- Chat toggle — hanya untuk owner dan client, bukan admin viewer -->
-                <button
-                    v-if="!isAdminViewer"
-                    type="button"
-                    @click="isChatOpen = !isChatOpen; isDrawerOpen = false; isGalleryOpen = false"
-                    class="relative flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
-                    :class="isChatOpen && 'border-indigo-500/50 bg-indigo-500/10 text-indigo-300'"
-                >
-                    <MessageCircle class="h-3.5 w-3.5" :class="isChatOpen ? 'text-indigo-400' : 'text-indigo-300'" />
-                    <span class="hidden sm:inline">Chat</span>
-                    <span
-                        v-if="chatUnread > 0"
-                        class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 text-[9px] font-bold text-white"
-                    >
-                        {{ chatUnread > 9 ? '9+' : chatUnread }}
-                    </span>
+                    <ChevronRight class="h-4 w-4" />
                 </button>
             </div>
         </header>
@@ -205,7 +268,7 @@
             <!-- Three.js Canvas -->
             <div
                 ref="viewerContainer"
-                class="absolute inset-0 h-full w-full"
+                class="absolute inset-0 h-full w-full touch-none"
                 :class="{
                     'cursor-grab active:cursor-grabbing': interactionMode === 'rotate',
                     'cursor-move': interactionMode === 'pan',
@@ -273,11 +336,16 @@
                     <X class="h-6 w-6 text-rose-400" />
                 </div>
                 <p class="font-semibold text-base text-white">{{ modelError }}</p>
-                <p class="text-xs text-neutral-400 mt-1 max-w-sm">Pastikan file model .glb tersedia di storage.</p>
+                <p class="text-xs text-neutral-400 mt-1 max-w-sm">
+                    {{ isSkpModel ? 'Pastikan file SketchUp (.skp) tersedia di storage.' : 'Pastikan file model .glb tersedia di storage.' }}
+                </p>
             </div>
 
             <!-- ── TOOLBAR TOP-LEFT: Controls ── -->
-            <div class="absolute top-4 left-4 z-20 flex flex-wrap items-center gap-1.5 rounded-2xl border border-white/15 bg-black/80 p-1.5 shadow-2xl backdrop-blur-xl">
+            <div
+                class="absolute top-4 left-4 z-20 flex items-center gap-1.5 rounded-2xl border border-white/15 bg-black/80 p-1.5 shadow-2xl backdrop-blur-xl max-w-[calc(100vw-2rem)] overflow-x-auto no-scrollbar scroll-smooth"
+                style="scrollbar-width: none; -ms-overflow-style: none;"
+            >
                 <span class="text-[11px] font-mono text-neutral-400 px-2 hidden sm:inline">KONTROL:</span>
                 <button
                     type="button"
@@ -395,6 +463,57 @@
                 </template>
             </div>
 
+            <!-- ── SKETCHUP FLOATING BAR ── -->
+            <div
+                v-if="isSkpModel"
+                class="absolute top-16 left-4 z-20 flex flex-wrap items-center gap-2 rounded-2xl border border-red-500/30 bg-black/85 px-3 py-1.5 shadow-2xl backdrop-blur-xl text-xs text-white max-w-[calc(100vw-2rem)]"
+            >
+                <div class="flex items-center gap-1.5">
+                    <span class="h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+                    <span class="font-semibold text-red-300">Format SketchUp (.skp)</span>
+                    <span v-if="hasConvertedGlb" class="text-emerald-400 font-medium hidden sm:inline">— 3D Interaktif Aktif</span>
+                    <span v-else class="text-neutral-400 hidden sm:inline">— Mode Pratinjau Gambar 3D</span>
+                </div>
+                <div class="h-3.5 w-px bg-white/20 hidden sm:block"></div>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <a
+                        :href="`/storage/${project.file_path}`"
+                        download
+                        class="flex items-center gap-1 rounded-xl bg-white/10 hover:bg-white/20 px-2.5 py-1 text-[11px] font-medium text-white transition"
+                        title="Unduh file .skp asli"
+                    >
+                        <Download class="h-3 w-3" />
+                        <span>Unduh .skp</span>
+                    </a>
+                    <button
+                        v-if="effectiveSkpImageUrl"
+                        type="button"
+                        @click="is2DPreviewModalOpen = true"
+                        class="flex items-center gap-1 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/30 px-2.5 py-1 text-[11px] font-medium text-indigo-200 transition"
+                    >
+                        <Maximize2 class="h-3 w-3" />
+                        <span>Resolusi Penuh</span>
+                    </button>
+                    <button
+                        type="button"
+                        @click="isSkpGuideModalOpen = true"
+                        class="flex items-center gap-1 rounded-xl bg-red-600/30 hover:bg-red-600/50 border border-red-500/30 px-2.5 py-1 text-[11px] font-medium text-red-200 transition"
+                    >
+                        <Info class="h-3 w-3" />
+                        <span>Panduan 3D Orbit</span>
+                    </button>
+                    <button
+                        v-if="isOwner"
+                        type="button"
+                        @click="isUploadGlbModalOpen = true"
+                        class="flex items-center gap-1 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/30 px-2.5 py-1 text-[11px] font-medium text-emerald-200 transition"
+                    >
+                        <Box class="h-3 w-3" />
+                        <span>Unggah .glb</span>
+                    </button>
+                </div>
+            </div>
+
             <!-- ── TOOLBAR BOTTOM-CENTER ── -->
             <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 rounded-full border border-white/15 bg-black/85 p-1.5 sm:p-2 shadow-2xl backdrop-blur-2xl max-w-[95vw]">
 
@@ -433,9 +552,8 @@
                     <span>Auto-Orbit</span>
                 </button>
 
-                <!-- Tambah Pin — hanya untuk owner dan client, bukan admin viewer -->
+                <!-- Tambah Pin -->
                 <button
-                    v-if="!isAdminViewer"
                     type="button"
                     @click="handleTambahPinButton"
                     class="flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-all shadow-md"
@@ -612,9 +730,14 @@
                     </div>
                 </div>
 
-                <!-- Pending pin form (draggable) -->
+            </div>
+
+            <!-- ── PENDING PIN FORM (TOP OVERLAY Z-40) ── -->
+            <div
+                v-if="pendingPin && pendingPin.isVisible"
+                class="pointer-events-none absolute inset-0 z-40 overflow-hidden"
+            >
                 <div
-                    v-if="pendingPin && pendingPin.isVisible"
                     :style="{ transform: `translate3d(${pendingPin.cardX}px, ${pendingPin.cardY}px, 0)` }"
                     class="pointer-events-auto absolute top-0 left-0 w-[320px] max-w-[90vw] touch-none"
                 >
@@ -2804,6 +2927,212 @@
                 @close="isChatOpen = false"
             />
 
+            <!-- ── COMMENTS BOARD MODAL (Drag & Drop Status) ── -->
+            <CommentsBoardModal
+                :is-open="isCommentsBoardOpen"
+                :comments="comments"
+                :can-edit="canEditComment"
+                :is-updating-status="!!togglingResolvedId"
+                @close="isCommentsBoardOpen = false"
+                @update-status="onUpdateCommentStatusFromBoard"
+                @focus-comment="onFocusCommentFromBoard"
+                @edit-comment="onEditCommentFromBoard"
+                @delete-comment="onDeleteCommentFromBoard"
+            />
+
+            <!-- ── SKETCHUP (.SKP) GUIDE MODAL ── -->
+            <div
+                v-if="isSkpGuideModalOpen"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200"
+                @click.self="isSkpGuideModalOpen = false"
+            >
+                <div class="relative w-full max-w-lg rounded-2xl border border-white/20 bg-slate-900 p-6 shadow-2xl text-white space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                        <div class="flex items-center gap-2">
+                            <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-white font-bold text-xs">SKP</span>
+                            <div>
+                                <h3 class="font-bold text-base text-white">Panduan Model SketchUp (.skp)</h3>
+                                <p class="text-xs text-slate-400">Dukungan format gambar 3D & pin revisi</p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            @click="isSkpGuideModalOpen = false"
+                            class="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition"
+                        >
+                            <X class="h-5 w-5" />
+                        </button>
+                    </div>
+
+                    <div class="space-y-3 text-xs text-slate-300">
+                        <div class="rounded-xl bg-white/5 border border-white/10 p-3.5 space-y-1.5">
+                            <div class="flex items-center gap-2 text-white font-semibold">
+                                <CheckCircle2 class="h-4 w-4 text-emerald-400" />
+                                <span>Fitur Aktif Pada Format .skp</span>
+                            </div>
+                            <p class="text-slate-400">
+                                File SketchUp Anda telah berhasil dimuat dan ditampilkan sebagai pratinjau gambar 3D beresolusi tinggi. Anda dan klien dapat:
+                            </p>
+                            <ul class="list-disc pl-5 space-y-1 text-slate-300">
+                                <li>Meletakkan <span class="text-rose-400 font-medium">Pin Komentar</span> langsung di atas gambar model</li>
+                                <li>Mengelola status revisi via papan Kanban <span class="text-indigo-400 font-medium">Daftar Komentar</span></li>
+                                <li>Mengunduh file asli <span class="text-white font-medium">.skp</span> kapan saja</li>
+                                <li>Membuat dan mengaitkan dokumen <span class="text-amber-400 font-medium">RAB</span> dan lembar kerja 2D</li>
+                            </ul>
+                        </div>
+
+                        <div class="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3.5 space-y-2">
+                            <div class="flex items-center gap-2 text-amber-300 font-semibold">
+                                <Info class="h-4 w-4 text-amber-400" />
+                                <span>Ingin Navigasi Orbit 3D 360° Penuh?</span>
+                            </div>
+                            <p class="text-amber-200/90 leading-relaxed">
+                                Format browser WebGL memerlukan geometri berbasis glTF/GLB untuk perputaran kamera bebas 360°. Anda dapat mengekspor dari SketchUp dalam 1 langkah:
+                            </p>
+                            <ol class="list-decimal pl-5 space-y-1 text-amber-100">
+                                <li>Buka file proyek ini di software <strong class="text-white">SketchUp</strong> desktop.</li>
+                                <li>Pilih menu <strong class="text-white">File > Export > 3D Model...</strong></li>
+                                <li>Ubah format penyimpanan menjadi <strong class="text-white">glTF / GLB (*.glb)</strong> lalu klik Export.</li>
+                                <li>Klik tombol <strong class="text-white">Unggah .glb</strong> di atas untuk memperbarui proyek dengan model 3D penuh.</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-3 border-t border-white/10">
+                        <a
+                            :href="`/storage/${project.file_path}`"
+                            download
+                            class="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-medium text-white transition"
+                        >
+                            <Download class="h-3.5 w-3.5" /> Unduh File .skp
+                        </a>
+                        <div class="flex items-center gap-2">
+                            <button
+                                v-if="isOwner"
+                                type="button"
+                                @click="isSkpGuideModalOpen = false; isUploadGlbModalOpen = true"
+                                class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-xs font-medium text-white transition shadow-lg"
+                            >
+                                <Box class="h-3.5 w-3.5" /> Unggah Versi .glb
+                            </button>
+                            <button
+                                type="button"
+                                @click="isSkpGuideModalOpen = false"
+                                class="rounded-xl border border-white/20 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/10 transition"
+                            >
+                                Tutup
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── SKETCHUP 2D FULL-RESOLUTION LIGHTBOX MODAL ── -->
+            <div
+                v-if="is2DPreviewModalOpen && effectiveSkpImageUrl"
+                class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-xl p-4 animate-in fade-in duration-200"
+                @click.self="is2DPreviewModalOpen = false"
+            >
+                <div class="absolute top-4 right-4 z-10 flex items-center gap-2">
+                    <a
+                        :href="effectiveSkpImageUrl"
+                        download
+                        class="rounded-xl bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-medium text-white transition flex items-center gap-1.5"
+                    >
+                        <Download class="h-4 w-4" /> Unduh Gambar
+                    </a>
+                    <button
+                        type="button"
+                        @click="is2DPreviewModalOpen = false"
+                        class="rounded-xl bg-white/10 hover:bg-white/20 p-2 text-white transition"
+                    >
+                        <X class="h-5 w-5" />
+                    </button>
+                </div>
+
+                <div class="max-w-5xl max-h-[85vh] overflow-hidden rounded-2xl border border-white/15 bg-black/40 shadow-2xl flex items-center justify-center p-2">
+                    <img
+                        :src="effectiveSkpImageUrl"
+                        :alt="project.title"
+                        class="max-w-full max-h-[80vh] object-contain rounded-xl select-none"
+                    />
+                </div>
+                <div class="mt-3 text-center">
+                    <p class="text-xs text-neutral-300 font-medium">{{ project.title }} — Pratinjau Gambar 3D Model SketchUp</p>
+                </div>
+            </div>
+
+            <!-- ── MODAL UNGGAH .GLB / MODEL BARU ── -->
+            <div
+                v-if="isUploadGlbModalOpen"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200"
+                @click.self="isUploadGlbModalOpen = false"
+            >
+                <div class="relative w-full max-w-md rounded-2xl border border-white/20 bg-slate-900 p-6 shadow-2xl text-white space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                        <div class="flex items-center gap-2">
+                            <Box class="h-5 w-5 text-emerald-400" />
+                            <div>
+                                <h3 class="font-bold text-base text-white">Unggah / Ganti Model 3D</h3>
+                                <p class="text-xs text-slate-400">Mendukung format .glb, .gltf, atau .skp</p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            @click="isUploadGlbModalOpen = false"
+                            class="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition"
+                        >
+                            <X class="h-5 w-5" />
+                        </button>
+                    </div>
+
+                    <div class="space-y-3">
+                        <label
+                            class="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-white/20 p-6 text-center cursor-pointer hover:border-emerald-500/60 hover:bg-emerald-500/5 transition"
+                        >
+                            <FileUp class="h-8 w-8 text-neutral-400 mb-2" />
+                            <div v-if="glbUploadName" class="text-sm font-semibold text-emerald-400">
+                                {{ glbUploadName }}
+                            </div>
+                            <div v-else class="text-xs text-neutral-300">
+                                Klik untuk memilih file model (.glb, .gltf, .skp)
+                            </div>
+                            <p class="text-[11px] text-neutral-500 mt-1">
+                                Rekomendasi: .glb untuk navigasi 3D interaktif penuh
+                            </p>
+                            <input
+                                type="file"
+                                accept=".glb,.gltf,.skp"
+                                class="hidden"
+                                @change="onGlbFileSelected"
+                            />
+                        </label>
+                        <p v-if="glbUploadError" class="text-xs text-rose-400 font-medium">
+                            {{ glbUploadError }}
+                        </p>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                        <button
+                            type="button"
+                            @click="isUploadGlbModalOpen = false"
+                            class="rounded-xl border border-white/20 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/10 transition"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            type="button"
+                            :disabled="!glbUploadFile || isUploadingGlb"
+                            @click="submitGlbUpload"
+                            class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 text-xs font-semibold text-white transition shadow-lg"
+                        >
+                            <Loader2 v-if="isUploadingGlb" class="h-3.5 w-3.5 animate-spin" />
+                            <span>{{ isUploadingGlb ? 'Mengunggah...' : 'Unggah & Perbarui' }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 </template>
@@ -2816,6 +3145,7 @@ import {
     ArrowRight,
     Bookmark,
     BookmarkPlus,
+    Box,
     Camera,
     Check,
     CheckCircle2,
@@ -2831,12 +3161,14 @@ import {
     Eye,
     EyeOff,
     ExternalLink,
+    FileUp,
     Focus,
     Globe,
     GripVertical,
     Hand,
     Image,
     Info,
+    KanbanSquare,
     Layers,
     Loader2,
     Lock,
@@ -2872,6 +3204,8 @@ import { usePostProcessing } from '@/composables/usePostProcessing';
 import { usePathTracer } from '@/composables/usePathTracer';
 import RevisionBadge from '@/components/RevisionBadge.vue';
 import ChatPanel from '@/components/ChatPanel.vue';
+import CommentsBoardModal from '@/components/CommentsBoardModal.vue';
+import { toast } from 'vue-sonner';
 import {
     index as commentIndex,
     store as storeComment,
@@ -2957,6 +3291,121 @@ const showAnnotations = ref(true);
 const isDrawerOpen = ref(true);
 const activeCommentId = ref<string | null>(null);
 const limitWarning = ref('');
+
+// ── SketchUp (.skp) State & Modals ────────────────────────
+const isSkpModel = computed(() => {
+    const p = project.value?.file_path;
+    return typeof p === 'string' && p.toLowerCase().endsWith('.skp');
+});
+
+const hasConvertedGlb = computed(() => {
+    return Boolean((project.value as any)?.converted_glb_path);
+});
+
+const effectiveSkpImageUrl = computed(() => {
+    if (project.value?.thumbnail_url) return project.value.thumbnail_url;
+    if (captures.value.length > 0 && captures.value[0].file_path) {
+        return `/storage/${captures.value[0].file_path}`;
+    }
+    return null;
+});
+
+const isSkpGuideModalOpen = ref(false);
+const is2DPreviewModalOpen = ref(false);
+const isUploadGlbModalOpen = ref(false);
+
+const glbUploadFile = ref<File | null>(null);
+const glbUploadName = ref('');
+const glbUploadError = ref('');
+const isUploadingGlb = ref(false);
+
+function onGlbFileSelected(e: Event) {
+    glbUploadError.value = '';
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext !== 'glb' && ext !== 'gltf' && ext !== 'skp') {
+        glbUploadError.value = 'Hanya file .glb, .gltf, atau .skp yang didukung.';
+        glbUploadFile.value = null;
+        glbUploadName.value = '';
+        return;
+    }
+    glbUploadFile.value = file;
+    glbUploadName.value = file.name;
+}
+
+function submitGlbUpload() {
+    if (!glbUploadFile.value || !project.value?.id) return;
+    isUploadingGlb.value = true;
+    router.post(
+        `/projects/${project.value.id}`,
+        {
+            _method: 'PUT',
+            file: glbUploadFile.value,
+        },
+        {
+            forceFormData: true,
+            onSuccess: () => {
+                isUploadingGlb.value = false;
+                isUploadGlbModalOpen.value = false;
+                toast.success('File model berhasil diperbarui! Memuat ulang viewer...');
+                window.location.reload();
+            },
+            onError: (errors: any) => {
+                isUploadingGlb.value = false;
+                glbUploadError.value = errors.file || 'Gagal mengunggah file baru.';
+                toast.error(glbUploadError.value);
+            },
+        }
+    );
+}
+
+// ── Comments Board Modal & Header Tools Scroll State ────
+const isCommentsBoardOpen = ref(false);
+const headerToolsContainer = ref<HTMLDivElement | null>(null);
+const canScrollToolsLeft = ref(false);
+const canScrollToolsRight = ref(false);
+
+function checkToolsOverflow() {
+    const el = headerToolsContainer.value;
+    if (!el) return;
+    canScrollToolsLeft.value = el.scrollLeft > 10;
+    canScrollToolsRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 10;
+}
+
+function scrollToolsRight() {
+    const el = headerToolsContainer.value;
+    if (!el) return;
+    el.scrollBy({ left: 180, behavior: 'smooth' });
+    setTimeout(checkToolsOverflow, 300);
+}
+
+function scrollToolsLeft() {
+    const el = headerToolsContainer.value;
+    if (!el) return;
+    el.scrollBy({ left: -180, behavior: 'smooth' });
+    setTimeout(checkToolsOverflow, 300);
+}
+
+function onUpdateCommentStatusFromBoard(commentId: string, newStatus: 'open' | 'resolved') {
+    toggleResolved(commentId, newStatus);
+}
+
+function onFocusCommentFromBoard(comment: Comment) {
+    isCommentsBoardOpen.value = false;
+    focusComment(comment);
+}
+
+function onEditCommentFromBoard(comment: Comment) {
+    isCommentsBoardOpen.value = false;
+    isDrawerOpen.value = true;
+    focusComment(comment);
+    startEditing(comment);
+}
+
+function onDeleteCommentFromBoard(comment: Comment) {
+    promptUnpin(comment.id);
+}
 
 // ── Clipping / Sectioning state ──────────────────────────
 const clippingEnabled  = ref(false);
@@ -5202,11 +5651,20 @@ function promptUnpinFromDrawer(comment: Comment) {
 // Toggle resolved status — save to DB
 const togglingResolvedId = ref<string | null>(null);
 
-async function toggleResolved(commentId: string): Promise<void> {
+async function toggleResolved(commentId: string, targetStatus?: 'open' | 'resolved'): Promise<void> {
     if (togglingResolvedId.value) return;
     togglingResolvedId.value = commentId;
 
+    const target = comments.value.find(c => c.id === commentId);
+    const prevStatus = target?.status;
+    if (target && targetStatus) {
+        target.status = targetStatus;
+        renderCommentMarkers();
+        updateProjections();
+    }
+
     try {
+        const body = targetStatus ? JSON.stringify({ status: targetStatus }) : JSON.stringify({});
         const response = await fetch(
             `/projects/${project.value.id}/comments/${commentId}/resolve`,
             {
@@ -5217,19 +5675,31 @@ async function toggleResolved(commentId: string): Promise<void> {
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
                 },
+                body,
             }
         );
 
         if (response.ok) {
             const data = await response.json();
-            const target = comments.value.find(c => c.id === commentId);
-            if (target) {
-                target.status = data.data?.status;
+            if (target && data.data?.status) {
+                target.status = data.data.status;
             }
+            renderCommentMarkers();
             updateProjections();
+        } else {
+            if (target && prevStatus) {
+                target.status = prevStatus;
+                renderCommentMarkers();
+                updateProjections();
+            }
         }
     } catch (err) {
         console.error('Failed to toggle resolved:', err);
+        if (target && prevStatus) {
+            target.status = prevStatus;
+            renderCommentMarkers();
+            updateProjections();
+        }
     } finally {
         togglingResolvedId.value = null;
     }
@@ -5255,18 +5725,23 @@ function onPointerDown(e: MouseEvent) {
 async function onPointerUp(e: MouseEvent) {
     const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
 
-    // If mouse moved more than 5px, it's a drag (rotate or pan), NOT a pin click
-    if (dist > 5) {
+    // If mouse moved more than 15px, it's a drag (rotate or pan), NOT a pin click
+    if (dist > 15) {
         return;
     }
 
-    // Only respond to left-clicks for pin drop
-    if (e.button !== 0) {
+    // Only respond to left-clicks for pin drop (button 0 or touch undefined)
+    if (e.button !== undefined && e.button !== 0) {
         return;
     }
 
-    // In pan mode, user is panning; don't pin unless in pin mode or rotate mode
+    // In pan mode, user is panning; don't pin
     if (interactionMode.value === 'pan') {
+        return;
+    }
+
+    // Only drop pin if user is explicitly in pin mode
+    if (interactionMode.value !== 'pin') {
         return;
     }
 
@@ -5310,13 +5785,15 @@ function setInteractionMode(mode: 'rotate' | 'pan' | 'pin') {
             TWO: THREE.TOUCH.DOLLY_PAN,
         };
     } else if (mode === 'pin') {
+        // Desktop mouse: Left click places pin (disabled for rotate/pan)
         controls.mouseButtons = {
-            LEFT: THREE.MOUSE.ROTATE,
+            LEFT: -1 as any,
             MIDDLE: THREE.MOUSE.DOLLY,
-            RIGHT: THREE.MOUSE.PAN,
+            RIGHT: THREE.MOUSE.ROTATE,
         };
+        // Mobile touch: 1 finger taps to place pin (disabled for rotate/pan)
         controls.touches = {
-            ONE: THREE.TOUCH.ROTATE,
+            ONE: -1 as any,
             TWO: THREE.TOUCH.DOLLY_PAN,
         };
     }
@@ -5335,11 +5812,11 @@ function createPendingPin(
     editingCommentId.value = null;
     editCommentError.value = '';
 
+    const cardWidth = Math.min(320, rect.width - 24);
     const defaultIsRight = screenX < rect.width * 0.6;
-    const cardWidth = 320;
-    const defaultDx = defaultIsRight ? 60 : -350;
-    const cardX = Math.max(10, Math.min(rect.width - cardWidth - 10, screenX + defaultDx));
-    const cardY = Math.max(20, Math.min(rect.height - 180, screenY - 40));
+    const defaultDx = defaultIsRight ? 50 : -(cardWidth + 30);
+    const cardX = Math.max(12, Math.min(rect.width - cardWidth - 12, screenX + defaultDx));
+    const cardY = Math.max(20, Math.min(rect.height - 220, screenY - 40));
     const isRightSide = cardX + cardWidth * 0.5 >= screenX;
     const anchorX = isRightSide ? cardX : cardX + cardWidth;
     const anchorY = cardY + 24;
@@ -5359,6 +5836,7 @@ function createPendingPin(
         isVisible: true,
     };
 
+    showAnnotations.value = true;
     updateProjections();
     focusNewCommentInput();
 }
@@ -5369,6 +5847,20 @@ function handleTambahPinButton(): void {
         limitWarning.value = `Batas revisi maksimal (${maxLimit} pin) telah tercapai. Hapus atau unpin komentar yang ada jika ingin menambahkan revisi baru.`;
         return;
     }
+
+    // Toggle off if already in pin mode and no pending pin
+    if (interactionMode.value === 'pin' && !pendingPin.value) {
+        setInteractionMode('rotate');
+        return;
+    }
+
+    // Ensure annotations are shown and close blocking panels
+    showAnnotations.value = true;
+    isDrawerOpen.value = false;
+    isPresetPanelOpen.value = false;
+    isClipPanelOpen.value = false;
+    isSunPanelOpen.value = false;
+    isCommentsBoardOpen.value = false;
 
     setInteractionMode('pin');
 
@@ -5386,7 +5878,7 @@ async function handlePinClick(event: MouseEvent): Promise<void> {
         return;
     }
 
-    const hit = await useRaycast(event, camera, scene);
+    const hit = await useRaycast(event, camera, scene, viewerContainer.value);
     if (!hit) {
         return;
     }
@@ -5494,13 +5986,17 @@ function updateProjections(): void {
         const screenY = (-tempVec.y * 0.5 + 0.5) * height;
 
         const pOffset = pendingPinOffset.value;
-        const cardWidth = 320;
+        const cardWidth = Math.min(320, width - 24);
         const defaultIsRight = screenX < width * 0.6;
-        const defaultDx = defaultIsRight ? 60 : -350;
+        const defaultDx = defaultIsRight ? 50 : -(cardWidth + 30);
         const defaultDy = -40;
 
-        const cardX = screenX + defaultDx + pOffset.dx;
-        const cardY = screenY + defaultDy + pOffset.dy;
+        let cardX = screenX + defaultDx + pOffset.dx;
+        let cardY = screenY + defaultDy + pOffset.dy;
+
+        // Clamp to viewer boundaries so it never overflows off-screen
+        cardX = Math.max(12, Math.min(width - cardWidth - 12, cardX));
+        cardY = Math.max(16, Math.min(height - 220, cardY));
 
         const cardCenterX = cardX + cardWidth * 0.5;
         const isRightSide = cardCenterX >= screenX;
@@ -5641,17 +6137,118 @@ function frameModel(): void {
     const size = bounds.getSize(new THREE.Vector3());
     const distance = Math.max(size.length() * 0.9, 1.2);
 
-    camera.position.set(
-        center.x + distance * 0.8,
-        center.y + distance * 0.6,
-        center.z + distance * 0.8
-    );
+    if (isSkpModel.value) {
+        camera.position.set(
+            center.x,
+            center.y,
+            center.z + distance * 1.05
+        );
+    } else {
+        camera.position.set(
+            center.x + distance * 0.8,
+            center.y + distance * 0.6,
+            center.z + distance * 0.8
+        );
+    }
     camera.near = distance / 100;
     camera.far = distance * 100;
     camera.updateProjectionMatrix();
 
     controls.target.copy(center);
     controls.update();
+}
+
+function loadSkpModel(): void {
+    const imgUrl = effectiveSkpImageUrl.value;
+    if (!imgUrl) {
+        createSkpPlaceholderMesh();
+        isLoading.value = false;
+        return;
+    }
+
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.load(
+        imgUrl,
+        (texture) => {
+            texture.colorSpace = THREE.SRGBColorSpace;
+            const img = texture.image;
+            const aspect = (img && img.width && img.height) ? (img.width / img.height) : (16 / 9);
+            const width = 12;
+            const height = width / aspect;
+
+            const planeGeo = new THREE.PlaneGeometry(width, height);
+            const planeMat = new THREE.MeshStandardMaterial({
+                map: texture,
+                roughness: 0.4,
+                metalness: 0.05,
+                side: THREE.DoubleSide,
+            });
+            const planeMesh = new THREE.Mesh(planeGeo, planeMat);
+            planeMesh.castShadow = true;
+            planeMesh.receiveShadow = true;
+
+            const frameGeo = new THREE.BoxGeometry(width + 0.3, height + 0.3, 0.08);
+            const frameMat = new THREE.MeshStandardMaterial({
+                color: 0x0f172a,
+                roughness: 0.6,
+                metalness: 0.2,
+            });
+            const frameMesh = new THREE.Mesh(frameGeo, frameMat);
+            frameMesh.position.z = -0.05;
+
+            const group = new THREE.Group();
+            group.add(planeMesh);
+            group.add(frameMesh);
+
+            model = group;
+            scene?.add(group);
+
+            frameModel();
+            isLoading.value = false;
+            modelError.value = '';
+        },
+        undefined,
+        (err) => {
+            console.warn('Gagal memuat tekstur preview SKP, fallback ke placeholder:', err);
+            createSkpPlaceholderMesh();
+            isLoading.value = false;
+        }
+    );
+}
+
+function createSkpPlaceholderMesh(): void {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280;
+    canvas.height = 720;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, 1280, 720);
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 6;
+        ctx.strokeRect(30, 30, 1220, 660);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 42px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('MODEL SKETCHUP (.SKP)', 640, 300);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '24px sans-serif';
+        ctx.fillText(project.value?.title || 'Proyek Arsitektur 3D', 640, 370);
+        ctx.fillStyle = '#ef4444';
+        ctx.font = '18px sans-serif';
+        ctx.fillText('Mode Pratinjau Gambar 3D & Pin Komentar Aktif', 640, 440);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const planeGeo = new THREE.PlaneGeometry(12, 6.75);
+    const planeMat = new THREE.MeshStandardMaterial({ map: texture, side: THREE.DoubleSide });
+    const group = new THREE.Group();
+    group.add(new THREE.Mesh(planeGeo, planeMat));
+    model = group;
+    scene?.add(group);
+    frameModel();
+    isLoading.value = false;
+    modelError.value = '';
 }
 
 function loadModel(): void {
@@ -5662,8 +6259,16 @@ function loadModel(): void {
         return;
     }
 
+    const convertedGlb = (proj as any)?.converted_glb_path;
+    const modelToLoad = convertedGlb || proj.file_path;
+
+    if (isSkpModel.value && !convertedGlb) {
+        loadSkpModel();
+        return;
+    }
+
     const loader = new GLTFLoader();
-    const modelUrl = `/storage/${proj.file_path}`;
+    const modelUrl = `/storage/${modelToLoad}`;
 
     loader.load(
         modelUrl,
@@ -5683,12 +6288,46 @@ function loadModel(): void {
             updateClippingRangeFromModel();
             applyClippingToRenderer();
             isLoading.value = false;
+
+            // Auto-capture 3D snapshot jika thumbnail proyek saat ini masih berupa placeholder skp_thumb
+            if (isOwner.value && (!project.value?.thumbnail_url || project.value.thumbnail_url.includes('skp_thumb_'))) {
+                setTimeout(() => {
+                    if (renderer && scene && camera) {
+                        try {
+                            renderer.render(scene, camera);
+                            const dataUrl = renderer.domElement.toDataURL('image/jpeg', 0.9);
+                            if (dataUrl && dataUrl.length > 500) {
+                                fetch(`/projects/${project.value.id}/thumbnail`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        Accept: 'application/json',
+                                        'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                    },
+                                    body: JSON.stringify({ image: dataUrl }),
+                                }).then(res => res.json()).then(data => {
+                                    if (data.thumbnail_url && project.value) {
+                                        project.value.thumbnail_url = data.thumbnail_url;
+                                    }
+                                }).catch(() => {});
+                            }
+                        } catch (e) {}
+                    }
+                }, 800);
+            }
         },
         undefined,
-        () => {
-            modelError.value =
-                'Model 3D tidak dapat dimuat. Pastikan file GLB tersedia di storage.';
-            isLoading.value = false;
+        (err) => {
+            console.warn('Gagal memuat GLB:', err);
+            if (isSkpModel.value) {
+                // Fallback ke skp 2D mode jika GLB gagal
+                loadSkpModel();
+            } else {
+                modelError.value =
+                    'Model 3D tidak dapat dimuat. Pastikan file GLB tersedia di storage.';
+                isLoading.value = false;
+            }
         }
     );
 }
@@ -5804,6 +6443,12 @@ onMounted(async () => {
     loadCameraPresets();
     loadCaptures();
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+    window.addEventListener('resize', checkToolsOverflow);
+    nextTick(() => {
+        checkToolsOverflow();
+        setTimeout(checkToolsOverflow, 400);
+        setTimeout(checkToolsOverflow, 1200);
+    });
     const proj = project.value;
     if (Array.isArray(proj?.comments) && proj.comments.length > 0) {
         comments.value = [...proj.comments];
@@ -5818,6 +6463,7 @@ onBeforeUnmount(() => {
     onBoxDragEnd();
     document.removeEventListener('fullscreenchange', handleFullscreenChange);
     window.removeEventListener('keydown', onLightboxKeyDown);
+    window.removeEventListener('resize', checkToolsOverflow);
     if (animationFrame !== null) {
         window.cancelAnimationFrame(animationFrame);
     }
