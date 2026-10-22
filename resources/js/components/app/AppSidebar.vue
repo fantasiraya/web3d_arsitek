@@ -117,10 +117,13 @@ const isActiveRoute = (routeName: string) => {
     if (routeName === 'rab-template') {
         return page.url.startsWith('/rab/templates')
     }
+    if (routeName === 'rab-mapping') {
+        return page.url.startsWith('/rab/mappings')
+    }
     if (routeName === 'rab') {
-        // Aktif untuk semua halaman RAB kecuali template
+        // Aktif untuk master harga satuan dan dokumen RAB di project, KECUALI template dan mapping yang punya menu terpisah
         return (
-            (page.url.startsWith('/rab') && !page.url.startsWith('/rab/templates')) ||
+            (page.url.startsWith('/rab') && !page.url.startsWith('/rab/templates') && !page.url.startsWith('/rab/mappings')) ||
             /\/projects\/[^/]+\/rab/.test(page.url)
         )
     }
@@ -548,7 +551,7 @@ onUnmounted(() => {
                     @click="!hasRabAccess ? handleRabClick($event, '/rab/mappings') : null"
                     :class="[
                         'group relative flex items-center justify-between px-3 py-2 rounded-xl transition-all w-full text-left',
-                        (page.url.startsWith('/rab/mappings') && hasRabAccess)
+                        (isActiveRoute('rab-mapping') && hasRabAccess)
                             ? 'bg-slate-100 dark:bg-white/[0.06] text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 shadow-sm'
                             : !hasRabAccess
                                 ? 'text-slate-400 dark:text-[#6b7280] opacity-60 cursor-pointer hover:opacity-80'
@@ -557,11 +560,11 @@ onUnmounted(() => {
                     ]"
                     :title="!isSidebarOpen ? (!hasRabAccess ? 'Mapping RAB (Pro)' : 'Mapping RAB') : ''"
                 >
-                    <div v-if="page.url.startsWith('/rab/mappings') && hasRabAccess" class="absolute left-0 top-2 bottom-2 w-1 bg-sky-500 dark:bg-[#38bdf8] rounded-r-full"></div>
+                    <div v-if="isActiveRoute('rab-mapping') && hasRabAccess" class="absolute left-0 top-2 bottom-2 w-1 bg-sky-500 dark:bg-[#38bdf8] rounded-r-full"></div>
                     <div class="flex items-center gap-3 min-w-0 flex-1">
                         <GitMerge
                             class="h-[19px] w-[19px] shrink-0 transition-colors"
-                            :class="(page.url.startsWith('/rab/mappings') && hasRabAccess) ? 'text-sky-600 dark:text-[#38bdf8]' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
+                            :class="(isActiveRoute('rab-mapping') && hasRabAccess) ? 'text-sky-600 dark:text-[#38bdf8]' : 'text-slate-400 dark:text-[#6b7280] group-hover:text-slate-700 dark:group-hover:text-white'"
                             :stroke-width="2"
                         />
                         <Transition

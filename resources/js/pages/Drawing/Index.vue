@@ -374,26 +374,42 @@ const getTypeColor = (type: string) => {
             </div>
 
             <!-- Controls: Search & Filters -->
-            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-[#12131a] p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
-                <div class="relative flex-1 max-w-md">
-                    <Search class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <div class="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3.5 bg-white dark:bg-[#12131a] p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
+                <!-- Search Input: Stretches full width on smaller/medium screens and stays comfortable on large screens -->
+                <div class="relative w-full xl:max-w-md flex-1">
+                    <Search class="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                         v-model="searchQuery"
                         type="text"
                         placeholder="Cari lembar kerja atau proyek..."
-                        class="w-full pl-9 pr-4 py-2 text-sm rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                        class="w-full h-10 pl-10 pr-9 text-sm rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/50 transition-all"
                     />
+                    <button
+                        v-if="searchQuery"
+                        @click="searchQuery = ''"
+                        type="button"
+                        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 rounded-md transition-colors"
+                        title="Hapus pencarian"
+                    >
+                        <X class="w-3.5 h-3.5" />
+                    </button>
                 </div>
 
-                <div class="flex items-center gap-2 overflow-x-auto">
+                <!-- Filters Group: Wraps naturally on small screens without ugly scrollbars -->
+                <div class="flex flex-wrap items-center gap-2 sm:gap-2.5">
                     <!-- Project Selector Filter -->
                     <select
                         :value="selectedProjectId || ''"
                         @change="filterByProject(($event.target as HTMLSelectElement).value)"
-                        class="text-xs rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                        class="h-10 text-xs rounded-xl bg-white dark:bg-[#1a1b23] border border-slate-200 dark:border-white/10 px-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer font-medium shadow-sm transition shrink-0 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-slate-800 dark:[&>option]:bg-[#1a1b23] dark:[&>option]:text-slate-200"
                     >
-                        <option value="">Semua Proyek</option>
-                        <option v-for="p in projects" :key="p.id" :value="p.id">
+                        <option value="" class="bg-white dark:bg-[#1a1b23] text-slate-800 dark:text-slate-200 font-medium">Semua Proyek</option>
+                        <option
+                            v-for="p in projects"
+                            :key="p.id"
+                            :value="p.id"
+                            class="bg-white dark:bg-[#1a1b23] text-slate-800 dark:text-slate-200 font-medium"
+                        >
                             {{ p.title }}
                         </option>
                     </select>
@@ -402,7 +418,7 @@ const getTypeColor = (type: string) => {
                     <button
                         @click="groupByProject = !groupByProject"
                         :class="[
-                            'px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer',
+                            'h-10 px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shrink-0 shadow-sm',
                             groupByProject
                                 ? 'bg-orange-500/15 border-orange-500/40 text-orange-600 dark:text-orange-400'
                                 : 'bg-slate-50 dark:bg-white/[0.04] border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300'
@@ -414,7 +430,7 @@ const getTypeColor = (type: string) => {
                     </button>
 
                     <!-- Type Filter Tabs -->
-                    <div class="inline-flex rounded-xl p-1 bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 text-xs">
+                    <div class="h-10 inline-flex items-center rounded-xl p-1 bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 text-xs shrink-0 shadow-sm">
                         <button
                             v-for="t in [
                                 { key: 'all', label: 'Semua' },
@@ -425,7 +441,7 @@ const getTypeColor = (type: string) => {
                             :key="t.key"
                             @click="filterType = t.key as any"
                             :class="[
-                                'px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer',
+                                'h-8 px-3 rounded-lg font-medium transition-all cursor-pointer flex items-center justify-center',
                                 filterType === t.key
                                     ? 'bg-white dark:bg-[#1e2029] text-violet-600 dark:text-violet-300 shadow-sm'
                                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white',
@@ -601,10 +617,10 @@ const getTypeColor = (type: string) => {
                                 <div class="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-2">
                                     <Link
                                         :href="`/drawings/${sheet.id}`"
-                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-violet-50 dark:bg-violet-400/10 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-400/20 hover:bg-violet-100 dark:hover:bg-violet-400/20 transition-colors"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors"
                                     >
-                                        <DraftingCompass class="w-3.5 h-3.5" />
-                                        <span>Buka CAD</span>
+                                        <Sparkles class="w-3.5 h-3.5 text-amber-500" />
+                                        <span>Gambar Kerja</span>
                                     </Link>
 
                                     <div class="flex items-center gap-1">
@@ -793,10 +809,10 @@ const getTypeColor = (type: string) => {
                         <div class="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-2">
                             <Link
                                 :href="`/drawings/${sheet.id}`"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-violet-50 dark:bg-violet-400/10 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-400/20 hover:bg-violet-100 dark:hover:bg-violet-400/20 transition-colors"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors"
                             >
-                                <DraftingCompass class="w-3.5 h-3.5" />
-                                <span>Buka CAD</span>
+                                <Sparkles class="w-3.5 h-3.5 text-amber-500" />
+                                <span>Gambar Kerja</span>
                             </Link>
 
                             <div class="flex items-center gap-1">
@@ -894,7 +910,7 @@ const getTypeColor = (type: string) => {
                         <select
                             v-model="form.project_id"
                             required
-                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white font-medium"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white font-medium"
                         >
                             <option v-for="p in projects" :key="p.id" :value="p.id" class="bg-slate-900 text-white">
                                 {{ p.title }}
@@ -979,7 +995,7 @@ const getTypeColor = (type: string) => {
                             </label>
                             <select
                                 v-model="form.scale"
-                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white font-mono"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white font-mono"
                             >
                                 <option value="1:50" class="bg-slate-900 text-white">1:50 (Detail)</option>
                                 <option value="1:100" class="bg-slate-900 text-white">1:100 (Standar)</option>
@@ -993,7 +1009,7 @@ const getTypeColor = (type: string) => {
                             </label>
                             <select
                                 v-model="form.paper_size"
-                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white font-mono"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white font-mono"
                             >
                                 <option value="A1" class="bg-slate-900 text-white">A1 (841 x 594 mm)</option>
                                 <option value="A2" class="bg-slate-900 text-white">A2 (594 x 420 mm)</option>
@@ -1011,7 +1027,7 @@ const getTypeColor = (type: string) => {
                             </label>
                             <select
                                 v-model="form.orientation"
-                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white font-mono"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white font-mono"
                             >
                                 <option value="landscape" class="bg-slate-900 text-white">Landscape</option>
                                 <option value="portrait" class="bg-slate-900 text-white">Portrait</option>
@@ -1024,7 +1040,7 @@ const getTypeColor = (type: string) => {
                             </label>
                             <select
                                 v-model="form.unit"
-                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-amber-400 font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-amber-400 font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white"
                             >
                                 <option value="m" class="bg-slate-900 text-white">Meter (m)</option>
                                 <option value="cm" class="bg-slate-900 text-white">Sentimeter (cm)</option>
@@ -1088,7 +1104,7 @@ const getTypeColor = (type: string) => {
                         <select
                             v-model="editForm.project_id"
                             required
-                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white font-medium"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white font-medium"
                         >
                             <option v-for="p in projects" :key="p.id" :value="p.id" class="bg-slate-900 text-white">
                                 {{ p.title }}
@@ -1143,7 +1159,7 @@ const getTypeColor = (type: string) => {
                             </label>
                             <select
                                 v-model="editForm.type"
-                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white"
                             >
                                 <option value="plan" class="bg-slate-900 text-white">Denah (Floor Plan)</option>
                                 <option value="elevation" class="bg-slate-900 text-white">Tampak (Elevation)</option>
@@ -1158,7 +1174,7 @@ const getTypeColor = (type: string) => {
                             </label>
                             <select
                                 v-model="editForm.unit"
-                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-amber-500/30 text-sm text-amber-400 font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-amber-500/30 text-sm text-amber-400 font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/40 cursor-pointer [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white"
                             >
                                 <option value="m" class="bg-slate-900 text-white">Meter (m) - Standar Arsitek</option>
                                 <option value="cm" class="bg-slate-900 text-white">Sentimeter (cm) - Standar Sipil</option>
@@ -1175,7 +1191,7 @@ const getTypeColor = (type: string) => {
                             </label>
                             <select
                                 v-model="editForm.scale"
-                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 font-mono cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 font-mono cursor-pointer [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white"
                             >
                                 <option value="1:20" class="bg-slate-900 text-white">1:20 (Detail Khusus)</option>
                                 <option value="1:50" class="bg-slate-900 text-white">1:50 (Detail Ruang)</option>
@@ -1191,7 +1207,7 @@ const getTypeColor = (type: string) => {
                             </label>
                             <select
                                 v-model="editForm.paper_size"
-                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 font-mono cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 dark:border-white/10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 font-mono cursor-pointer [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white"
                             >
                                 <option value="A4" class="bg-slate-900 text-white">A4 (297 × 210 mm)</option>
                                 <option value="A3" class="bg-slate-900 text-white">A3 (420 × 297 mm)</option>

@@ -30,32 +30,59 @@ class DrawingSheetController extends Controller
     /**
      * Tampilkan halaman daftar lembar kerja 2D.
      */
-    public function index(Request $request): Response
+    public function index(Request $request): Response|JsonResponse
     {
         $user = $request->user();
         $hasAccess = $this->accessService->hasPlanAccess($user);
 
-        // Ambil project yang dimiliki atau diundang
-        $projects = Project::where('user_id', $user->id)
-            ->select(['id', 'title', 'client_name', 'client_address'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-
         $selectedProjectId = $request->query('project_id');
+        $search = trim((string) ($request->query('search') ?? $request->query('q', '')));
+        $type = $request->query('type');
 
-        $query = DrawingSheet::with([
-            'project:id,title,description,client_name,client_address',
-            'elements' => function ($q) {
-                $q->orderBy('sort_order');
-            },
-            'captures' => function ($q) {
-                $q->select(['id', 'project_id', 'drawing_sheet_id', 'room_element_id', 'code', 'room_name', 'captured_hour', 'file_path', 'ai_rendered_path', 'sort_order'])
-                  ->orderBy('sort_order')
-                  ->orderBy('created_at');
-            },
-        ])
+        // Query ringan untuk DrawingSheet: hanya kolom yang dibutuhkan dan relasi yang dioptimasi
+        $query = DrawingSheet::query()
+            ->select([
+                'id',
+                'project_id',
+                'user_id',
+                'title',
+                'type',
+                'scale',
+                'paper_size',
+                'orientation',
+                'width',
+                'height',
+                'grid_spacing',
+                'unit',
+                'image_path',
+                'sort_order',
+                'created_at',
+                'updated_at',
+            ])
+            ->with([
+                'project:id,title,client_name,client_address',
+                'elements' => function ($q) {
+                    $q->select(['id', 'drawing_sheet_id', 'type', 'data', 'sort_order'])
+                      ->orderBy('sort_order');
+                },
+                'captures' => function ($q) {
+                    $q->select([
+                        'id',
+                        'project_id',
+                        'drawing_sheet_id',
+                        'room_element_id',
+                        'code',
+                        'room_name',
+                        'captured_hour',
+                        'file_path',
+                        'ai_rendered_path',
+                        'sort_order',
+                    ])
+                    ->orderBy('sort_order')
+                    ->orderBy('created_at');
+                },
+            ])
             ->withCount('captures')
-
             ->where(function ($q) use ($user) {
                 $q->where('user_id', $user->id)
                   ->orWhereHas('project.invitedClients', function ($clientQ) use ($user) {
@@ -64,13 +91,43 @@ class DrawingSheetController extends Controller
                   });
             });
 
-        if ($selectedProjectId) {
+        // Filter Project
+        if (!empty($selectedProjectId)) {
             $query->where('project_id', $selectedProjectId);
+        }
+
+        // Filter Type (plan, elevation, section)
+        if (!empty($type) && in_array($type, ['plan', 'elevation', 'section'], true)) {
+            $query->where('type', $type);
+        }
+
+        // Filter Pencarian Server-side (judul lembar, judul proyek, atau nama klien)
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhereHas('project', function ($pQ) use ($search) {
+                      $pQ->where('title', 'like', "%{$search}%")
+                         ->orWhere('client_name', 'like', "%{$search}%");
+                  });
+            });
         }
 
         $sheets = $query->orderBy('updated_at', 'desc')->paginate(12)->withQueryString();
 
-        // Ambil semua visual 3D dari proyek-proyek yang relevan untuk modal penautan
+        // Jika request AJAX / JSON (infinite scroll atau live search), kembalikan payload JSON murni yang super ringan
+        if ($request->wantsJson() && ! $request->header('X-Inertia')) {
+            return response()->json([
+                'sheets' => $sheets,
+            ]);
+        }
+
+        // Ambil project yang dimiliki atau diundang untuk opsi dropdown filter & form
+        $projects = Project::where('user_id', $user->id)
+            ->select(['id', 'title', 'client_name', 'client_address'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Ambil visual 3D dari proyek-proyek yang relevan untuk modal penautan
         $allProjectCaptures = \App\Domains\Project\Models\ProjectCapture::whereIn('project_id', $projects->pluck('id'))
             ->select(['id', 'project_id', 'drawing_sheet_id', 'room_element_id', 'code', 'room_name', 'captured_hour', 'file_path', 'ai_rendered_path', 'sort_order'])
             ->orderBy('sort_order')
@@ -82,6 +139,11 @@ class DrawingSheetController extends Controller
             'projects'           => $projects,
             'allProjectCaptures' => $allProjectCaptures,
             'selectedProjectId'  => $selectedProjectId,
+            'filters'            => [
+                'search'     => $search,
+                'type'       => $type ?? 'all',
+                'project_id' => $selectedProjectId,
+            ],
             'hasAccess'          => $hasAccess,
         ]);
     }

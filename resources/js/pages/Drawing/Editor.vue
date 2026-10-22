@@ -4,6 +4,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { toast } from 'vue-sonner';
 import Konva from 'konva';
 import jsPDF from 'jspdf';
+import FurnitureShopDrawingEditor from '@/components/drawing/FurnitureShopDrawingEditor.vue';
 import {
     DraftingCompass,
     ArrowLeft,
@@ -126,6 +127,27 @@ const props = defineProps<{
     canEdit: boolean;
     architect?: ArchitectProfile | null;
 }>();
+
+// Mode Editor: Gambar Kerja (Shop Drawing) vs CAD Denah Arsitektural
+const activeEditorMode = ref<'shop_drawing' | 'cad'>(
+    (props.sheet.id === '01a16100-3421-70f5-ac75-f9db46e8c46f' ||
+     props.sheet.type === 'furniture' ||
+     props.sheet.type === 'shop_drawing' ||
+     (typeof window !== 'undefined' && window.innerWidth < 1024))
+        ? 'shop_drawing'
+        : 'shop_drawing'
+);
+
+function switchEditorMode(mode: 'shop_drawing' | 'cad') {
+    activeEditorMode.value = mode;
+    if (mode === 'cad') {
+        nextTick(() => {
+            initCanvas();
+            restoreFromState(elementList.value, true);
+            setTimeout(zoomToFit, 100);
+        });
+    }
+}
 
 // Tool state
 type ToolType =
@@ -786,8 +808,15 @@ const layersVisibility = ref({
 const showLayerPanel = ref(false);
 const showHelpModal = ref(false);
 
-// Local element memory list
-const elementList = ref<Array<{ id: string; type: string; data: Record<string, any>; sort_order: number }>>([]);
+// Local element memory list (initialized immediately from props for both CAD and Shop Drawing modes)
+const elementList = ref<Array<{ id: string; type: string; data: Record<string, any>; sort_order: number }>>(
+    (props.elements || []).map((el: any, index: number) => ({
+        id: el.id,
+        type: el.type,
+        data: typeof el.data === 'string' ? JSON.parse(el.data) : (el.data || {}),
+        sort_order: el.sort_order ?? index,
+    }))
+);
 
 // ── UNDO / REDO HISTORY STACK ───────────────────────────────────────────────
 const historyStack = ref<string[]>([]);
@@ -4462,9 +4491,24 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <Head :title="`${sheet.title} — Lembar Kerja CAD 2D`" />
+    <Head :title="`${sheet.title} — ${activeEditorMode === 'shop_drawing' ? 'Gambar Kerja' : 'Lembar Kerja CAD 2D'}`" />
 
-    <div class="h-screen w-screen flex flex-col bg-slate-900 text-slate-100 overflow-hidden select-none">
+    <!-- TAMPILAN GAMBAR KERJA (SHOP DRAWING & DAFTAR POTONG INTERIOR / MOBILE-FRIENDLY) -->
+    <FurnitureShopDrawingEditor
+        v-if="activeEditorMode === 'shop_drawing'"
+        :sheet="currentSheet"
+        :project="project"
+        :elements="elementList"
+        :canEdit="canEdit"
+        :architect="architect"
+        @switchMode="switchEditorMode"
+    />
+
+    <!-- TAMPILAN CAD DENAH ARSITEKTUR TRADISIONAL (KONVA JS) -->
+    <div
+        v-else
+        class="h-screen w-screen flex flex-col bg-slate-900 text-slate-100 overflow-hidden select-none"
+    >
         <!-- TOP CAD HEADER BAR -->
         <!-- TOP CAD 2-ROW HEADER & RIBBON TOOLBAR -->
         <header class="relative z-30 shrink-0 bg-slate-950 border-b border-white/10 flex flex-col">
@@ -4486,6 +4530,18 @@ onUnmounted(() => {
 
                     <div class="flex items-center gap-2 min-w-0">
                         <h2 class="text-xs sm:text-sm font-bold text-white tracking-tight truncate max-w-[150px] sm:max-w-xs">{{ currentSheet.title }}</h2>
+
+                        <!-- Tombol Beralih ke Gambar Kerja -->
+                        <button
+                            type="button"
+                            @click="switchEditorMode('shop_drawing')"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-colors cursor-pointer shadow-sm shrink-0"
+                            title="Buka Tampilan Gambar Kerja & Daftar Potong Interior"
+                        >
+                            <Sparkles class="w-3.5 h-3.5 text-amber-400" />
+                            <span>Gambar Kerja</span>
+                        </button>
+
                         <button
                             v-if="canEdit"
                             type="button"
@@ -4508,7 +4564,7 @@ onUnmounted(() => {
                             <select
                                 :value="sheet.id"
                                 @change="switchSheet"
-                                class="bg-slate-900 border border-violet-500/40 text-violet-300 hover:text-white hover:border-violet-400 text-[11px] rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-400 font-medium cursor-pointer transition-colors shadow-sm max-w-[140px] sm:max-w-[190px] truncate"
+                                class="bg-slate-900 border border-violet-500/40 text-violet-300 hover:text-white hover:border-violet-400 text-[11px] rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-400 font-medium cursor-pointer transition-colors shadow-sm max-w-[140px] sm:max-w-[190px] truncate [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white"
                                 title="Pilih Lembar Kerja Lainnya"
                             >
                                 <option
@@ -4812,7 +4868,7 @@ onUnmounted(() => {
                             <select
                                 :value="paperSize"
                                 @change="applyPaperPreset(($event.target as HTMLSelectElement).value)"
-                                class="bg-white/5 border border-white/10 rounded-lg px-2 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer shrink-0"
+                                class="bg-slate-900 border border-white/10 rounded-lg px-2 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer shrink-0 [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white"
                                 title="Preset Ukuran Kertas Standar ISO"
                             >
                                 <option value="A0" class="bg-slate-900 text-white">A0 (3564 × 2520)</option>
@@ -6012,11 +6068,11 @@ onUnmounted(() => {
                             </label>
                             <select
                                 v-model="newSheetForm.scale"
-                                class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-400 cursor-pointer"
+                                class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-400 cursor-pointer [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white"
                             >
-                                <option value="1:50">1:50 (Detail)</option>
-                                <option value="1:100">1:100 (Standar)</option>
-                                <option value="1:200">1:200 (Site)</option>
+                                <option value="1:50" class="bg-slate-900 text-white">1:50 (Detail)</option>
+                                <option value="1:100" class="bg-slate-900 text-white">1:100 (Standar)</option>
+                                <option value="1:200" class="bg-slate-900 text-white">1:200 (Site)</option>
                             </select>
                         </div>
 
@@ -6026,13 +6082,13 @@ onUnmounted(() => {
                             </label>
                             <select
                                 v-model="newSheetForm.paper_size"
-                                class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-400 cursor-pointer"
+                                class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-400 cursor-pointer [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white"
                             >
-                                <option value="A0">A0</option>
-                                <option value="A1">A1</option>
-                                <option value="A2">A2</option>
-                                <option value="A3">A3</option>
-                                <option value="A4">A4</option>
+                                <option value="A0" class="bg-slate-900 text-white">A0</option>
+                                <option value="A1" class="bg-slate-900 text-white">A1</option>
+                                <option value="A2" class="bg-slate-900 text-white">A2</option>
+                                <option value="A3" class="bg-slate-900 text-white">A3</option>
+                                <option value="A4" class="bg-slate-900 text-white">A4</option>
                             </select>
                         </div>
                     </div>

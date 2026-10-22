@@ -25,6 +25,8 @@ import {
     Users,
     X,
     ClipboardList,
+    Loader2,
+    Search,
 } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -131,6 +133,14 @@ interface TransactionPage {
 const iconButtonClass =
     'border-slate-200 bg-white text-xs text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 dark:border-white/15 dark:bg-white/5 dark:text-neutral-300 dark:hover:border-white/30 dark:hover:bg-white/10 dark:hover:text-white'
 
+interface PaginatedData<T> {
+    data: T[];
+    current_page: number;
+    last_page: number;
+    total: number;
+    per_page?: number;
+}
+
 const props = defineProps<{
     auth?: {
         user?: {
@@ -141,8 +151,10 @@ const props = defineProps<{
             is_pro: boolean;
         };
     };
-    ownedProjects?: OwnedProject[];
-    clientProjects?: ClientProject[];
+    ownedProjects?: PaginatedData<OwnedProject> | OwnedProject[];
+    clientProjects?: PaginatedData<ClientProject> | ClientProject[];
+    search?: string;
+    tab?: string;
     stats?: Stats;
     transactions?: TransactionPage;
 }>();
@@ -150,11 +162,29 @@ const props = defineProps<{
 const page = usePage();
 const flashSuccess = computed(() => (page.props as any).flash?.success);
 
+const extractData = <T>(val: PaginatedData<T> | T[] | undefined): T[] => {
+    if (!val) return [];
+    return Array.isArray(val) ? val : (val.data || []);
+};
+
 // ── Local copy of ownedProjects agar bisa di-mutate realtime ──────────────
-const localOwnedProjects = ref<OwnedProject[]>([]);
+const localOwnedProjects = ref<OwnedProject[]>(extractData(props.ownedProjects));
 
 // ── Local copy of clientProjects untuk realtime update tab Kolaborasi ──────
-const localClientProjects = ref<ClientProject[]>([]);
+const localClientProjects = ref<ClientProject[]>(extractData(props.clientProjects));
+
+const ownedPage = ref(!Array.isArray(props.ownedProjects) ? props.ownedProjects?.current_page || 1 : 1);
+const ownedLastPage = ref(!Array.isArray(props.ownedProjects) ? props.ownedProjects?.last_page || 1 : 1);
+const hasMoreOwned = ref(ownedPage.value < ownedLastPage.value);
+
+const clientPage = ref(!Array.isArray(props.clientProjects) ? props.clientProjects?.current_page || 1 : 1);
+const clientLastPage = ref(!Array.isArray(props.clientProjects) ? props.clientProjects?.last_page || 1 : 1);
+const hasMoreClient = ref(clientPage.value < clientLastPage.value);
+
+const isLoadingMore = ref(false);
+const isSearching = ref(false);
+const sentinelRef = ref<HTMLElement | null>(null);
+let observer: IntersectionObserver | null = null;
 
 // ── Realtime: update status klien saat event ClientStatusUpdated diterima ──
 function handleClientStatusUpdated(payload: {
@@ -208,8 +238,8 @@ function handleAccessRevoked(payload: { project_id: string; invitation_id: strin
 
 onMounted(() => {
     // Sync local copy dari props awal
-    localOwnedProjects.value = [...(props.ownedProjects ?? [])];
-    localClientProjects.value = [...(props.clientProjects ?? [])];
+    localOwnedProjects.value = [...extractData(props.ownedProjects)];
+    localClientProjects.value = [...extractData(props.clientProjects)];
 
     // Subscribe ke private channel user — satu channel untuk semua event user ini
     const userId = (page.props.auth as any)?.user?.id;
@@ -219,6 +249,20 @@ onMounted(() => {
             .listen('.invitation.received', handleInvitationReceived)
             .listen('.access.revoked', handleAccessRevoked);
     }
+
+    // Observer untuk Infinite Scroll
+    observer = new IntersectionObserver(
+        (entries) => {
+            if (entries[0]?.isIntersecting) {
+                loadMore();
+            }
+        },
+        { rootMargin: '250px' }
+    );
+
+    if (sentinelRef.value) {
+        observer.observe(sentinelRef.value);
+    }
 });
 
 onBeforeUnmount(() => {
@@ -226,13 +270,24 @@ onBeforeUnmount(() => {
     if (userId) {
         echo.leave(`App.Models.User.${userId}`);
     }
+    if (debounceTimer) clearTimeout(debounceTimer);
+    if (observer) {
+        observer.disconnect();
+        observer = null;
+    }
 });
 
 // Sync local copy saat Inertia props diperbarui (invite/revoke/page reload)
 watch(() => props.ownedProjects, (updated) => {
     if (!updated) return;
+    const items = extractData(updated);
+    if (!Array.isArray(updated)) {
+        ownedPage.value = updated.current_page || 1;
+        ownedLastPage.value = updated.last_page || 1;
+        hasMoreOwned.value = ownedPage.value < ownedLastPage.value;
+    }
     // Merge: pertahankan status realtime yang sudah diupdate, update sisanya dari props
-    localOwnedProjects.value = updated.map(proj => {
+    localOwnedProjects.value = items.map(proj => {
         const existing = localOwnedProjects.value.find(p => p.id === proj.id);
         if (!existing) return proj;
         // Gabungkan: clients dari props tapi status bisa sudah diupdate realtime
@@ -253,46 +308,151 @@ watch(() => props.ownedProjects, (updated) => {
 // Sync clientProjects dari props saat Inertia reload
 watch(() => props.clientProjects, (updated) => {
     if (!updated) return;
+    const items = extractData(updated);
+    if (!Array.isArray(updated)) {
+        clientPage.value = updated.current_page || 1;
+        clientLastPage.value = updated.last_page || 1;
+        hasMoreClient.value = clientPage.value < clientLastPage.value;
+    }
     // Merge: tambahkan item baru dari props, pertahankan yang sudah ada via realtime
     const existingIds = new Set(localClientProjects.value.map(p => p.invitation_id));
-    const newItems = updated.filter(p => !existingIds.has(p.invitation_id));
+    const newItems = items.filter(p => !existingIds.has(p.invitation_id));
     if (newItems.length > 0) {
         localClientProjects.value.push(...newItems);
     }
     // Update status item yang sudah ada
     localClientProjects.value = localClientProjects.value.map(local => {
-        const fresh = updated.find(p => p.invitation_id === local.invitation_id);
+        const fresh = items.find(p => p.invitation_id === local.invitation_id);
         return fresh ?? local;
     });
 }, { deep: true });
 
 // Active Tab: 'architect' | 'client' | 'billing'
-const activeTab = ref<'architect' | 'client' | 'billing'>('architect');
-const searchQuery = ref('');
+const activeTab = ref<'architect' | 'client' | 'billing'>((props.tab as any) || 'architect');
+const searchQuery = ref(props.search || '');
 
-// Filtered lists
-const filteredOwnedProjects = computed(() => {
-    const list = localOwnedProjects.value;
-    if (!searchQuery.value.trim()) return list;
-    const query = searchQuery.value.toLowerCase();
-    return list.filter(
-        (p) =>
-            p.title.toLowerCase().includes(query) ||
-            (p.description && p.description.toLowerCase().includes(query))
-    );
+let currentRequestId = 0;
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Query AJAX super ringan untuk live search & infinite scroll dashboard
+async function fetchDashboardProjects(page: number, append = false) {
+    if (activeTab.value === 'billing') return;
+
+    const reqId = ++currentRequestId;
+    if (append) {
+        isLoadingMore.value = true;
+    } else {
+        isSearching.value = true;
+    }
+
+    const currentTab = activeTab.value;
+
+    try {
+        const params = new URLSearchParams();
+        params.set('tab', currentTab);
+        if (searchQuery.value.trim()) params.set('search', searchQuery.value.trim());
+        params.set('page', page.toString());
+
+        // Update URL di browser history secara halus tanpa reload
+        const newUrl = `/dashboard${params.toString() ? '?' + params.toString() : ''}`;
+        window.history.replaceState({}, '', newUrl);
+
+        const res = await fetch(`/dashboard?${params.toString()}`, {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+
+        if (!res.ok) throw new Error('Gagal memuat proyek dashboard');
+
+        const json = await res.json();
+        if (reqId !== currentRequestId) return; // Abaikan jika ada request baru
+
+        if (currentTab === 'architect' && json.ownedProjects) {
+            const incoming: OwnedProject[] = json.ownedProjects.data || [];
+            ownedPage.value = json.ownedProjects.current_page || page;
+            ownedLastPage.value = json.ownedProjects.last_page || 1;
+            hasMoreOwned.value = ownedPage.value < ownedLastPage.value;
+
+            if (append) {
+                const existingIds = new Set(localOwnedProjects.value.map(p => p.id));
+                const newUnique = incoming.filter(p => !existingIds.has(p.id));
+                localOwnedProjects.value.push(...newUnique);
+            } else {
+                localOwnedProjects.value = incoming;
+            }
+        } else if (currentTab === 'client' && json.clientProjects) {
+            const incoming: ClientProject[] = json.clientProjects.data || [];
+            clientPage.value = json.clientProjects.current_page || page;
+            clientLastPage.value = json.clientProjects.last_page || 1;
+            hasMoreClient.value = clientPage.value < clientLastPage.value;
+
+            if (append) {
+                const existingIds = new Set(localClientProjects.value.map(p => p.id));
+                const newUnique = incoming.filter(p => !existingIds.has(p.id));
+                localClientProjects.value.push(...newUnique);
+            } else {
+                localClientProjects.value = incoming;
+            }
+        }
+    } catch (err) {
+        if (reqId === currentRequestId) {
+            console.error('Error fetching dashboard projects:', err);
+        }
+    } finally {
+        if (reqId === currentRequestId) {
+            isLoadingMore.value = false;
+            isSearching.value = false;
+        }
+    }
+}
+
+function handleSearchInput() {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+        if (activeTab.value === 'architect') ownedPage.value = 1;
+        if (activeTab.value === 'client') clientPage.value = 1;
+        fetchDashboardProjects(1, false);
+    }, 350);
+}
+
+function clearSearch() {
+    searchQuery.value = '';
+    if (debounceTimer) clearTimeout(debounceTimer);
+    if (activeTab.value === 'architect') ownedPage.value = 1;
+    if (activeTab.value === 'client') clientPage.value = 1;
+    fetchDashboardProjects(1, false);
+}
+
+function switchTab(newTab: 'architect' | 'client' | 'billing') {
+    activeTab.value = newTab;
+    if (newTab !== 'billing') {
+        if (newTab === 'architect') ownedPage.value = 1;
+        if (newTab === 'client') clientPage.value = 1;
+        fetchDashboardProjects(1, false);
+    }
+}
+
+function loadMore() {
+    if (isLoadingMore.value || isSearching.value || activeTab.value === 'billing') return;
+    if (activeTab.value === 'architect' && hasMoreOwned.value) {
+        fetchDashboardProjects(ownedPage.value + 1, true);
+    } else if (activeTab.value === 'client' && hasMoreClient.value) {
+        fetchDashboardProjects(clientPage.value + 1, true);
+    }
+}
+
+watch(sentinelRef, (newEl) => {
+    if (observer) {
+        observer.disconnect();
+        if (newEl) observer.observe(newEl);
+    }
 });
 
-const filteredClientProjects = computed(() => {
-    const list = localClientProjects.value;
-    if (!searchQuery.value.trim()) return list;
-    const query = searchQuery.value.toLowerCase();
-    return list.filter(
-        (p) =>
-            p.title.toLowerCase().includes(query) ||
-            p.architect_name.toLowerCase().includes(query) ||
-            p.architect_email.toLowerCase().includes(query)
-    );
-});
+// Filtered lists (Server-Side)
+const filteredOwnedProjects = computed(() => localOwnedProjects.value);
+const filteredClientProjects = computed(() => localClientProjects.value);
 
 // Modal: Create Project
 const isCreateModalOpen = ref(false);
@@ -545,7 +705,7 @@ function submitInviteClient() {
             suggestEmpty.value = false;
             // Refresh dari localOwnedProjects dulu, fallback ke props
             const updated = localOwnedProjects.value.find((p) => p.id === activeProjectForClients.value?.id)
-                ?? props.ownedProjects?.find((p) => p.id === activeProjectForClients.value?.id);
+                ?? extractData(props.ownedProjects).find((p) => p.id === activeProjectForClients.value?.id);
             if (updated) {
                 activeProjectForClients.value = updated;
             }
@@ -572,7 +732,7 @@ async function revokeClient(client: ProjectClientItem) {
         onSuccess: () => {
             toast.success(`Akses klien ${client.email} berhasil dicabut.`);
             const updated = localOwnedProjects.value.find((p) => p.id === activeProjectForClients.value?.id)
-                ?? props.ownedProjects?.find((p) => p.id === activeProjectForClients.value?.id);
+                ?? extractData(props.ownedProjects).find((p) => p.id === activeProjectForClients.value?.id);
             if (updated) {
                 activeProjectForClients.value = updated;
             }
@@ -612,7 +772,7 @@ async function deleteProject(project: any) {
         },
         onError: () => {
             // Rollback: kembalikan project ke list jika gagal
-            localOwnedProjects.value = [...(props.ownedProjects ?? [])];
+            localOwnedProjects.value = [...extractData(props.ownedProjects)];
             toast.error('Gagal menghapus proyek. Coba lagi.');
         },
     });
@@ -889,14 +1049,14 @@ const { isLoading } = usePageLoading(80);
                                         : 'bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-neutral-300',
                                 ]"
                             >
-                                {{ localOwnedProjects.length }}
+                                {{ stats?.owned_count ?? localOwnedProjects.length }}
                             </span>
                         </button>
 
                         <button
-                            @click="activeTab = 'client'"
+                            @click="switchTab('client')"
                             :class="[
-                                'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all duration-300 border',
+                                'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all duration-300 border cursor-pointer',
                                 activeTab === 'client'
                                     ? 'bg-slate-900 dark:bg-white text-white dark:text-black shadow-sm dark:shadow-[0_0_25px_rgba(255,255,255,0.2)] border-slate-900 dark:border-white'
                                     : 'text-slate-500 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-neutral-100 border-slate-200 dark:border-white/15',
@@ -912,15 +1072,15 @@ const { isLoading } = usePageLoading(80);
                                         : 'bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-neutral-300',
                                 ]"
                             >
-                                {{ localClientProjects.length }}
+                                {{ stats?.client_count ?? localClientProjects.length }}
                             </span>
                         </button>
 
                         <!-- Tab 3: Riwayat Pembelian -->
                         <button
-                            @click="activeTab = 'billing'"
+                            @click="switchTab('billing')"
                             :class="[
-                                'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all duration-300 border',
+                                'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all duration-300 border cursor-pointer',
                                 activeTab === 'billing'
                                     ? 'bg-slate-900 dark:bg-white text-white dark:text-black shadow-sm dark:shadow-[0_0_25px_rgba(255,255,255,0.2)] border-slate-900 dark:border-white'
                                     : 'text-slate-500 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-neutral-100 border-slate-200 dark:border-white/15',
@@ -942,12 +1102,31 @@ const { isLoading } = usePageLoading(80);
                     </div>
 
                     <!-- Search box (sembunyikan di tab billing) -->
-                    <div class="w-full sm:w-64" v-if="activeTab !== 'billing'">
-                        <Input
-                            v-model="searchQuery"
-                            placeholder="Cari judul proyek..."
-                            class="h-9 text-xs bg-white dark:bg-white/5 border-slate-200 dark:border-white/15 text-slate-900 dark:text-neutral-100 placeholder:text-slate-400 dark:placeholder:text-neutral-400"
-                        />
+                    <div class="w-full sm:w-72" v-if="activeTab !== 'billing'">
+                        <div class="relative">
+                            <Search class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <Input
+                                v-model="searchQuery"
+                                @input="handleSearchInput"
+                                :placeholder="activeTab === 'architect' ? 'Cari proyek saya...' : 'Cari proyek kolaborasi...'"
+                                class="h-9 text-xs pl-8.5 pr-8 bg-white dark:bg-white/5 border-slate-200 dark:border-white/15 text-slate-900 dark:text-neutral-100 placeholder:text-slate-400 dark:placeholder:text-neutral-400"
+                            />
+                            <!-- Spinner saat live search -->
+                            <Loader2
+                                v-if="isSearching"
+                                class="w-3.5 h-3.5 text-violet-500 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2"
+                            />
+                            <!-- Tombol Clear -->
+                            <button
+                                v-else-if="searchQuery"
+                                type="button"
+                                @click="clearSearch"
+                                class="p-0.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-white absolute right-2 top-1/2 -translate-y-1/2 transition-colors cursor-pointer"
+                                title="Hapus pencarian"
+                            >
+                                <X class="w-3.5 h-3.5" />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -961,29 +1140,59 @@ const { isLoading } = usePageLoading(80);
                         <div class="flex h-16 w-16 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/30">
                             <FolderOpen class="h-8 w-8" />
                         </div>
-                        <h3 class="mt-4 text-lg font-bold text-slate-900 dark:text-neutral-100">Belum Ada Proyek 3D</h3>
+                        <h3 class="mt-4 text-lg font-bold text-slate-900 dark:text-neutral-100">
+                            {{ searchQuery ? 'Tidak Ditemukan' : 'Belum Ada Proyek 3D' }}
+                        </h3>
                         <p class="mt-2 max-w-md text-sm text-slate-500 dark:text-neutral-300 leading-relaxed">
-                            Unggah model 3D pertama Anda (.glb) untuk memvisualisasikan arsitektur dan undang Klien untuk memberikan pin komentar revisi.
+                            {{ searchQuery ? `Tidak ada proyek arsitek yang cocok dengan "${searchQuery}".` : 'Unggah model 3D pertama Anda (.glb) untuk memvisualisasikan arsitektur dan undang Klien untuk memberikan pin komentar revisi.' }}
                         </p>
-                        <Button
-                            @click="isCreateModalOpen = true"
-                            class="mt-5 bg-slate-900 dark:bg-white text-white dark:text-black hover:bg-slate-700 dark:hover:bg-neutral-100 font-semibold shadow-sm dark:shadow-[0_0_25px_rgba(255,255,255,0.2)] rounded-full"
-                            :disabled="stats ? !stats.can_create_project : false"
-                        >
-                            <Plus class="mr-1.5 h-4 w-4" /> Unggah Proyek Pertama
-                        </Button>
+                        <div class="mt-5 flex items-center gap-3">
+                            <Button v-if="searchQuery" @click="clearSearch" variant="outline" class="rounded-full cursor-pointer">
+                                <X class="mr-1.5 h-4 w-4" /> Reset Pencarian
+                            </Button>
+                            <Button
+                                v-if="!searchQuery"
+                                @click="isCreateModalOpen = true"
+                                class="bg-slate-900 dark:bg-white text-white dark:text-black hover:bg-slate-700 dark:hover:bg-neutral-100 font-semibold shadow-sm dark:shadow-[0_0_25px_rgba(255,255,255,0.2)] rounded-full cursor-pointer"
+                                :disabled="stats ? !stats.can_create_project : false"
+                            >
+                                <Plus class="mr-1.5 h-4 w-4" /> Unggah Proyek Pertama
+                            </Button>
+                        </div>
                     </div>
 
                     <!-- Projects Grid -->
-                    <div v-else class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        <ProjectCard
-                            v-for="project in filteredOwnedProjects"
-                            :key="project.id"
-                            :project="project"
-                            @edit="openEditModal"
-                            @delete="deleteProject"
-                            @manage-clients="openClientModal"
-                        />
+                    <div v-else class="space-y-6">
+                        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                            <ProjectCard
+                                v-for="project in filteredOwnedProjects"
+                                :key="project.id"
+                                :project="project"
+                                @edit="openEditModal"
+                                @delete="deleteProject"
+                                @manage-clients="openClientModal"
+                            />
+                        </div>
+
+                        <!-- Infinite Scroll Sentinel & Status (Architect) -->
+                        <div
+                            ref="sentinelRef"
+                            class="py-8 flex flex-col items-center justify-center min-h-[64px]"
+                        >
+                            <div
+                                v-if="isLoadingMore"
+                                class="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-white dark:bg-[#14151f] border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-sm"
+                            >
+                                <Loader2 class="w-4 h-4 animate-spin text-violet-500" />
+                                <span>Memuat proyek berikutnya...</span>
+                            </div>
+                            <div
+                                v-else-if="!hasMoreOwned && localOwnedProjects.length > 0"
+                                class="text-xs text-slate-400 dark:text-slate-500 font-medium"
+                            >
+                                Semua proyek arsitek telah dimuat ({{ localOwnedProjects.length }} total)
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -997,103 +1206,132 @@ const { isLoading } = usePageLoading(80);
                         <div class="flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-500/30">
                             <Users class="h-8 w-8" />
                         </div>
-                        <h3 class="mt-4 text-lg font-bold text-slate-900 dark:text-neutral-100">Belum Ada Proyek Kolaborasi</h3>
+                        <h3 class="mt-4 text-lg font-bold text-slate-900 dark:text-neutral-100">
+                            {{ searchQuery ? 'Tidak Ditemukan' : 'Belum Ada Proyek Kolaborasi' }}
+                        </h3>
                         <p class="mt-2 max-w-md text-sm text-slate-500 dark:text-neutral-300 leading-relaxed">
-                            Ketika seorang arsitek mengundang email Anda (<strong class="text-slate-700 dark:text-neutral-100">{{ auth?.user?.email }}</strong>) ke proyek mereka, proyek tersebut akan langsung muncul di sini secara otomatis.
+                            {{ searchQuery ? `Tidak ada proyek kolaborasi yang cocok dengan "${searchQuery}".` : `Ketika seorang arsitek mengundang email Anda (${auth?.user?.email}) ke proyek mereka, proyek tersebut akan langsung muncul di sini secara otomatis.` }}
                         </p>
+                        <div v-if="searchQuery" class="mt-5">
+                            <Button @click="clearSearch" variant="outline" class="rounded-full cursor-pointer">
+                                <X class="mr-1.5 h-4 w-4" /> Reset Pencarian
+                            </Button>
+                        </div>
                     </div>
 
                     <!-- Client Projects Grid -->
-                    <div v-else class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        <div
-                            v-for="project in filteredClientProjects"
-                            :key="project.invitation_id"
-                            class="flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/[0.04] shadow-sm dark:shadow-lg transition-all duration-300 hover:shadow-md dark:hover:shadow-[0_0_45px_rgba(59,130,246,0.25)] hover:border-slate-300 dark:hover:border-white/30 hover:scale-[1.02] group"
-                        >
-                            <div>
-                                <!-- Header Status -->
-                                <div class="flex items-center justify-between border-b border-slate-100 dark:border-white/10 p-4 bg-slate-50 dark:bg-white/[0.02]">
-                                    <div class="flex items-center gap-1.5">
-                                        <Badge
-                                            v-if="project.invitation_status === 'accepted'"
-                                            class="bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[11px] border border-emerald-200 dark:border-emerald-500/30 font-medium"
-                                        >
-                                            <CheckCircle2 class="mr-1 h-3 w-3" /> Akses Aktif (Reviewer)
-                                        </Badge>
-                                        <Badge
-                                            v-else
-                                            class="bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[11px] border border-amber-200 dark:border-amber-500/30 font-medium"
-                                        >
-                                            <Clock class="mr-1 h-3 w-3" /> Menunggu Konfirmasi
-                                        </Badge>
+                    <div v-else class="space-y-6">
+                        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                            <div
+                                v-for="project in filteredClientProjects"
+                                :key="project.invitation_id"
+                                class="flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/[0.04] shadow-sm dark:shadow-lg transition-all duration-300 hover:shadow-md dark:hover:shadow-[0_0_45px_rgba(59,130,246,0.25)] hover:border-slate-300 dark:hover:border-white/30 hover:scale-[1.02] group"
+                            >
+                                <div>
+                                    <!-- Header Status -->
+                                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-white/10 p-4 bg-slate-50 dark:bg-white/[0.02]">
+                                        <div class="flex items-center gap-1.5">
+                                            <Badge
+                                                v-if="project.invitation_status === 'accepted'"
+                                                class="bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[11px] border border-emerald-200 dark:border-emerald-500/30 font-medium"
+                                            >
+                                                <CheckCircle2 class="mr-1 h-3 w-3" /> Akses Aktif (Reviewer)
+                                            </Badge>
+                                            <Badge
+                                                v-else
+                                                class="bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[11px] border border-amber-200 dark:border-amber-500/30 font-medium"
+                                            >
+                                                <Clock class="mr-1 h-3 w-3" /> Menunggu Konfirmasi
+                                            </Badge>
+                                        </div>
+                                        <span class="text-[11px] text-slate-400 dark:text-neutral-400">{{ project.invited_at }}</span>
                                     </div>
-                                    <span class="text-[11px] text-slate-400 dark:text-neutral-400">{{ project.invited_at }}</span>
+
+                                    <!-- Body -->
+                                    <div class="p-5">
+                                        <h3 class="font-bold text-base line-clamp-1 text-slate-900 dark:text-neutral-100" :title="project.title">
+                                            {{ project.title }}
+                                        </h3>
+                                        <p class="mt-1 text-xs text-slate-400 dark:text-neutral-400 line-clamp-2 min-h-[32px]">
+                                            {{ project.description || 'Proyek visualisasi arsitektur 3D dari klien.' }}
+                                        </p>
+
+                                        <!-- Architect information -->
+                                        <div class="mt-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-3 text-xs space-y-1">
+                                            <div class="text-slate-400 dark:text-neutral-400">Arsitek Pengundang:</div>
+                                            <div class="font-semibold text-slate-900 dark:text-neutral-100">
+                                                {{ project.architect_name }}
+                                            </div>
+                                            <div class="text-slate-400 dark:text-neutral-400 text-[11px]">
+                                                {{ project.architect_email }}
+                                            </div>
+                                        </div>
+
+                                        <!-- Revision status -->
+                                        <div class="mt-3 flex items-center justify-between text-xs">
+                                            <span class="text-slate-400 dark:text-neutral-400">Revisi Terpakai:</span>
+                                            <span class="font-semibold text-slate-900 dark:text-neutral-100">
+                                                {{ project.current_revision_count }} / {{ project.max_revisions_allowed }}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <!-- Body -->
-                                <div class="p-5">
-                                    <h3 class="font-bold text-base line-clamp-1 text-slate-900 dark:text-neutral-100" :title="project.title">
-                                        {{ project.title }}
-                                    </h3>
-                                    <p class="mt-1 text-xs text-slate-400 dark:text-neutral-400 line-clamp-2 min-h-[32px]">
-                                        {{ project.description || 'Proyek visualisasi arsitektur 3D dari klien.' }}
-                                    </p>
-
-                                    <!-- Architect information -->
-                                    <div class="mt-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-3 text-xs space-y-1">
-                                        <div class="text-slate-400 dark:text-neutral-400">Arsitek Pengundang:</div>
-                                        <div class="font-semibold text-slate-900 dark:text-neutral-100">
-                                            {{ project.architect_name }}
-                                        </div>
-                                        <div class="text-slate-400 dark:text-neutral-400 text-[11px]">
-                                            {{ project.architect_email }}
-                                        </div>
+                                <!-- Footer Actions -->
+                                <div class="border-t border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4">
+                                    <div v-if="project.invitation_status === 'pending'">
+                                        <Button
+                                            @click="acceptInvitation(project)"
+                                            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all duration-300"
+                                            size="sm"
+                                        >
+                                            <CheckCircle2 class="mr-1.5 h-3.5 w-3.5" /> Terima Undangan & Buka
+                                        </Button>
                                     </div>
-
-                                    <!-- Revision status -->
-                                    <div class="mt-3 flex items-center justify-between text-xs">
-                                        <span class="text-slate-400 dark:text-neutral-400">Revisi Terpakai:</span>
-                                        <span class="font-semibold text-slate-900 dark:text-neutral-100">
-                                            {{ project.current_revision_count }} / {{ project.max_revisions_allowed }}
-                                        </span>
+                                    <div v-else>
+                                        <Link :href="`/projects/${project.id}/viewer`">
+                                            <Button class="w-full text-xs font-semibold bg-blue-500 hover:bg-blue-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300" size="sm">
+                                                <Box class="mr-1.5 h-3.5 w-3.5" /> Buka & Beri Feedback
+                                            </Button>
+                                        </Link>
+                                        <!-- Tombol Lihat RAB — hanya muncul jika ada RAB yang dibagikan -->
+                                        <Link v-if="project.rab_visible_count > 0"
+                                              :href="`/projects/${project.id}/rab`"
+                                              class="mt-2 block">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                class="w-full text-xs font-semibold border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/60 hover:text-emerald-300 transition-all duration-200"
+                                            >
+                                                <ClipboardList class="mr-1.5 h-3.5 w-3.5" />
+                                                Lihat RAB
+                                                <span class="ml-1.5 rounded-full bg-emerald-500/30 px-1.5 py-0.5 text-[10px] font-bold">
+                                                    {{ project.rab_visible_count }}
+                                                </span>
+                                            </Button>
+                                        </Link>
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <!-- Footer Actions -->
-                            <div class="border-t border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4">
-                                <div v-if="project.invitation_status === 'pending'">
-                                    <Button
-                                        @click="acceptInvitation(project)"
-                                        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all duration-300"
-                                        size="sm"
-                                    >
-                                        <CheckCircle2 class="mr-1.5 h-3.5 w-3.5" /> Terima Undangan & Buka
-                                    </Button>
-                                </div>
-                                <div v-else>
-                                    <Link :href="`/projects/${project.id}/viewer`">
-                                        <Button class="w-full text-xs font-semibold bg-blue-500 hover:bg-blue-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300" size="sm">
-                                            <Box class="mr-1.5 h-3.5 w-3.5" /> Buka & Beri Feedback
-                                        </Button>
-                                    </Link>
-                                    <!-- Tombol Lihat RAB — hanya muncul jika ada RAB yang dibagikan -->
-                                    <Link v-if="project.rab_visible_count > 0"
-                                          :href="`/projects/${project.id}/rab`"
-                                          class="mt-2 block">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            class="w-full text-xs font-semibold border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/60 hover:text-emerald-300 transition-all duration-200"
-                                        >
-                                            <ClipboardList class="mr-1.5 h-3.5 w-3.5" />
-                                            Lihat RAB
-                                            <span class="ml-1.5 rounded-full bg-emerald-500/30 px-1.5 py-0.5 text-[10px] font-bold">
-                                                {{ project.rab_visible_count }}
-                                            </span>
-                                        </Button>
-                                    </Link>
-                                </div>
+                        <!-- Infinite Scroll Sentinel & Status (Client) -->
+                        <div
+                            ref="sentinelRef"
+                            class="py-8 flex flex-col items-center justify-center min-h-[64px]"
+                        >
+                            <div
+                                v-if="isLoadingMore"
+                                class="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-white dark:bg-[#14151f] border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-sm"
+                            >
+                                <Loader2 class="w-4 h-4 animate-spin text-violet-500" />
+                                <span>Memuat proyek kolaborasi berikutnya...</span>
+                            </div>
+                            <div
+                                v-else-if="!hasMoreClient && localClientProjects.length > 0"
+                                class="text-xs text-slate-400 dark:text-slate-500 font-medium"
+                            >
+                                Semua proyek kolaborasi telah dimuat ({{ localClientProjects.length }} total)
                             </div>
                         </div>
                     </div>

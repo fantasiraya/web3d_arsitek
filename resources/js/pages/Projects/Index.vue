@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
     AlertTriangle, Box, CheckCircle2, ClipboardList, Clock, FileUp, FolderOpen,
-    Pencil, Plus, Search, Send, Sparkles, Trash2,
+    Loader2, Pencil, Plus, Search, Send, Sparkles, Trash2,
     UserCheck, UserPlus, Users, X,
 } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
@@ -50,32 +50,176 @@ interface Project {
     invited_clients: ProjectClientItem[];
 }
 
+interface PaginatedProjects {
+    data: Project[];
+    current_page: number;
+    last_page: number;
+    total: number;
+}
+
 // ─── Props ───────────────────────────────────────────────
 const props = defineProps<{
-    projects: Project[];
+    projects: PaginatedProjects | Project[];
     search: string;
     canCreate: boolean;
     stats: { total: number; max_projects: number };
 }>();
 
-// ─── Layout ──────────────────────────────────────────────
+// ─── Layout & Page State ─────────────────────────────────
+const page = usePage();
 const { isSidebarOpen, isMobile } = useSidebar();
 const { confirm } = useConfirm();
 const { isLoading } = usePageLoading(80);
-const page = usePage();
 const flashSuccess = computed(() => (page.props as any).flash?.success);
 
-// ─── Search ──────────────────────────────────────────────
-const searchInput = ref(props.search);
+// ─── Infinite Scroll & Server-Side Search State ──────────
+const initialProjects = Array.isArray(props.projects)
+    ? props.projects
+    : (props.projects?.data || []);
+
+const allProjects = ref<Project[]>([...initialProjects]);
+const currentPage = ref(!Array.isArray(props.projects) ? props.projects?.current_page || 1 : 1);
+const lastPage = ref(!Array.isArray(props.projects) ? props.projects?.last_page || 1 : 1);
+const totalProjectsCount = ref(!Array.isArray(props.projects) ? props.projects?.total || initialProjects.length : initialProjects.length);
+const hasMore = ref(currentPage.value < lastPage.value);
+const isLoadingMore = ref(false);
+const isSearching = ref(false);
+const sentinelRef = ref<HTMLElement | null>(null);
+
+const searchInput = ref(props.search || '');
+
+// Sinkronisasi saat props.projects di-update oleh Inertia
+watch(
+    () => props.projects,
+    (newVal) => {
+        const incoming = Array.isArray(newVal) ? newVal : (newVal?.data || []);
+        allProjects.value = [...incoming];
+        if (!Array.isArray(newVal) && newVal) {
+            currentPage.value = newVal.current_page || 1;
+            lastPage.value = newVal.last_page || 1;
+            totalProjectsCount.value = newVal.total ?? incoming.length;
+            hasMore.value = currentPage.value < lastPage.value;
+        }
+    }
+);
+
+let currentRequestId = 0;
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Query AJAX super ringan untuk server-side search & infinite scroll
+async function fetchProjects(page: number, append = false) {
+    const reqId = ++currentRequestId;
+    if (append) {
+        isLoadingMore.value = true;
+    } else {
+        isSearching.value = true;
+    }
+
+    try {
+        const params = new URLSearchParams();
+        if (searchInput.value.trim()) params.set('search', searchInput.value.trim());
+        params.set('page', page.toString());
+
+        // Update URL di browser history secara halus tanpa reload
+        const newUrl = `/projects${params.toString() ? '?' + params.toString() : ''}`;
+        window.history.replaceState({}, '', newUrl);
+
+        const res = await fetch(`/projects?${params.toString()}`, {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+
+        if (!res.ok) throw new Error('Gagal memuat daftar proyek');
+
+        const json = await res.json();
+        if (reqId !== currentRequestId) return; // Abaikan jika ada request baru
+
+        const incoming: Project[] = json.projects?.data || [];
+        currentPage.value = json.projects?.current_page || page;
+        lastPage.value = json.projects?.last_page || 1;
+        totalProjectsCount.value = json.projects?.total ?? incoming.length;
+        hasMore.value = currentPage.value < lastPage.value;
+
+        if (append) {
+            // Deduplikasi ID saat infinite scroll
+            const existingIds = new Set(allProjects.value.map(p => p.id));
+            const newUnique = incoming.filter(p => !existingIds.has(p.id));
+            allProjects.value.push(...newUnique);
+        } else {
+            allProjects.value = incoming;
+        }
+    } catch (err) {
+        if (reqId === currentRequestId) {
+            console.error('Error fetching projects:', err);
+        }
+    } finally {
+        if (reqId === currentRequestId) {
+            isLoadingMore.value = false;
+            isSearching.value = false;
+        }
+    }
+}
+
+function handleSearchInput() {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+        currentPage.value = 1;
+        fetchProjects(1, false);
+    }, 350);
+}
 
 function doSearch() {
-    router.get('/projects', { search: searchInput.value }, { preserveState: true, preserveScroll: true });
+    if (debounceTimer) clearTimeout(debounceTimer);
+    currentPage.value = 1;
+    fetchProjects(1, false);
 }
 
 function clearSearch() {
     searchInput.value = '';
-    router.get('/projects', {}, { preserveState: true });
+    if (debounceTimer) clearTimeout(debounceTimer);
+    currentPage.value = 1;
+    fetchProjects(1, false);
 }
+
+function loadMore() {
+    if (isLoadingMore.value || !hasMore.value || isSearching.value) return;
+    fetchProjects(currentPage.value + 1, true);
+}
+
+// Observer untuk Infinite Scroll
+let observer: IntersectionObserver | null = null;
+
+onMounted(() => {
+    observer = new IntersectionObserver(
+        (entries) => {
+            if (entries[0]?.isIntersecting) {
+                loadMore();
+            }
+        },
+        { rootMargin: '250px' }
+    );
+
+    if (sentinelRef.value) {
+        observer.observe(sentinelRef.value);
+    }
+});
+
+onUnmounted(() => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    if (observer) {
+        observer.disconnect();
+        observer = null;
+    }
+});
+
+watch(sentinelRef, (newEl) => {
+    if (observer) {
+        observer.disconnect();
+        if (newEl) observer.observe(newEl);
+    }
+});
 
 // ─── Helpers ─────────────────────────────────────────────
 function formatBytes(bytes: number): string {
@@ -98,7 +242,11 @@ async function deleteProject(project: Project) {
 
     router.delete(`/projects/${project.id}`, {
         preserveScroll: true,
-        onSuccess: () => toast.success('Proyek berhasil dihapus.'),
+        onSuccess: () => {
+            allProjects.value = allProjects.value.filter(p => p.id !== project.id);
+            totalProjectsCount.value = Math.max(0, totalProjectsCount.value - 1);
+            toast.success('Proyek berhasil dihapus.');
+        },
         onError: () => toast.error('Gagal menghapus proyek.'),
     });
 }
@@ -324,16 +472,21 @@ async function revokeClient(client: ProjectClientItem) {
 <template>
     <Head title="Proyek 3D" />
 
-    <div class="min-h-screen bg-[#F8F9FA] dark:bg-[#0b0c10] text-slate-900 dark:text-[#f3f4f6] font-['Geist',sans-serif] antialiased relative flex">
+    <div class="min-h-screen bg-[#F8F9FA] dark:bg-[#0b0c10] text-slate-900 dark:text-[#f3f4f6] font-['Geist',sans-serif] antialiased relative overflow-x-hidden flex transition-colors duration-300">
+        <!-- Ambient Background Lighting (Only in dark mode) -->
+        <div class="hidden dark:block fixed top-0 left-64 w-[650px] h-[400px] bg-[#38bdf8]/10 blur-[150px] pointer-events-none rounded-full"></div>
+        <div class="hidden dark:block fixed top-1/2 right-10 w-[500px] h-[500px] bg-[#6366f1]/10 blur-[170px] pointer-events-none rounded-full"></div>
+        <div class="hidden dark:block fixed bottom-0 left-80 w-[550px] h-[350px] bg-[#2e303d]/20 blur-[130px] pointer-events-none rounded-full"></div>
+
         <AppSidebar />
 
-        <div :class="['flex-1 flex flex-col min-w-0 transition-all duration-300', isSidebarOpen && !isMobile ? 'ml-64' : 'ml-0 lg:ml-16']">
+        <div :class="['flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out', isSidebarOpen && !isMobile ? 'ml-64' : 'ml-0 lg:ml-16']">
             <AppHeader 
                 :can-create="canCreate"
                 @create-project="isCreateModalOpen = true"
             />
 
-            <main class="flex-1 p-6 lg:p-8 space-y-6">
+            <main class="flex-1 p-6 lg:p-8 space-y-6 w-full relative z-10">
 
                 <!-- ── SKELETON ── -->
                 <template v-if="isLoading">
@@ -377,43 +530,83 @@ async function revokeClient(client: ProjectClientItem) {
                         <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <Input
                             v-model="searchInput"
-                            placeholder="Cari proyek berdasarkan judul..."
+                            @input="handleSearchInput"
+                            placeholder="Cari proyek berdasarkan judul atau deskripsi..."
                             class="pl-9 pr-9"
                             @keydown.enter="doSearch"
                         />
-                        <button v-if="searchInput" @click="clearSearch" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                        <!-- Spinner saat mencari server-side -->
+                        <Loader2
+                            v-if="isSearching"
+                            class="w-4 h-4 text-violet-500 animate-spin absolute right-3 top-1/2 -translate-y-1/2"
+                        />
+                        <!-- Tombol Clear saat ada query -->
+                        <button
+                            v-else-if="searchInput"
+                            type="button"
+                            @click="clearSearch"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer transition-colors"
+                            title="Hapus pencarian"
+                        >
                             <X class="h-4 w-4" />
                         </button>
                     </div>
-                    <Button @click="doSearch" variant="outline" class="shrink-0">
+                    <Button @click="doSearch" variant="outline" class="shrink-0 cursor-pointer">
                         <Search class="h-4 w-4 mr-1.5" /> Cari
                     </Button>
                 </div>
 
                 <!-- No results -->
-                <div v-if="projects.length === 0" class="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 dark:border-white/20 bg-white dark:bg-white/[0.02] p-8 text-center">
+                <div v-if="allProjects.length === 0" class="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 dark:border-white/20 bg-white dark:bg-white/[0.02] p-8 text-center">
                     <FolderOpen class="h-12 w-12 text-slate-300 dark:text-neutral-600 mb-4" />
                     <h3 class="text-lg font-bold text-slate-900 dark:text-neutral-100">
-                        {{ search ? 'Tidak ditemukan' : 'Belum Ada Proyek 3D' }}
+                        {{ searchInput ? 'Tidak ditemukan' : 'Belum Ada Proyek 3D' }}
                     </h3>
                     <p class="mt-2 text-sm text-slate-500 dark:text-neutral-400 max-w-md">
-                        {{ search ? `Tidak ada proyek yang cocok dengan "${search}".` : 'Unggah model 3D pertama Anda untuk memulai.' }}
+                        {{ searchInput ? `Tidak ada proyek yang cocok dengan "${searchInput}".` : 'Unggah model 3D pertama Anda untuk memulai.' }}
                     </p>
-                    <Button v-if="!search && canCreate" @click="isCreateModalOpen = true" class="mt-5 rounded-full">
-                        <Plus class="mr-1.5 h-4 w-4" /> Unggah Proyek Pertama
-                    </Button>
+                    <div class="mt-5 flex items-center gap-3">
+                        <Button v-if="searchInput" @click="clearSearch" variant="outline" class="rounded-full cursor-pointer">
+                            <X class="mr-1.5 h-4 w-4" /> Reset Pencarian
+                        </Button>
+                        <Button v-if="!searchInput && canCreate" @click="isCreateModalOpen = true" class="rounded-full cursor-pointer">
+                            <Plus class="mr-1.5 h-4 w-4" /> Unggah Proyek Pertama
+                        </Button>
+                    </div>
                 </div>
 
-                <!-- Project grid -->
-                <div v-else class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                    <ProjectCard
-                        v-for="project in projects"
-                        :key="project.id"
-                        :project="project"
-                        @edit="openEditModal"
-                        @delete="deleteProject"
-                        @manage-clients="openClientModal"
-                    />
+                <!-- Project grid & Infinite Scroll -->
+                <div v-else class="space-y-6">
+                    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                        <ProjectCard
+                            v-for="project in allProjects"
+                            :key="project.id"
+                            :project="project"
+                            @edit="openEditModal"
+                            @delete="deleteProject"
+                            @manage-clients="openClientModal"
+                        />
+                    </div>
+
+                    <!-- Infinite Scroll Sentinel & Status Indicator -->
+                    <div
+                        ref="sentinelRef"
+                        class="py-8 flex flex-col items-center justify-center min-h-[64px]"
+                    >
+                        <div
+                            v-if="isLoadingMore"
+                            class="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-white dark:bg-[#14151f] border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-sm"
+                        >
+                            <Loader2 class="w-4 h-4 animate-spin text-violet-500" />
+                            <span>Memuat proyek berikutnya...</span>
+                        </div>
+                        <div
+                            v-else-if="!hasMore && allProjects.length > 0"
+                            class="text-xs text-slate-400 dark:text-slate-500 font-medium"
+                        >
+                            Semua proyek telah dimuat ({{ allProjects.length }} total)
+                        </div>
+                    </div>
                 </div>
                 </template><!-- end v-else -->
             </main>
