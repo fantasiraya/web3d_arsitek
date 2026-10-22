@@ -208,6 +208,241 @@ class ExportSvgAction
                     break;
                 }
 
+                case 'double_door': {
+                    $x = ($data['x'] ?? 0) - $paperX;
+                    $y = ($data['y'] ?? 0) - $paperY;
+                    $w = $data['width'] ?? 140;
+                    $leaf = $w / 2;
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <line x1=\"{$x}\" y1=\"{$y}\" x2=\"{$x}\" y2=\"" . ($y + $leaf) . "\" stroke=\"#16a34a\" stroke-width=\"2.5\" stroke-linecap=\"round\"/>";
+                    $svg[] = "      <line x1=\"" . ($x + $w) . "\" y1=\"{$y}\" x2=\"" . ($x + $w) . "\" y2=\"" . ($y + $leaf) . "\" stroke=\"#16a34a\" stroke-width=\"2.5\" stroke-linecap=\"round\"/>";
+                    $svg[] = "      <path d=\"M {$x} " . ($y + $leaf) . " A {$leaf} {$leaf} 0 0 1 " . ($x + $leaf) . " {$y}\" stroke=\"#16a34a\" stroke-width=\"1.5\" stroke-dasharray=\"4,3\" fill=\"none\"/>";
+                    $svg[] = "      <path d=\"M " . ($x + $w) . " " . ($y + $leaf) . " A {$leaf} {$leaf} 0 0 0 " . ($x + $leaf) . " {$y}\" stroke=\"#16a34a\" stroke-width=\"1.5\" stroke-dasharray=\"4,3\" fill=\"none\"/>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'sliding_door': {
+                    $x = ($data['x'] ?? 0) - $paperX;
+                    $y = ($data['y'] ?? 0) - $paperY;
+                    $w = $data['width'] ?? 120;
+                    $h = $data['height'] ?? 16;
+                    $pW = $w * 0.52;
+                    $pH = $h / 2 - 2;
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <rect x=\"{$x}\" y=\"{$y}\" width=\"{$w}\" height=\"{$h}\" stroke=\"#0284c7\" stroke-width=\"2\" fill=\"#f0f9ff\"/>";
+                    $svg[] = "      <rect x=\"" . ($x + 2) . "\" y=\"" . ($y + 2) . "\" width=\"{$pW}\" height=\"{$pH}\" stroke=\"#0369a1\" stroke-width=\"1.5\" fill=\"#bae6fd\"/>";
+                    $svg[] = "      <rect x=\"" . ($x + $w * 0.46) . "\" y=\"" . ($y + $h / 2) . "\" width=\"{$pW}\" height=\"{$pH}\" stroke=\"#0369a1\" stroke-width=\"1.5\" fill=\"#bae6fd\"/>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'sofa': {
+                    $x = ($data['x'] ?? 0) - $paperX;
+                    $y = ($data['y'] ?? 0) - $paperY;
+                    $w = $data['width'] ?? 140;
+                    $h = $data['height'] ?? 65;
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <rect x=\"{$x}\" y=\"{$y}\" width=\"{$w}\" height=\"{$h}\" rx=\"6\" stroke=\"#78350f\" stroke-width=\"2\" fill=\"#fef3c7\"/>";
+                    $svg[] = "      <rect x=\"" . ($x + 6) . "\" y=\"" . ($y + 4) . "\" width=\"" . ($w - 12) . "\" height=\"14\" rx=\"4\" stroke=\"#92400e\" stroke-width=\"1.5\" fill=\"#fde68a\"/>";
+                    $svg[] = "      <rect x=\"" . ($x + 4) . "\" y=\"" . ($y + 4) . "\" width=\"14\" height=\"" . ($h - 8) . "\" rx=\"4\" stroke=\"#92400e\" stroke-width=\"1.5\" fill=\"#fde68a\"/>";
+                    $svg[] = "      <rect x=\"" . ($x + $w - 18) . "\" y=\"" . ($y + 4) . "\" width=\"14\" height=\"" . ($h - 8) . "\" rx=\"4\" stroke=\"#92400e\" stroke-width=\"1.5\" fill=\"#fde68a\"/>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'kitchen': {
+                    $x = ($data['x'] ?? 0) - $paperX;
+                    $y = ($data['y'] ?? 0) - $paperY;
+                    $w = $data['width'] ?? 150;
+                    $h = $data['height'] ?? 60;
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <rect x=\"{$x}\" y=\"{$y}\" width=\"{$w}\" height=\"{$h}\" rx=\"3\" stroke=\"#334155\" stroke-width=\"2\" fill=\"#f1f5f9\"/>";
+                    $svg[] = "      <rect x=\"" . ($x + 8) . "\" y=\"" . ($y + 8) . "\" width=\"54\" height=\"" . ($h - 16) . "\" rx=\"4\" stroke=\"#0284c7\" stroke-width=\"1.5\" fill=\"#e0f2fe\"/>";
+                    $svg[] = "      <rect x=\"" . ($x + 75) . "\" y=\"" . ($y + 8) . "\" width=\"65\" height=\"" . ($h - 16) . "\" rx=\"4\" stroke=\"#b91c1c\" stroke-width=\"1.5\" fill=\"#fee2e2\"/>";
+                    $svg[] = "      <circle cx=\"" . ($x + 92) . "\" cy=\"" . ($y + $h / 2) . "\" r=\"12\" stroke=\"#dc2626\" stroke-width=\"1.5\" fill=\"none\"/>";
+                    $svg[] = "      <circle cx=\"" . ($x + 123) . "\" cy=\"" . ($y + $h / 2) . "\" r=\"12\" stroke=\"#dc2626\" stroke-width=\"1.5\" fill=\"none\"/>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'washbasin': {
+                    $x = ($data['x'] ?? 0) - $paperX;
+                    $y = ($data['y'] ?? 0) - $paperY;
+                    $w = $data['width'] ?? 50;
+                    $h = $data['height'] ?? 40;
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <rect x=\"{$x}\" y=\"{$y}\" width=\"{$w}\" height=\"{$h}\" rx=\"6\" stroke=\"#0369a1\" stroke-width=\"2\" fill=\"#f0f9ff\"/>";
+                    $svg[] = "      <ellipse cx=\"" . ($x + $w / 2) . "\" cy=\"" . ($y + $h / 2 + 2) . "\" rx=\"" . ($w / 2 - 8) . "\" ry=\"" . ($h / 2 - 8) . "\" stroke=\"#0284c7\" stroke-width=\"1.5\" fill=\"#e0f2fe\"/>";
+                    $svg[] = "      <circle cx=\"" . ($x + $w / 2) . "\" cy=\"" . ($y + $h / 2 + 3) . "\" r=\"2.5\" fill=\"#0369a1\"/>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'shower': {
+                    $x = ($data['x'] ?? 0) - $paperX;
+                    $y = ($data['y'] ?? 0) - $paperY;
+                    $w = $data['width'] ?? 80;
+                    $h = $data['height'] ?? 80;
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <rect x=\"{$x}\" y=\"{$y}\" width=\"{$w}\" height=\"{$h}\" rx=\"4\" stroke=\"#0891b2\" stroke-width=\"2\" fill=\"#ecfeff\"/>";
+                    $svg[] = "      <circle cx=\"" . ($x + 16) . "\" cy=\"" . ($y + 16) . "\" r=\"6\" stroke=\"#0891b2\" stroke-width=\"2\" fill=\"#cffafe\"/>";
+                    $svg[] = "      <circle cx=\"" . ($x + $w - 18) . "\" cy=\"" . ($y + $h - 18) . "\" r=\"3.5\" fill=\"#0891b2\"/>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'car': {
+                    $x = ($data['x'] ?? 0) - $paperX;
+                    $y = ($data['y'] ?? 0) - $paperY;
+                    $w = $data['width'] ?? 160;
+                    $h = $data['height'] ?? 75;
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <rect x=\"" . ($x + 8) . "\" y=\"" . ($y + 6) . "\" width=\"" . ($w - 16) . "\" height=\"" . ($h - 12) . "\" rx=\"16\" stroke=\"#334155\" stroke-width=\"2\" fill=\"#e2e8f0\"/>";
+                    $svg[] = "      <rect x=\"" . ($x + 56) . "\" y=\"" . ($y + 15) . "\" width=\"" . ($w - 104) . "\" height=\"" . ($h - 30) . "\" rx=\"4\" stroke=\"#475569\" stroke-width=\"1.5\" fill=\"#ffffff\"/>";
+                    $svg[] = "      <rect x=\"" . ($x + 26) . "\" y=\"{$y}\" width=\"22\" height=\"7\" rx=\"2\" fill=\"#0f172a\"/>";
+                    $svg[] = "      <rect x=\"" . ($x + 26) . "\" y=\"" . ($y + $h - 7) . "\" width=\"22\" height=\"7\" rx=\"2\" fill=\"#0f172a\"/>";
+                    $svg[] = "      <rect x=\"" . ($x + $w - 46) . "\" y=\"{$y}\" width=\"22\" height=\"7\" rx=\"2\" fill=\"#0f172a\"/>";
+                    $svg[] = "      <rect x=\"" . ($x + $w - 46) . "\" y=\"" . ($y + $h - 7) . "\" width=\"22\" height=\"7\" rx=\"2\" fill=\"#0f172a\"/>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'tree': {
+                    $cx = ($data['x'] ?? 0) - $paperX;
+                    $cy = ($data['y'] ?? 0) - $paperY;
+                    $r = $data['radius'] ?? 40;
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <circle cx=\"{$cx}\" cy=\"{$cy}\" r=\"{$r}\" stroke=\"#16a34a\" stroke-width=\"2\" stroke-dasharray=\"6,4\" fill=\"#dcfce7\"/>";
+                    $svg[] = "      <circle cx=\"{$cx}\" cy=\"{$cy}\" r=\"" . ($r * 0.7) . "\" stroke=\"#22c55e\" stroke-width=\"1.5\" fill=\"none\"/>";
+                    $svg[] = "      <circle cx=\"{$cx}\" cy=\"{$cy}\" r=\"4\" fill=\"#14532d\"/>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'north_arrow': {
+                    $cx = ($data['x'] ?? 0) - $paperX;
+                    $cy = ($data['y'] ?? 0) - $paperY;
+                    $r = 30;
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <circle cx=\"{$cx}\" cy=\"{$cy}\" r=\"{$r}\" stroke=\"#0f172a\" stroke-width=\"2\" fill=\"#ffffff\"/>";
+                    $svg[] = "      <polygon points=\"{$cx}," . ($cy - $r + 3) . " " . ($cx - 9) . "," . ($cy + 4) . " {$cx},{$cy}\" fill=\"#0f172a\" stroke=\"#0f172a\" stroke-width=\"1.5\"/>";
+                    $svg[] = "      <polygon points=\"{$cx}," . ($cy - $r + 3) . " " . ($cx + 9) . "," . ($cy + 4) . " {$cx},{$cy}\" fill=\"none\" stroke=\"#0f172a\" stroke-width=\"1.5\"/>";
+                    $svg[] = "      <line x1=\"{$cx}\" y1=\"{$cy}\" x2=\"{$cx}\" y2=\"" . ($cy + $r - 5) . "\" stroke=\"#64748b\" stroke-width=\"1.5\"/>";
+                    $svg[] = "      <text x=\"{$cx}\" y=\"" . ($cy - $r - 6) . "\" font-size=\"14\" font-weight=\"bold\" fill=\"#0f172a\" text-anchor=\"middle\">U</text>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'elevation_marker': {
+                    $cx = ($data['x'] ?? 0) - $paperX;
+                    $cy = ($data['y'] ?? 0) - $paperY;
+                    $r = 16;
+                    $elevText = htmlspecialchars($data['text'] ?? '±0.00', ENT_XML1);
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <circle cx=\"{$cx}\" cy=\"{$cy}\" r=\"{$r}\" stroke=\"#0f172a\" stroke-width=\"1.5\" fill=\"#ffffff\"/>";
+                    $svg[] = "      <path d=\"M {$cx} {$cy} L " . ($cx - $r) . " {$cy} A {$r} {$r} 0 0 1 {$cx} " . ($cy - $r) . " Z\" fill=\"#0f172a\"/>";
+                    $svg[] = "      <path d=\"M {$cx} {$cy} L " . ($cx + $r) . " {$cy} A {$r} {$r} 0 0 1 {$cx} " . ($cy + $r) . " Z\" fill=\"#0f172a\"/>";
+                    $svg[] = "      <line x1=\"" . ($cx - $r - 4) . "\" y1=\"{$cy}\" x2=\"" . ($cx + $r + 4) . "\" y2=\"{$cy}\" stroke=\"#0f172a\" stroke-width=\"1.5\"/>";
+                    $svg[] = "      <line x1=\"{$cx}\" y1=\"" . ($cy - $r - 4) . "\" x2=\"{$cx}\" y2=\"" . ($cy + $r + 4) . "\" stroke=\"#0f172a\" stroke-width=\"1.5\"/>";
+                    $svg[] = "      <text x=\"" . ($cx + $r + 8) . "\" y=\"" . ($cy + 4) . "\" font-family=\"monospace\" font-size=\"13\" font-weight=\"bold\" fill=\"#0f172a\">{$elevText}</text>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'section_marker': {
+                    $x1 = ($data['x1'] ?? 0) - $paperX;
+                    $y1 = ($data['y1'] ?? 0) - $paperY;
+                    $x2 = ($data['x2'] ?? 200) - $paperX;
+                    $y2 = ($data['y2'] ?? 0) - $paperY;
+                    $label = htmlspecialchars($data['text'] ?? 'A', ENT_XML1);
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <line x1=\"{$x1}\" y1=\"{$y1}\" x2=\"{$x2}\" y2=\"{$y2}\" stroke=\"#7c3aed\" stroke-width=\"3\" stroke-dasharray=\"16,4,3,4\"/>";
+                    $svg[] = "      <circle cx=\"{$x1}\" cy=\"{$y1}\" r=\"16\" stroke=\"#7c3aed\" stroke-width=\"2\" fill=\"#f5f3ff\"/>";
+                    $svg[] = "      <text x=\"{$x1}\" y=\"" . ($y1 + 5) . "\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"bold\" fill=\"#6d28d9\">{$label}</text>";
+                    $svg[] = "      <circle cx=\"{$x2}\" cy=\"{$y2}\" r=\"16\" stroke=\"#7c3aed\" stroke-width=\"2\" fill=\"#f5f3ff\"/>";
+                    $svg[] = "      <text x=\"{$x2}\" y=\"" . ($y2 + 5) . "\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"bold\" fill=\"#6d28d9\">{$label}</text>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'grid_line': {
+                    $x1 = ($data['x1'] ?? 0) - $paperX;
+                    $y1 = ($data['y1'] ?? 0) - $paperY;
+                    $x2 = ($data['x2'] ?? 0) - $paperX;
+                    $y2 = ($data['y2'] ?? 200) - $paperY;
+                    $code = htmlspecialchars($data['code'] ?? '1', ENT_XML1);
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <line x1=\"{$x1}\" y1=\"{$y1}\" x2=\"{$x2}\" y2=\"{$y2}\" stroke=\"#0284c7\" stroke-width=\"1.5\" stroke-dasharray=\"12,4,2,4\"/>";
+                    $svg[] = "      <circle cx=\"{$x2}\" cy=\"{$y2}\" r=\"14\" stroke=\"#0284c7\" stroke-width=\"2\" fill=\"#ffffff\"/>";
+                    $svg[] = "      <text x=\"{$x2}\" y=\"" . ($y2 + 4) . "\" text-anchor=\"middle\" font-size=\"12\" font-weight=\"bold\" fill=\"#0284c7\">{$code}</text>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'leader_note': {
+                    $x1 = ($data['x1'] ?? 0) - $paperX;
+                    $y1 = ($data['y1'] ?? 0) - $paperY;
+                    $x2 = ($data['x2'] ?? 60) - $paperX;
+                    $y2 = ($data['y2'] ?? -40) - $paperY;
+                    $noteText = htmlspecialchars($data['text'] ?? 'Catatan Spesifikasi', ENT_XML1);
+                    $shoulderDir = $x2 >= $x1 ? 1 : -1;
+                    $shoulderLen = 45;
+                    $shoulderEndX = $x2 + ($shoulderDir * $shoulderLen);
+                    $textX = $shoulderDir > 0 ? $x2 + 4 : $shoulderEndX - 4;
+                    $anchor = $shoulderDir > 0 ? 'start' : 'end';
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <line x1=\"{$x2}\" y1=\"{$y2}\" x2=\"{$x1}\" y2=\"{$y1}\" stroke=\"#d97706\" stroke-width=\"1.5\"/>";
+                    $svg[] = "      <line x1=\"{$x2}\" y1=\"{$y2}\" x2=\"{$shoulderEndX}\" y2=\"{$y2}\" stroke=\"#d97706\" stroke-width=\"1.5\"/>";
+                    $svg[] = "      <text x=\"{$textX}\" y=\"" . ($y2 - 4) . "\" text-anchor=\"{$anchor}\" font-size=\"11\" font-weight=\"bold\" fill=\"#92400e\">{$noteText}</text>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'circle': {
+                    $cx = ($data['x'] ?? 0) - $paperX;
+                    $cy = ($data['y'] ?? 0) - $paperY;
+                    $r = $data['radius'] ?? 40;
+                    $stroke = $data['stroke'] ?? '#1e293b';
+                    $fill = $data['fill'] ?? 'rgba(241, 245, 249, 0.4)';
+
+                    $svg[] = "    <g>";
+                    $svg[] = "      <circle cx=\"{$cx}\" cy=\"{$cy}\" r=\"{$r}\" stroke=\"{$stroke}\" stroke-width=\"2\" fill=\"{$fill}\"/>";
+                    $svg[] = "      <line x1=\"" . ($cx - 5) . "\" y1=\"{$cy}\" x2=\"" . ($cx + 5) . "\" y2=\"{$cy}\" stroke=\"#64748b\" stroke-width=\"1\"/>";
+                    $svg[] = "      <line x1=\"{$cx}\" y1=\"" . ($cy - 5) . "\" x2=\"{$cx}\" y2=\"" . ($cy + 5) . "\" stroke=\"#64748b\" stroke-width=\"1\"/>";
+                    $svg[] = "    </g>";
+                    break;
+                }
+
+                case 'arc': {
+                    $cx = ($data['x'] ?? 0) - $paperX;
+                    $cy = ($data['y'] ?? 0) - $paperY;
+                    $r = $data['radius'] ?? 50;
+                    $angle = deg2rad($data['angle'] ?? 90);
+                    $rot = deg2rad($data['rotation'] ?? 0);
+                    $x1 = $cx + $r * cos($rot);
+                    $y1 = $cy + $r * sin($rot);
+                    $x2 = $cx + $r * cos($rot + $angle);
+                    $y2 = $cy + $r * sin($rot + $angle);
+                    $largeArc = ($data['angle'] ?? 90) > 180 ? 1 : 0;
+
+                    $svg[] = "    <path d=\"M {$x1} {$y1} A {$r} {$r} 0 {$largeArc} 1 {$x2} {$y2}\" stroke=\"#1e293b\" stroke-width=\"2\" fill=\"none\"/>";
+                    break;
+                }
+
                 case 'toilet': {
                     $x = ($data['x'] ?? 0) - $paperX;
                     $y = ($data['y'] ?? 0) - $paperY;

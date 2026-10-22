@@ -65,8 +65,6 @@ class ExportDxfAction
         $out[] = "2\nTABLES";
         $out[] = "0\nTABLE";
         $out[] = "2\nLAYER";
-        $out[] = "70\n8";
-
         $layers = [
             '0'           => 7, // White (Default)
             'BORDER'      => 7, // White (Border Kertas)
@@ -79,6 +77,8 @@ class ExportDxfAction
             'TEXT'        => 7, // White (Teks & Label)
             'FURNITURE'   => 5, // Blue (Furnitur)
         ];
+
+        $out[] = "70\n" . count($layers);
 
         foreach ($layers as $layerName => $color) {
             $out[] = "0\nLAYER";
@@ -260,6 +260,203 @@ class ExportDxfAction
                     break;
                 }
 
+                case 'double_door': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $w = ($data['width'] ?? 140) * $scaleFactor;
+                    $leaf = $w / 2;
+
+                    // Kusen kiri dan kanan
+                    $this->addDxfLine($out, 'DOORS', $x, $y, $x, $y - $leaf);
+                    $this->addDxfLine($out, 'DOORS', $x + $w, $y, $x + $w, $y - $leaf);
+
+                    $steps = 12;
+                    for ($i = 0; $i < $steps; $i++) {
+                        $a1 = ($i / $steps) * (M_PI / 2);
+                        $a2 = (($i + 1) / $steps) * (M_PI / 2);
+
+                        $px1 = $x + $leaf * sin($a1);
+                        $py1 = ($y - $leaf) + $leaf * cos($a1);
+                        $px2 = $x + $leaf * sin($a2);
+                        $py2 = ($y - $leaf) + $leaf * cos($a2);
+                        $this->addDxfLine($out, 'DOORS', $px1, $py1, $px2, $py2);
+
+                        $px3 = ($x + $w) - $leaf * sin($a1);
+                        $px4 = ($x + $w) - $leaf * sin($a2);
+                        $this->addDxfLine($out, 'DOORS', $px3, $py1, $px4, $py2);
+                    }
+                    break;
+                }
+
+                case 'sliding_door': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $w = ($data['width'] ?? 120) * $scaleFactor;
+                    $h = ($data['height'] ?? 16) * $scaleFactor;
+                    $this->addDxfRect($out, 'DOORS', $x, $y, $w, -$h);
+                    $this->addDxfRect($out, 'DOORS', $x + 0.02, $y - 0.02, $w * 0.52, -($h / 2));
+                    $this->addDxfRect($out, 'DOORS', $x + $w * 0.46, $y - ($h / 2), $w * 0.52, -($h / 2));
+                    break;
+                }
+
+                case 'sofa': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $w = ($data['width'] ?? 140) * $scaleFactor;
+                    $h = ($data['height'] ?? 65) * $scaleFactor;
+                    $this->addDxfRect($out, 'FURNITURE', $x, $y, $w, -$h);
+                    $this->addDxfRect($out, 'FURNITURE', $x + 0.06, $y - 0.04, $w - 0.12, -0.14);
+                    break;
+                }
+
+                case 'kitchen': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $w = ($data['width'] ?? 150) * $scaleFactor;
+                    $h = ($data['height'] ?? 60) * $scaleFactor;
+                    $this->addDxfRect($out, 'FURNITURE', $x, $y, $w, -$h);
+                    // Sink
+                    $this->addDxfRect($out, 'FURNITURE', $x + 0.08, $y - 0.08, 0.54, -($h - 0.16));
+                    // Stove
+                    $this->addDxfRect($out, 'FURNITURE', $x + 0.75, $y - 0.08, 0.65, -($h - 0.16));
+                    break;
+                }
+
+                case 'washbasin': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $w = ($data['width'] ?? 50) * $scaleFactor;
+                    $h = ($data['height'] ?? 40) * $scaleFactor;
+                    $this->addDxfRect($out, 'FURNITURE', $x, $y, $w, -$h);
+                    $this->addDxfRect($out, 'FURNITURE', $x + 0.05, $y - 0.05, $w - 0.1, -($h - 0.1));
+                    break;
+                }
+
+                case 'shower': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $w = ($data['width'] ?? 80) * $scaleFactor;
+                    $h = ($data['height'] ?? 80) * $scaleFactor;
+                    $this->addDxfRect($out, 'FURNITURE', $x, $y, $w, -$h);
+                    $this->addDxfLine($out, 'FURNITURE', $x, $y, $x + $w, $y - $h);
+                    $this->addDxfLine($out, 'FURNITURE', $x, $y - $h, $x + $w, $y);
+                    break;
+                }
+
+                case 'car': {
+                    $x = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $y = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $w = ($data['width'] ?? 160) * $scaleFactor;
+                    $h = ($data['height'] ?? 75) * $scaleFactor;
+                    $this->addDxfRect($out, 'FURNITURE', $x, $y, $w, -$h);
+                    $this->addDxfLine($out, 'FURNITURE', $x + 0.42, $y - 0.1, $x + 0.56, $y - 0.16);
+                    $this->addDxfLine($out, 'FURNITURE', $x + 0.42, $y - $h + 0.1, $x + 0.56, $y - $h + 0.16);
+                    $this->addDxfLine($out, 'FURNITURE', $x + 0.56, $y - 0.16, $x + 0.56, $y - $h + 0.16);
+                    $this->addDxfText($out, 'TEXT', $x + $w / 2 - 0.15, $y - $h / 2, 0.12, 'CAR');
+                    break;
+                }
+
+                case 'tree': {
+                    $cx = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $cy = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $r = ($data['radius'] ?? 40) * $scaleFactor;
+                    $this->addDxfCircle($out, 'FURNITURE', $cx, $cy, $r);
+                    $this->addDxfCircle($out, 'FURNITURE', $cx, $cy, $r * 0.7);
+                    break;
+                }
+
+                case 'north_arrow': {
+                    $cx = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $cy = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $r = 30 * $scaleFactor;
+                    $this->addDxfCircle($out, 'TEXT', $cx, $cy, $r);
+                    $this->addDxfLine($out, 'TEXT', $cx, $cy + $r - 0.03, $cx - 0.09, $cy - 0.04);
+                    $this->addDxfLine($out, 'TEXT', $cx, $cy + $r - 0.03, $cx + 0.09, $cy - 0.04);
+                    $this->addDxfLine($out, 'TEXT', $cx, $cy + $r - 0.03, $cx, $cy - $r + 0.05);
+                    $this->addDxfText($out, 'TEXT', $cx - 0.05, $cy + $r + 0.08, 0.15, 'U');
+                    break;
+                }
+
+                case 'elevation_marker': {
+                    $cx = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $cy = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $r = 16 * $scaleFactor;
+                    $text = $data['text'] ?? '±0.00';
+                    $this->addDxfCircle($out, 'DIMENSIONS', $cx, $cy, $r);
+                    $this->addDxfLine($out, 'DIMENSIONS', $cx - $r - 0.04, $cy, $cx + $r + 0.04, $cy);
+                    $this->addDxfLine($out, 'DIMENSIONS', $cx, $cy - $r - 0.04, $cx, $cy + $r + 0.04);
+                    $this->addDxfText($out, 'TEXT', $cx + $r + 0.08, $cy, 0.12, $text);
+                    break;
+                }
+
+                case 'section_marker': {
+                    $x1 = (($data['x1'] ?? 0) - $paperX) * $scaleFactor;
+                    $y1 = -(($data['y1'] ?? 0) - $paperY) * $scaleFactor;
+                    $x2 = (($data['x2'] ?? 200) - $paperX) * $scaleFactor;
+                    $y2 = -(($data['y2'] ?? 0) - $paperY) * $scaleFactor;
+                    $label = $data['text'] ?? 'A';
+                    $r = 16 * $scaleFactor;
+
+                    $this->addDxfLine($out, 'DIMENSIONS', $x1, $y1, $x2, $y2);
+                    $this->addDxfCircle($out, 'DIMENSIONS', $x1, $y1, $r);
+                    $this->addDxfText($out, 'TEXT', $x1 - 0.05, $y1, 0.12, $label);
+                    $this->addDxfCircle($out, 'DIMENSIONS', $x2, $y2, $r);
+                    $this->addDxfText($out, 'TEXT', $x2 - 0.05, $y2, 0.12, $label);
+                    break;
+                }
+
+                case 'grid_line': {
+                    $x1 = (($data['x1'] ?? 0) - $paperX) * $scaleFactor;
+                    $y1 = -(($data['y1'] ?? 0) - $paperY) * $scaleFactor;
+                    $x2 = (($data['x2'] ?? 0) - $paperX) * $scaleFactor;
+                    $y2 = -(($data['y2'] ?? 200) - $paperY) * $scaleFactor;
+                    $code = $data['code'] ?? '1';
+                    $r = 14 * $scaleFactor;
+
+                    $this->addDxfLine($out, '0', $x1, $y1, $x2, $y2);
+                    $this->addDxfCircle($out, '0', $x2, $y2, $r);
+                    $this->addDxfText($out, 'TEXT', $x2 - 0.05, $y2, 0.12, $code);
+                    break;
+                }
+
+                case 'leader_note': {
+                    $x1 = (($data['x1'] ?? 0) - $paperX) * $scaleFactor;
+                    $y1 = -(($data['y1'] ?? 0) - $paperY) * $scaleFactor;
+                    $x2 = (($data['x2'] ?? 60) - $paperX) * $scaleFactor;
+                    $y2 = -(($data['y2'] ?? -40) - $paperY) * $scaleFactor;
+                    $noteText = $data['text'] ?? 'Spesifikasi';
+                    $shoulderLen = 45 * $scaleFactor;
+                    $shoulderDir = $x2 >= $x1 ? 1 : -1;
+
+                    $this->addDxfLine($out, 'DIMENSIONS', $x1, $y1, $x2, $y2);
+                    $this->addDxfLine($out, 'DIMENSIONS', $x2, $y2, $x2 + ($shoulderDir * $shoulderLen), $y2);
+                    $this->addDxfText($out, 'TEXT', $x2 + ($shoulderDir > 0 ? 0.04 : -$shoulderLen), $y2 + 0.08, 0.11, $noteText);
+                    break;
+                }
+
+                case 'circle': {
+                    $cx = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $cy = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $r = ($data['radius'] ?? 40) * $scaleFactor;
+                    $this->addDxfCircle($out, '0', $cx, $cy, $r);
+                    break;
+                }
+
+                case 'arc': {
+                    $cx = (($data['x'] ?? 0) - $paperX) * $scaleFactor;
+                    $cy = -(($data['y'] ?? 0) - $paperY) * $scaleFactor;
+                    $r = ($data['radius'] ?? 50) * $scaleFactor;
+                    $ang = $data['angle'] ?? 90;
+                    $rot = $data['rotation'] ?? 0;
+                    $steps = 12;
+                    for ($i = 0; $i < $steps; $i++) {
+                        $a1 = deg2rad($rot + ($i / $steps) * $ang);
+                        $a2 = deg2rad($rot + (($i + 1) / $steps) * $ang);
+                        $this->addDxfLine($out, '0', $cx + $r * cos($a1), $cy + $r * sin($a1), $cx + $r * cos($a2), $cy + $r * sin($a2));
+                    }
+                    break;
+                }
+
                 case 'toilet':
                 case 'bed':
                 case 'table': {
@@ -373,5 +570,15 @@ class ExportDxfAction
         $out[] = "30\n0.0";
         $out[] = "40\n" . sprintf('%.4f', $size);
         $out[] = "1\n{$safeText}";
+    }
+
+    protected function addDxfCircle(array &$out, string $layer, float $cx, float $cy, float $radius): void
+    {
+        $out[] = "0\nCIRCLE";
+        $out[] = "8\n{$layer}";
+        $out[] = "10\n" . sprintf('%.4f', $cx);
+        $out[] = "20\n" . sprintf('%.4f', $cy);
+        $out[] = "30\n0.0";
+        $out[] = "40\n" . sprintf('%.4f', $radius);
     }
 }

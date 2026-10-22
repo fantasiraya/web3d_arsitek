@@ -391,9 +391,7 @@ async function deleteSnapshotImage(sheet: DrawingSheetItem) {
 <template>
     <Head title="Gambar Kerja &amp; Daftar Potong — Shop Drawing" />
 
-    <div class="min-h-screen bg-slate-50 dark:bg-[#090a0f] text-slate-800 dark:text-slate-100 py-8 px-4 sm:px-6 lg:px-8">
-        <div class="max-w-7xl mx-auto space-y-6">
-            
+    <div class="space-y-6 max-w-7xl mx-auto pb-12">
             <!-- ── TOP HEADER & ACTIONS ──────────────────────────────────────── -->
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200 dark:border-white/10">
                 <div class="space-y-1">
@@ -1049,8 +1047,6 @@ async function deleteSnapshotImage(sheet: DrawingSheetItem) {
                     </div>
                 </div>
             </div>
-
         </div>
-    </div>
 </template>
 

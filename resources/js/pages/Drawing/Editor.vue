@@ -18,6 +18,7 @@ import {
     Minus,
     Square,
     DoorClosed,
+    DoorOpen,
     Columns,
     Type,
     Ruler,
@@ -34,6 +35,7 @@ import {
     Sparkles,
     Building2,
     Armchair,
+    Sofa,
     Bath,
     Bed,
     Move,
@@ -59,6 +61,23 @@ import {
     Search,
     X,
     Settings,
+    Menu,
+    Compass,
+    Crosshair,
+    Circle as CircleIcon,
+    Car,
+    Trees,
+    CookingPot,
+    Droplets,
+    ArrowUpRight,
+    FlipHorizontal,
+    FlipVertical,
+    BringToFront,
+    SendToBack,
+    Hash,
+    Bookmark,
+    Split,
+    SlidersHorizontal,
 } from '@lucide/vue';
 
 interface SheetData {
@@ -166,21 +185,62 @@ function switchEditorMode(mode: 'shop_drawing' | 'cad') {
 type ToolType =
     | 'select'
     | 'pan'
+    // Struktur & Arsitektur
     | 'wall'
     | 'rect'
-    | 'door'
-    | 'window'
     | 'column'
+    | 'grid_line'
     | 'stair'
-    | 'toilet'
+    // Bukaan Pintu & Jendela
+    | 'door'
+    | 'double_door'
+    | 'sliding_door'
+    | 'window'
+    // Perabot & Ruangan
+    | 'sofa'
     | 'bed'
     | 'table'
+    | 'kitchen'
+    | 'toilet'
+    | 'washbasin'
+    | 'shower'
+    | 'car'
+    | 'tree'
+    // Simbol Arsitektural & Anotasi
+    | 'north_arrow'
+    | 'elevation_marker'
+    | 'section_marker'
+    | 'leader_note'
     | 'dimension'
     | 'room_label'
+    // Bentuk Geometri CAD
     | 'line'
+    | 'circle'
+    | 'arc'
+    // Utilitas
     | 'eraser';
 
 const activeTool = ref<ToolType>('select');
+const activeToolCategory = ref<'all' | 'structure' | 'openings' | 'furniture' | 'symbols' | 'shapes'>('all');
+const showCategoryMenu = ref(false);
+
+const toolCategories = [
+    { key: 'all', label: 'Semua Tools', icon: '☰' },
+    { key: 'structure', label: 'Dinding & Kolom', icon: '🏛️' },
+    { key: 'openings', label: 'Pintu & Jendela', icon: '🚪' },
+    { key: 'furniture', label: 'Perabot & Sanitair', icon: '🛋️' },
+    { key: 'symbols', label: 'Simbol & Notasi', icon: '📐' },
+    { key: 'shapes', label: 'Bentuk CAD', icon: '⭕' },
+] as const;
+
+const currentCategoryObj = computed(() => {
+    return toolCategories.find((c) => c.key === activeToolCategory.value) || toolCategories[0];
+});
+
+function selectCadTool(tool: ToolType) {
+    activeTool.value = tool;
+    showCategoryMenu.value = false;
+}
 
 // Canvas container
 const containerRef = ref<HTMLDivElement | null>(null);
@@ -194,6 +254,10 @@ let tr: Konva.Transformer | null = null;
 let selectionOverlay: Konva.Rect | null = null;
 
 // Header, Toolbar & Bottom HUD scroll indicators & export menu
+const topBarContainerRef = ref<HTMLElement | null>(null);
+const canScrollTopBarLeft = ref(false);
+const canScrollTopBarRight = ref(false);
+
 const headerContainerRef = ref<HTMLElement | null>(null);
 const canScrollLeft = ref(false);
 const canScrollRight = ref(false);
@@ -238,6 +302,16 @@ const paperY = ref<number>(60);
 const paperWidth = ref<number>(defaultInitialW);
 const paperHeight = ref<number>(defaultInitialH);
 const isResizingSheet = ref(false);
+
+// Local element memory list (initialized immediately from props for both CAD and Shop Drawing modes)
+const elementList = ref<Array<{ id: string; type: string; data: Record<string, any>; sort_order: number }>>(
+    (props.elements || []).map((el: any, index: number) => ({
+        id: el.id,
+        type: el.type,
+        data: typeof el.data === 'string' ? JSON.parse(el.data) : (el.data || {}),
+        sort_order: el.sort_order ?? index,
+    }))
+);
 
 // ── LOCALSTORAGE PAPER SIZES PERSISTENCE ────────────────────────────────────
 const STORAGE_KEY_PAPERS = `cad_paper_sizes_${props.sheet.id}`;
@@ -821,16 +895,6 @@ const layersVisibility = ref({
 const showLayerPanel = ref(false);
 const showHelpModal = ref(false);
 
-// Local element memory list (initialized immediately from props for both CAD and Shop Drawing modes)
-const elementList = ref<Array<{ id: string; type: string; data: Record<string, any>; sort_order: number }>>(
-    (props.elements || []).map((el: any, index: number) => ({
-        id: el.id,
-        type: el.type,
-        data: typeof el.data === 'string' ? JSON.parse(el.data) : (el.data || {}),
-        sort_order: el.sort_order ?? index,
-    }))
-);
-
 // ── UNDO / REDO HISTORY STACK ───────────────────────────────────────────────
 const historyStack = ref<string[]>([]);
 const historyIndex = ref(-1);
@@ -1091,22 +1155,39 @@ function snap(val: number): number {
 function getLayerCategory(type: string): keyof typeof layersVisibility.value {
     switch (type) {
         case 'wall':
+        case 'rect':
             return 'walls';
         case 'door':
+        case 'double_door':
+        case 'sliding_door':
         case 'window':
             return 'openings';
         case 'column':
         case 'stair':
+        case 'grid_line':
             return 'structure';
         case 'toilet':
         case 'bed':
         case 'table':
         case 'dining_table':
+        case 'sofa':
+        case 'kitchen':
+        case 'washbasin':
+        case 'shower':
+        case 'car':
+        case 'tree':
             return 'furniture';
         case 'dimension':
             return 'dimensions';
         case 'room_label':
         case 'text':
+        case 'north_arrow':
+        case 'elevation_marker':
+        case 'section_marker':
+        case 'leader_note':
+        case 'line':
+        case 'circle':
+        case 'arc':
         default:
             return 'annotations';
     }
@@ -1219,6 +1300,7 @@ function applyOffsetToElement(item: { id: string; type: string; data: Record<str
 
 // ── SELECT ALL ELEMENTS & MOVE ENTIRE DRAWING (AUTOCAD "MOVE ALL") ─────────
 function selectAllElements() {
+    showCategoryMenu.value = false;
     if (!mainLayer || !tr || !props.canEdit) return;
     activeTool.value = 'select';
     const allShapes = mainLayer.getChildren((node) => node !== tr && node !== selectionOverlay) as Konva.Group[];
@@ -1438,8 +1520,167 @@ function duplicateAllElements() {
     duplicateSelected();
 }
 
+// ── CAD TRANSFORM TOOLS (ROTATE, FLIP, Z-ORDER, METADATA) ───────────────────
+function rotateSelected(angleDeg: number = 90) {
+    if (!props.canEdit || !tr) return;
+    const selectedNodes = tr.nodes();
+    if (selectedNodes.length === 0) return;
+
+    const ids = new Set(selectedNodes.map((n) => n.id()));
+    const targetElements = elementList.value.filter((el) => ids.has(el.id));
+    if (targetElements.length === 0) return;
+
+    const rad = (angleDeg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+
+    const bboxes = targetElements.map(getElementBoundingBox);
+    const minX = Math.min(...bboxes.map((b) => b.x));
+    const maxX = Math.max(...bboxes.map((b) => b.x + b.width));
+    const minY = Math.min(...bboxes.map((b) => b.y));
+    const maxY = Math.max(...bboxes.map((b) => b.y + b.height));
+    const groupCx = (minX + maxX) / 2;
+    const groupCy = (minY + maxY) / 2;
+
+    targetElements.forEach((el) => {
+        const d = el.data;
+        const selfBox = getElementBoundingBox(el);
+        const selfCx = selfBox.x + selfBox.width / 2;
+        const selfCy = selfBox.y + selfBox.height / 2;
+
+        const pivotX = targetElements.length > 1 ? groupCx : selfCx;
+        const pivotY = targetElements.length > 1 ? groupCy : selfCy;
+
+        if (d.x1 !== undefined && d.x2 !== undefined && d.y1 !== undefined && d.y2 !== undefined) {
+            const rx1 = pivotX + (d.x1 - pivotX) * cos - (d.y1 - pivotY) * sin;
+            const ry1 = pivotY + (d.x1 - pivotX) * sin + (d.y1 - pivotY) * cos;
+            const rx2 = pivotX + (d.x2 - pivotX) * cos - (d.y2 - pivotY) * sin;
+            const ry2 = pivotY + (d.x2 - pivotX) * sin + (d.y2 - pivotY) * cos;
+            d.x1 = Math.round(rx1);
+            d.y1 = Math.round(ry1);
+            d.x2 = Math.round(rx2);
+            d.y2 = Math.round(ry2);
+        } else if (d.x !== undefined && d.y !== undefined) {
+            const rx = pivotX + (selfCx - pivotX) * cos - (selfCy - pivotY) * sin;
+            const ry = pivotY + (selfCx - pivotX) * sin + (selfCy - pivotY) * cos;
+            d.rotation = (((d.rotation || 0) + angleDeg) % 360 + 360) % 360;
+            if (Math.abs(angleDeg % 180) === 90 && d.width !== undefined && d.height !== undefined && targetElements.length === 1) {
+                const tmp = d.width;
+                d.width = d.height;
+                d.height = tmp;
+            }
+            const newBox = getElementBoundingBox(el);
+            d.x = Math.round(rx - newBox.width / 2);
+            d.y = Math.round(ry - newBox.height / 2);
+        }
+    });
+
+    restoreFromState(elementList.value, true);
+    pushHistory();
+    triggerAutoSaveDebounced();
+    toast.success(`Objek berhasil diputar ${angleDeg > 0 ? '+' : ''}${angleDeg}°`);
+}
+
+function flipSelected(direction: 'h' | 'v') {
+    if (!props.canEdit || !tr) return;
+    const selectedNodes = tr.nodes();
+    if (selectedNodes.length === 0) return;
+
+    const ids = new Set(selectedNodes.map((n) => n.id()));
+    const targetElements = elementList.value.filter((el) => ids.has(el.id));
+    if (targetElements.length === 0) return;
+
+    const bboxes = targetElements.map(getElementBoundingBox);
+    const minX = Math.min(...bboxes.map((b) => b.x));
+    const maxX = Math.max(...bboxes.map((b) => b.x + b.width));
+    const minY = Math.min(...bboxes.map((b) => b.y));
+    const maxY = Math.max(...bboxes.map((b) => b.y + b.height));
+    const pivotX = (minX + maxX) / 2;
+    const pivotY = (minY + maxY) / 2;
+
+    targetElements.forEach((el) => {
+        const d = el.data;
+        if (d.x1 !== undefined && d.x2 !== undefined && d.y1 !== undefined && d.y2 !== undefined) {
+            if (direction === 'h') {
+                d.x1 = Math.round(pivotX - (d.x1 - pivotX));
+                d.x2 = Math.round(pivotX - (d.x2 - pivotX));
+            } else {
+                d.y1 = Math.round(pivotY - (d.y1 - pivotY));
+                d.y2 = Math.round(pivotY - (d.y2 - pivotY));
+            }
+        } else if (d.x !== undefined && d.y !== undefined) {
+            const selfBox = getElementBoundingBox(el);
+            const selfCx = selfBox.x + selfBox.width / 2;
+            const selfCy = selfBox.y + selfBox.height / 2;
+            if (direction === 'h') {
+                d.flipH = !d.flipH;
+                const newCx = pivotX - (selfCx - pivotX);
+                d.x = Math.round(newCx - selfBox.width / 2);
+            } else {
+                d.flipV = !d.flipV;
+                const newCy = pivotY - (selfCy - pivotY);
+                d.y = Math.round(newCy - selfBox.height / 2);
+            }
+        }
+    });
+
+    restoreFromState(elementList.value, true);
+    pushHistory();
+    triggerAutoSaveDebounced();
+    toast.success(`Objek dicerminkan (${direction === 'h' ? 'Horizontal' : 'Vertikal'})`);
+}
+
+function bringSelectedToFront() {
+    if (!props.canEdit || !selectedNodeId.value) return;
+    const idx = elementList.value.findIndex((el) => el.id === selectedNodeId.value);
+    if (idx < 0 || idx === elementList.value.length - 1) return;
+    const [item] = elementList.value.splice(idx, 1);
+    elementList.value.push(item);
+    elementList.value.forEach((el, i) => (el.sort_order = i));
+    restoreFromState(elementList.value, true);
+    pushHistory();
+    triggerAutoSaveDebounced();
+    toast.success('Objek dipindahkan ke paling depan');
+}
+
+function sendSelectedToBack() {
+    if (!props.canEdit || !selectedNodeId.value) return;
+    const idx = elementList.value.findIndex((el) => el.id === selectedNodeId.value);
+    if (idx <= 0) return;
+    const [item] = elementList.value.splice(idx, 1);
+    elementList.value.unshift(item);
+    elementList.value.forEach((el, i) => (el.sort_order = i));
+    restoreFromState(elementList.value, true);
+    pushHistory();
+    triggerAutoSaveDebounced();
+    toast.success('Objek dipindahkan ke paling belakang');
+}
+
+function updateElementCustomText(newVal: string) {
+    if (!selectedNodeId.value || !selectedElementData.value) return;
+    selectedElementData.value.text = newVal;
+    const el = elementList.value.find((x) => x.id === selectedNodeId.value);
+    if (el) {
+        el.data = { ...el.data, text: newVal };
+    }
+    restoreFromState(elementList.value, true);
+    triggerAutoSaveDebounced();
+}
+
+function updateElementCustomCode(newVal: string) {
+    if (!selectedNodeId.value || !selectedElementData.value) return;
+    selectedElementData.value.code = newVal;
+    const el = elementList.value.find((x) => x.id === selectedNodeId.value);
+    if (el) {
+        el.data = { ...el.data, code: newVal };
+    }
+    restoreFromState(elementList.value, true);
+    triggerAutoSaveDebounced();
+}
+
 // ── RAPATKAN LEMBAR KERJA KE GAMBAR (ELIMINASI SEMUA JARAK KOSONG) ─────────
 function autoFitSheetToDrawing() {
+    showCategoryMenu.value = false;
     if (!stage) return;
 
     if (canvasMode.value !== 'sheet') {
@@ -1571,6 +1812,7 @@ function resetPaperToDefault() {
 
 // ── PUSATKAN TAMPILAN KANVAS (AUTOCAD ZOOM EXTENTS) ─────────────────────────
 function zoomToFit() {
+    showCategoryMenu.value = false;
     if (!stage || !containerRef.value) return;
 
     let minX = Infinity;
@@ -2355,6 +2597,17 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
 
     const isCad = canvasMode.value === 'infinite';
 
+    if (data.rotation || data.flipH || data.flipV) {
+        const bbox = getElementBoundingBox(el);
+        const cx = bbox.x + bbox.width / 2;
+        const cy = bbox.y + bbox.height / 2;
+        group.offset({ x: cx, y: cy });
+        group.position({ x: cx, y: cy });
+        if (data.rotation) group.rotation(data.rotation);
+        if (data.flipH) group.scaleX(-1);
+        if (data.flipV) group.scaleY(-1);
+    }
+
     switch (el.type) {
         case 'wall': {
             // Architectural wall: Double parallel line with dark or bright CAD infill
@@ -2413,7 +2666,7 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
         }
 
         case 'door': {
-            // Simbol Pintu Swing Arsitektur
+            // Simbol Pintu Swing Arsitektur (Tunggal)
             const x = data.x ?? 0;
             const y = data.y ?? 0;
             const size = data.size ?? 80;
@@ -2436,6 +2689,101 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
             });
             group.add(frame);
             group.add(swingArc);
+            break;
+        }
+
+        case 'double_door': {
+            // Simbol Pintu Ganda / Kupu-Tarung Arsitektur
+            const x = data.x ?? 0;
+            const y = data.y ?? 0;
+            const w = data.width ?? 120;
+            const leaf = w / 2;
+
+            const frameL = new Konva.Line({
+                points: [x, y, x, y + leaf],
+                stroke: isCad ? '#4ade80' : '#16a34a',
+                strokeWidth: 3,
+            });
+            const swingArcL = new Konva.Arc({
+                x: x,
+                y: y + leaf,
+                innerRadius: leaf,
+                outerRadius: leaf,
+                angle: 90,
+                rotation: -90,
+                stroke: isCad ? '#4ade80' : '#16a34a',
+                strokeWidth: 1.5,
+                dash: [4, 3],
+            });
+            const frameR = new Konva.Line({
+                points: [x + w, y, x + w, y + leaf],
+                stroke: isCad ? '#4ade80' : '#16a34a',
+                strokeWidth: 3,
+            });
+            const swingArcR = new Konva.Arc({
+                x: x + w,
+                y: y + leaf,
+                innerRadius: leaf,
+                outerRadius: leaf,
+                angle: 90,
+                rotation: 180,
+                stroke: isCad ? '#4ade80' : '#16a34a',
+                strokeWidth: 1.5,
+                dash: [4, 3],
+            });
+            group.add(frameL);
+            group.add(swingArcL);
+            group.add(frameR);
+            group.add(swingArcR);
+            break;
+        }
+
+        case 'sliding_door': {
+            // Simbol Pintu Geser / Sliding Door
+            const x = data.x ?? 0;
+            const y = data.y ?? 0;
+            const w = data.width ?? 120;
+            const h = data.height ?? 16;
+
+            const outer = new Konva.Rect({
+                x,
+                y,
+                width: w,
+                height: h,
+                stroke: isCad ? '#38bdf8' : '#0284c7',
+                strokeWidth: 2,
+                fill: isCad ? 'rgba(56, 189, 248, 0.15)' : '#f0f9ff',
+            });
+            const p1 = new Konva.Rect({
+                x: x + 2,
+                y: y + 2,
+                width: w * 0.52,
+                height: h / 2 - 2,
+                stroke: isCad ? '#7dd3fc' : '#0369a1',
+                strokeWidth: 1.5,
+                fill: isCad ? 'rgba(56, 189, 248, 0.4)' : '#bae6fd',
+            });
+            const p2 = new Konva.Rect({
+                x: x + w * 0.46,
+                y: y + h / 2,
+                width: w * 0.52,
+                height: h / 2 - 2,
+                stroke: isCad ? '#7dd3fc' : '#0369a1',
+                strokeWidth: 1.5,
+                fill: isCad ? 'rgba(56, 189, 248, 0.4)' : '#bae6fd',
+            });
+            const arrow = new Konva.Arrow({
+                points: [x + w * 0.25, y + h / 4, x + w * 0.4, y + h / 4],
+                pointerLength: 4,
+                pointerWidth: 4,
+                fill: isCad ? '#38bdf8' : '#0284c7',
+                stroke: isCad ? '#38bdf8' : '#0284c7',
+                strokeWidth: 1,
+            });
+            group.add(outer);
+            group.add(p1);
+            group.add(p2);
+            group.add(arrow);
             break;
         }
 
@@ -2518,6 +2866,171 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
             break;
         }
 
+        case 'sofa': {
+            // Sofa Ruang Tamu 3-Seater
+            const x = data.x ?? 0;
+            const y = data.y ?? 0;
+            const w = data.width ?? 140;
+            const h = data.height ?? 65;
+
+            const body = new Konva.Rect({
+                x,
+                y,
+                width: w,
+                height: h,
+                stroke: isCad ? '#fbbf24' : '#78350f',
+                strokeWidth: 2,
+                fill: isCad ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7',
+                cornerRadius: 6,
+            });
+            const back = new Konva.Rect({
+                x: x + 6,
+                y: y + 4,
+                width: w - 12,
+                height: 14,
+                stroke: isCad ? '#fde047' : '#92400e',
+                strokeWidth: 1.5,
+                fill: isCad ? 'rgba(251, 191, 36, 0.3)' : '#fde68a',
+                cornerRadius: 4,
+            });
+            const armL = new Konva.Rect({
+                x: x + 4,
+                y: y + 4,
+                width: 14,
+                height: h - 8,
+                stroke: isCad ? '#fde047' : '#92400e',
+                strokeWidth: 1.5,
+                fill: isCad ? 'rgba(251, 191, 36, 0.3)' : '#fde68a',
+                cornerRadius: 4,
+            });
+            const armR = new Konva.Rect({
+                x: x + w - 18,
+                y: y + 4,
+                width: 14,
+                height: h - 8,
+                stroke: isCad ? '#fde047' : '#92400e',
+                strokeWidth: 1.5,
+                fill: isCad ? 'rgba(251, 191, 36, 0.3)' : '#fde68a',
+                cornerRadius: 4,
+            });
+            group.add(body);
+            group.add(back);
+            group.add(armL);
+            group.add(armR);
+
+            const seatW = (w - 44) / 3;
+            for (let i = 0; i < 3; i++) {
+                group.add(
+                    new Konva.Rect({
+                        x: x + 20 + i * (seatW + 2),
+                        y: y + 20,
+                        width: seatW,
+                        height: h - 26,
+                        stroke: isCad ? '#fde047' : '#a16207',
+                        strokeWidth: 1.5,
+                        fill: isCad ? '#1e293b' : '#ffffff',
+                        cornerRadius: 4,
+                    })
+                );
+            }
+            break;
+        }
+
+        case 'kitchen': {
+            // Meja Kitchen Set (Double Sink + Kompor 2 Tungku)
+            const x = data.x ?? 0;
+            const y = data.y ?? 0;
+            const w = data.width ?? 150;
+            const h = data.height ?? 60;
+
+            const counter = new Konva.Rect({
+                x,
+                y,
+                width: w,
+                height: h,
+                stroke: isCad ? '#94a3b8' : '#334155',
+                strokeWidth: 2,
+                fill: isCad ? 'rgba(148, 163, 184, 0.15)' : '#f1f5f9',
+                cornerRadius: 3,
+            });
+            const sinkFrame = new Konva.Rect({
+                x: x + 8,
+                y: y + 8,
+                width: 54,
+                height: h - 16,
+                stroke: isCad ? '#38bdf8' : '#0284c7',
+                strokeWidth: 1.5,
+                fill: isCad ? 'rgba(56, 189, 248, 0.2)' : '#e0f2fe',
+                cornerRadius: 4,
+            });
+            const sinkDiv = new Konva.Line({
+                points: [x + 35, y + 8, x + 35, y + h - 8],
+                stroke: isCad ? '#38bdf8' : '#0284c7',
+                strokeWidth: 1.5,
+            });
+            const drain1 = new Konva.Circle({
+                x: x + 21,
+                y: y + h / 2,
+                radius: 3,
+                fill: isCad ? '#38bdf8' : '#0284c7',
+            });
+            const drain2 = new Konva.Circle({
+                x: x + 48,
+                y: y + h / 2,
+                radius: 3,
+                fill: isCad ? '#38bdf8' : '#0284c7',
+            });
+
+            const stoveFrame = new Konva.Rect({
+                x: x + 75,
+                y: y + 8,
+                width: 65,
+                height: h - 16,
+                stroke: isCad ? '#f87171' : '#b91c1c',
+                strokeWidth: 1.5,
+                fill: isCad ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
+                cornerRadius: 4,
+            });
+            const burner1 = new Konva.Circle({
+                x: x + 92,
+                y: y + h / 2,
+                radius: 12,
+                stroke: isCad ? '#ef4444' : '#dc2626',
+                strokeWidth: 1.5,
+            });
+            const burner2 = new Konva.Circle({
+                x: x + 123,
+                y: y + h / 2,
+                radius: 12,
+                stroke: isCad ? '#ef4444' : '#dc2626',
+                strokeWidth: 1.5,
+            });
+            const b1Center = new Konva.Circle({
+                x: x + 92,
+                y: y + h / 2,
+                radius: 4,
+                fill: isCad ? '#ef4444' : '#dc2626',
+            });
+            const b2Center = new Konva.Circle({
+                x: x + 123,
+                y: y + h / 2,
+                radius: 4,
+                fill: isCad ? '#ef4444' : '#dc2626',
+            });
+
+            group.add(counter);
+            group.add(sinkFrame);
+            group.add(sinkDiv);
+            group.add(drain1);
+            group.add(drain2);
+            group.add(stoveFrame);
+            group.add(burner1);
+            group.add(burner2);
+            group.add(b1Center);
+            group.add(b2Center);
+            break;
+        }
+
         case 'toilet': {
             // Simbol Sanitair Kloset Duduk 2D
             const x = data.x ?? 0;
@@ -2545,6 +3058,102 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
             });
             group.add(tank);
             group.add(bowl);
+            break;
+        }
+
+        case 'washbasin': {
+            // Wastafel Kamar Mandi
+            const x = data.x ?? 0;
+            const y = data.y ?? 0;
+            const w = data.width ?? 50;
+            const h = data.height ?? 40;
+
+            const base = new Konva.Rect({
+                x,
+                y,
+                width: w,
+                height: h,
+                stroke: isCad ? '#38bdf8' : '#0369a1',
+                strokeWidth: 2,
+                fill: isCad ? 'rgba(56, 189, 248, 0.2)' : '#f0f9ff',
+                cornerRadius: 6,
+            });
+            const bowl = new Konva.Ellipse({
+                x: x + w / 2,
+                y: y + h / 2 + 2,
+                radiusX: w / 2 - 8,
+                radiusY: h / 2 - 8,
+                stroke: isCad ? '#38bdf8' : '#0284c7',
+                strokeWidth: 1.5,
+                fill: isCad ? 'rgba(56, 189, 248, 0.35)' : '#e0f2fe',
+            });
+            const faucet = new Konva.Circle({
+                x: x + w / 2,
+                y: y + 7,
+                radius: 3,
+                fill: isCad ? '#7dd3fc' : '#0284c7',
+            });
+            const drain = new Konva.Circle({
+                x: x + w / 2,
+                y: y + h / 2 + 3,
+                radius: 2.5,
+                fill: isCad ? '#7dd3fc' : '#0369a1',
+            });
+
+            group.add(base);
+            group.add(bowl);
+            group.add(faucet);
+            group.add(drain);
+            break;
+        }
+
+        case 'shower': {
+            // Area Shower Box Kamar Mandi
+            const x = data.x ?? 0;
+            const y = data.y ?? 0;
+            const w = data.width ?? 80;
+            const h = data.height ?? 80;
+
+            const tray = new Konva.Rect({
+                x,
+                y,
+                width: w,
+                height: h,
+                stroke: isCad ? '#22d3ee' : '#0891b2',
+                strokeWidth: 2,
+                fill: isCad ? 'rgba(34, 211, 238, 0.15)' : '#ecfeff',
+                cornerRadius: 4,
+            });
+            const diag = new Konva.Line({
+                points: [x, y + h - 22, x + 22, y + h],
+                stroke: isCad ? '#67e8f9' : '#06b6d4',
+                strokeWidth: 1.5,
+            });
+            const head = new Konva.Circle({
+                x: x + 16,
+                y: y + 16,
+                radius: 6,
+                stroke: isCad ? '#22d3ee' : '#0891b2',
+                strokeWidth: 2,
+                fill: isCad ? '#0e7490' : '#cffafe',
+            });
+            const s1 = new Konva.Line({ points: [x + 16, y + 24, x + 24, y + 36], stroke: isCad ? '#67e8f9' : '#0891b2', strokeWidth: 1, dash: [2, 2] });
+            const s2 = new Konva.Line({ points: [x + 20, y + 20, x + 34, y + 28], stroke: isCad ? '#67e8f9' : '#0891b2', strokeWidth: 1, dash: [2, 2] });
+            const s3 = new Konva.Line({ points: [x + 24, y + 16, x + 38, y + 20], stroke: isCad ? '#67e8f9' : '#0891b2', strokeWidth: 1, dash: [2, 2] });
+            const drain = new Konva.Circle({
+                x: x + w - 18,
+                y: y + h - 18,
+                radius: 3.5,
+                fill: isCad ? '#06b6d4' : '#0891b2',
+            });
+
+            group.add(tray);
+            group.add(diag);
+            group.add(head);
+            group.add(s1);
+            group.add(s2);
+            group.add(s3);
+            group.add(drain);
             break;
         }
 
@@ -2626,6 +3235,426 @@ function createShapeFromElement(el: { id: string; type: string; data: Record<str
             group.add(c2);
             group.add(c3);
             group.add(c4);
+            break;
+        }
+
+        case 'car': {
+            // Simbol Mobil Carport / Garasi Tampak Atas
+            const x = data.x ?? 0;
+            const y = data.y ?? 0;
+            const w = data.width ?? 160;
+            const h = data.height ?? 75;
+
+            const carBody = new Konva.Rect({
+                x: x + 8,
+                y: y + 6,
+                width: w - 16,
+                height: h - 12,
+                stroke: isCad ? '#cbd5e1' : '#334155',
+                strokeWidth: 2,
+                fill: isCad ? 'rgba(71, 85, 105, 0.45)' : '#e2e8f0',
+                cornerRadius: 16,
+            });
+            const windshield = new Konva.Line({
+                points: [x + 42, y + 10, x + 56, y + 16, x + 56, y + h - 16, x + 42, y + h - 10],
+                stroke: isCad ? '#38bdf8' : '#0284c7',
+                strokeWidth: 2,
+                fill: isCad ? 'rgba(56, 189, 248, 0.3)' : '#bae6fd',
+                closed: true,
+            });
+            const rearGlass = new Konva.Line({
+                points: [x + w - 46, y + 16, x + w - 32, y + 11, x + w - 32, y + h - 11, x + w - 46, y + h - 16],
+                stroke: isCad ? '#38bdf8' : '#0284c7',
+                strokeWidth: 2,
+                fill: isCad ? 'rgba(56, 189, 248, 0.3)' : '#bae6fd',
+                closed: true,
+            });
+            const roof = new Konva.Rect({
+                x: x + 56,
+                y: y + 15,
+                width: w - 104,
+                height: h - 30,
+                stroke: isCad ? '#94a3b8' : '#475569',
+                strokeWidth: 1.5,
+                fill: isCad ? '#1e293b' : '#ffffff',
+                cornerRadius: 4,
+            });
+            const w1 = new Konva.Rect({ x: x + 26, y: y, width: 22, height: 7, fill: '#0f172a', cornerRadius: 2 });
+            const w2 = new Konva.Rect({ x: x + 26, y: y + h - 7, width: 22, height: 7, fill: '#0f172a', cornerRadius: 2 });
+            const w3 = new Konva.Rect({ x: x + w - 46, y: y, width: 22, height: 7, fill: '#0f172a', cornerRadius: 2 });
+            const w4 = new Konva.Rect({ x: x + w - 46, y: y + h - 7, width: 22, height: 7, fill: '#0f172a', cornerRadius: 2 });
+
+            group.add(carBody);
+            group.add(windshield);
+            group.add(rearGlass);
+            group.add(roof);
+            group.add(w1);
+            group.add(w2);
+            group.add(w3);
+            group.add(w4);
+            break;
+        }
+
+        case 'tree': {
+            // Simbol Pohon / Tanaman Landscape
+            const x = data.x ?? 0;
+            const y = data.y ?? 0;
+            const r = data.radius ?? 40;
+
+            const canopy = new Konva.Circle({
+                x,
+                y,
+                radius: r,
+                stroke: isCad ? '#4ade80' : '#16a34a',
+                strokeWidth: 2,
+                fill: isCad ? 'rgba(74, 222, 128, 0.2)' : '#dcfce7',
+                dash: [6, 4],
+            });
+            const innerCanopy = new Konva.Circle({
+                x,
+                y,
+                radius: r * 0.7,
+                stroke: isCad ? '#86efac' : '#22c55e',
+                strokeWidth: 1.5,
+            });
+            const trunk = new Konva.Circle({
+                x,
+                y,
+                radius: 4,
+                fill: isCad ? '#ffffff' : '#14532d',
+            });
+            group.add(canopy);
+            group.add(innerCanopy);
+            group.add(trunk);
+
+            for (let i = 0; i < 6; i++) {
+                const ang = (i * 60 * Math.PI) / 180;
+                group.add(
+                    new Konva.Line({
+                        points: [x, y, x + Math.cos(ang) * (r * 0.65), y + Math.sin(ang) * (r * 0.65)],
+                        stroke: isCad ? '#86efac' : '#15803d',
+                        strokeWidth: 1.5,
+                    })
+                );
+            }
+            break;
+        }
+
+        case 'north_arrow': {
+            // Arah Utara Arsitektur (North Arrow)
+            const x = data.x ?? 0;
+            const y = data.y ?? 0;
+            const r = 30;
+
+            const outerRing = new Konva.Circle({
+                x,
+                y,
+                radius: r,
+                stroke: isCad ? '#ffffff' : '#0f172a',
+                strokeWidth: 2,
+                fill: isCad ? 'rgba(15, 23, 42, 0.7)' : '#ffffff',
+            });
+            const northLeft = new Konva.Line({
+                points: [x, y - r + 3, x - 9, y + 4, x, y],
+                fill: isCad ? '#ffffff' : '#0f172a',
+                stroke: isCad ? '#ffffff' : '#0f172a',
+                strokeWidth: 1.5,
+                closed: true,
+            });
+            const northRight = new Konva.Line({
+                points: [x, y - r + 3, x + 9, y + 4, x, y],
+                stroke: isCad ? '#ffffff' : '#0f172a',
+                strokeWidth: 1.5,
+                fill: 'transparent',
+                closed: true,
+            });
+            const southTip = new Konva.Line({
+                points: [x, y, x, y + r - 5],
+                stroke: isCad ? '#94a3b8' : '#64748b',
+                strokeWidth: 1.5,
+            });
+            const letterU = new Konva.Text({
+                x: x - 6,
+                y: y - r - 17,
+                text: 'U',
+                fontSize: 14,
+                fontFamily: 'sans-serif',
+                fontStyle: 'bold',
+                fill: isCad ? '#f8fafc' : '#0f172a',
+            });
+            group.add(outerRing);
+            group.add(northLeft);
+            group.add(northRight);
+            group.add(southTip);
+            group.add(letterU);
+            break;
+        }
+
+        case 'elevation_marker': {
+            // Peil Ketinggian Lantai (±0.00)
+            const x = data.x ?? 0;
+            const y = data.y ?? 0;
+            const r = 16;
+            const elevText = data.text ?? '±0.00';
+
+            const circle = new Konva.Circle({
+                x,
+                y,
+                radius: r,
+                stroke: isCad ? '#ffffff' : '#0f172a',
+                strokeWidth: 1.5,
+                fill: isCad ? '#0f172a' : '#ffffff',
+            });
+            const hLine = new Konva.Line({ points: [x - r - 4, y, x + r + 4, y], stroke: isCad ? '#ffffff' : '#0f172a', strokeWidth: 1.5 });
+            const vLine = new Konva.Line({ points: [x, y - r - 4, x, y + r + 4], stroke: isCad ? '#ffffff' : '#0f172a', strokeWidth: 1.5 });
+
+            const q1 = new Konva.Arc({
+                x,
+                y,
+                innerRadius: 0,
+                outerRadius: r,
+                angle: 90,
+                rotation: -180,
+                fill: isCad ? '#38bdf8' : '#0f172a',
+            });
+            const q3 = new Konva.Arc({
+                x,
+                y,
+                innerRadius: 0,
+                outerRadius: r,
+                angle: 90,
+                rotation: 0,
+                fill: isCad ? '#38bdf8' : '#0f172a',
+            });
+
+            const label = new Konva.Text({
+                x: x + r + 8,
+                y: y - 7,
+                text: elevText,
+                fontSize: 13,
+                fontFamily: 'monospace',
+                fontStyle: 'bold',
+                fill: isCad ? '#38bdf8' : '#0f172a',
+            });
+
+            group.add(circle);
+            group.add(q1);
+            group.add(q3);
+            group.add(hLine);
+            group.add(vLine);
+            group.add(label);
+            break;
+        }
+
+        case 'section_marker': {
+            // Garis Potongan Arsitektur A - A
+            const x1 = data.x1 ?? 0;
+            const y1 = data.y1 ?? 0;
+            const x2 = data.x2 ?? 200;
+            const y2 = data.y2 ?? 0;
+            const label = data.text ?? 'A';
+
+            const cutLine = new Konva.Line({
+                points: [x1, y1, x2, y2],
+                stroke: isCad ? '#c084fc' : '#7c3aed',
+                strokeWidth: 3,
+                dash: [16, 4, 3, 4],
+            });
+
+            const b1 = new Konva.Circle({
+                x: x1,
+                y: y1,
+                radius: 16,
+                stroke: isCad ? '#c084fc' : '#7c3aed',
+                strokeWidth: 2,
+                fill: isCad ? '#1e1b4b' : '#f5f3ff',
+            });
+            const t1 = new Konva.Text({
+                x: x1 - 8,
+                y: y1 - 7,
+                width: 16,
+                text: label,
+                align: 'center',
+                fontSize: 14,
+                fontFamily: 'sans-serif',
+                fontStyle: 'bold',
+                fill: isCad ? '#ffffff' : '#6d28d9',
+            });
+
+            const b2 = new Konva.Circle({
+                x: x2,
+                y: y2,
+                radius: 16,
+                stroke: isCad ? '#c084fc' : '#7c3aed',
+                strokeWidth: 2,
+                fill: isCad ? '#1e1b4b' : '#f5f3ff',
+            });
+            const t2 = new Konva.Text({
+                x: x2 - 8,
+                y: y2 - 7,
+                width: 16,
+                text: label,
+                align: 'center',
+                fontSize: 14,
+                fontFamily: 'sans-serif',
+                fontStyle: 'bold',
+                fill: isCad ? '#ffffff' : '#6d28d9',
+            });
+
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const nx = -dy / len;
+            const ny = dx / len;
+
+            const p1 = new Konva.Arrow({
+                points: [x1, y1, x1 + nx * 28, y1 + ny * 28],
+                pointerLength: 8,
+                pointerWidth: 8,
+                fill: isCad ? '#c084fc' : '#7c3aed',
+                stroke: isCad ? '#c084fc' : '#7c3aed',
+                strokeWidth: 2,
+            });
+            const p2 = new Konva.Arrow({
+                points: [x2, y2, x2 + nx * 28, y2 + ny * 28],
+                pointerLength: 8,
+                pointerWidth: 8,
+                fill: isCad ? '#c084fc' : '#7c3aed',
+                stroke: isCad ? '#c084fc' : '#7c3aed',
+                strokeWidth: 2,
+            });
+
+            group.add(cutLine);
+            group.add(b1);
+            group.add(t1);
+            group.add(b2);
+            group.add(t2);
+            group.add(p1);
+            group.add(p2);
+            break;
+        }
+
+        case 'grid_line': {
+            // As Kolom & Bangunan
+            const x1 = data.x1 ?? 0;
+            const y1 = data.y1 ?? 0;
+            const x2 = data.x2 ?? 0;
+            const y2 = data.y2 ?? 200;
+            const code = data.code ?? '1';
+
+            const line = new Konva.Line({
+                points: [x1, y1, x2, y2],
+                stroke: isCad ? '#38bdf8' : '#0284c7',
+                strokeWidth: 1.5,
+                dash: [12, 4, 2, 4],
+            });
+
+            const bubble = new Konva.Circle({
+                x: x2,
+                y: y2,
+                radius: 14,
+                stroke: isCad ? '#38bdf8' : '#0284c7',
+                strokeWidth: 2,
+                fill: isCad ? '#0f172a' : '#ffffff',
+            });
+            const text = new Konva.Text({
+                x: x2 - 8,
+                y: y2 - 6,
+                width: 16,
+                text: code,
+                align: 'center',
+                fontSize: 12,
+                fontFamily: 'sans-serif',
+                fontStyle: 'bold',
+                fill: isCad ? '#38bdf8' : '#0284c7',
+            });
+
+            group.add(line);
+            group.add(bubble);
+            group.add(text);
+            break;
+        }
+
+        case 'leader_note': {
+            // Teks Catatan dengan Panah Penunjuk Spesifikasi
+            const x1 = data.x1 ?? 0;
+            const y1 = data.y1 ?? 0;
+            const x2 = data.x2 ?? 60;
+            const y2 = data.y2 ?? -40;
+            const noteText = data.text ?? 'Catatan Spesifikasi';
+            const shoulderDir = x2 >= x1 ? 1 : -1;
+            const shoulderLen = 45;
+
+            const arrow = new Konva.Arrow({
+                points: [x2, y2, x1, y1],
+                pointerLength: 7,
+                pointerWidth: 6,
+                fill: isCad ? '#facc15' : '#d97706',
+                stroke: isCad ? '#facc15' : '#d97706',
+                strokeWidth: 1.5,
+            });
+            const shoulder = new Konva.Line({
+                points: [x2, y2, x2 + shoulderDir * shoulderLen, y2],
+                stroke: isCad ? '#facc15' : '#d97706',
+                strokeWidth: 1.5,
+            });
+            const text = new Konva.Text({
+                x: shoulderDir > 0 ? x2 + 4 : x2 - shoulderLen - 4,
+                y: y2 - 14,
+                text: noteText,
+                fontSize: 11,
+                fontFamily: 'sans-serif',
+                fontStyle: 'bold',
+                fill: isCad ? '#fef08a' : '#92400e',
+            });
+
+            group.add(arrow);
+            group.add(shoulder);
+            group.add(text);
+            break;
+        }
+
+        case 'circle': {
+            // Lingkaran CAD
+            const x = data.x ?? 0;
+            const y = data.y ?? 0;
+            const r = data.radius ?? 40;
+
+            const circle = new Konva.Circle({
+                x,
+                y,
+                radius: r,
+                stroke: isCad ? '#38bdf8' : '#1e293b',
+                strokeWidth: 2,
+                fill: isCad ? 'rgba(56, 189, 248, 0.15)' : 'rgba(241, 245, 249, 0.4)',
+            });
+            const cross1 = new Konva.Line({ points: [x - 5, y, x + 5, y], stroke: isCad ? '#7dd3fc' : '#64748b', strokeWidth: 1 });
+            const cross2 = new Konva.Line({ points: [x, y - 5, x, y + 5], stroke: isCad ? '#7dd3fc' : '#64748b', strokeWidth: 1 });
+
+            group.add(circle);
+            group.add(cross1);
+            group.add(cross2);
+            break;
+        }
+
+        case 'arc': {
+            // Busur Lengkung CAD
+            const x = data.x ?? 0;
+            const y = data.y ?? 0;
+            const r = data.radius ?? 50;
+            const angle = data.angle ?? 90;
+
+            const arc = new Konva.Arc({
+                x,
+                y,
+                innerRadius: r,
+                outerRadius: r,
+                angle: angle,
+                rotation: data.rotation ?? 0,
+                stroke: isCad ? '#f8fafc' : '#1e293b',
+                strokeWidth: 2,
+            });
+            group.add(arc);
             break;
         }
 
@@ -3446,17 +4475,28 @@ function setupDrawingInteractions() {
         isDrawing = true;
 
         const isCad = canvasMode.value === 'infinite';
-        if (activeTool.value === 'wall' || activeTool.value === 'line' || activeTool.value === 'dimension') {
+        if (
+            activeTool.value === 'wall' ||
+            activeTool.value === 'line' ||
+            activeTool.value === 'dimension' ||
+            activeTool.value === 'grid_line' ||
+            activeTool.value === 'section_marker' ||
+            activeTool.value === 'leader_note'
+        ) {
             const previewStroke = activeTool.value === 'wall'
                 ? (isCad ? '#f8fafc' : '#1e293b')
-                : activeTool.value === 'dimension'
+                : (activeTool.value === 'dimension' || activeTool.value === 'leader_note')
                     ? (isCad ? '#facc15' : '#d97706')
-                    : (isCad ? '#f8fafc' : '#64748b');
+                    : activeTool.value === 'grid_line'
+                        ? (isCad ? '#38bdf8' : '#0284c7')
+                        : activeTool.value === 'section_marker'
+                            ? (isCad ? '#c084fc' : '#7c3aed')
+                            : (isCad ? '#f8fafc' : '#64748b');
 
             previewShape = new Konva.Line({
                 points: [startX, startY, startX, startY],
                 stroke: previewStroke,
-                strokeWidth: activeTool.value === 'wall' ? 12 : 2,
+                strokeWidth: activeTool.value === 'wall' ? 12 : (activeTool.value === 'section_marker' ? 3 : 2),
                 dash: [4, 4],
             });
             tempLayer?.add(previewShape);
@@ -3466,6 +4506,16 @@ function setupDrawingInteractions() {
                 y: startY,
                 width: 0,
                 height: 0,
+                stroke: isCad ? '#38bdf8' : '#1e293b',
+                strokeWidth: 2,
+                dash: [4, 4],
+            });
+            tempLayer?.add(previewShape);
+        } else if (activeTool.value === 'circle') {
+            previewShape = new Konva.Circle({
+                x: startX,
+                y: startY,
+                radius: 0,
                 stroke: isCad ? '#38bdf8' : '#1e293b',
                 strokeWidth: 2,
                 dash: [4, 4],
@@ -3519,6 +4569,9 @@ function setupDrawingInteractions() {
         } else if (previewShape instanceof Konva.Rect) {
             previewShape.width(currentX - startX);
             previewShape.height(currentY - startY);
+        } else if (previewShape instanceof Konva.Circle) {
+            const r = Math.round(Math.sqrt((currentX - startX) ** 2 + (currentY - startY) ** 2));
+            previewShape.radius(r);
         }
 
         tempLayer?.batchDraw();
@@ -3613,40 +4666,89 @@ function setupDrawingInteractions() {
         const id = 'el_' + Math.random().toString(36).substring(2, 9);
         let newElem: { id: string; type: string; data: Record<string, any>; sort_order: number } | null = null;
 
-        if (activeTool.value === 'wall' || activeTool.value === 'line' || activeTool.value === 'dimension') {
-            if (startX !== endX || startY !== endY) {
-                newElem = {
-                    id,
-                    type: activeTool.value,
-                    data: { x1: startX, y1: startY, x2: endX, y2: endY },
-                    sort_order: elementList.value.length,
-                };
-            }
+        if (
+            activeTool.value === 'wall' ||
+            activeTool.value === 'line' ||
+            activeTool.value === 'dimension' ||
+            activeTool.value === 'grid_line' ||
+            activeTool.value === 'section_marker' ||
+            activeTool.value === 'leader_note'
+        ) {
+            const effectiveEndX = (startX === endX && startY === endY)
+                ? (activeTool.value === 'grid_line' ? startX : startX + 160)
+                : endX;
+            const effectiveEndY = (startX === endX && startY === endY)
+                ? (activeTool.value === 'grid_line' ? startY + 160 : (activeTool.value === 'leader_note' ? startY - 45 : startY))
+                : endY;
+
+            newElem = {
+                id,
+                type: activeTool.value,
+                data: {
+                    x1: startX,
+                    y1: startY,
+                    x2: effectiveEndX,
+                    y2: effectiveEndY,
+                    ...(activeTool.value === 'grid_line' ? { code: '1' } : {}),
+                    ...(activeTool.value === 'section_marker' ? { text: 'A' } : {}),
+                    ...(activeTool.value === 'leader_note' ? { text: 'Catatan Spesifikasi' } : {}),
+                },
+                sort_order: elementList.value.length,
+            };
+        } else if (activeTool.value === 'circle') {
+            const dist = Math.round(Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2));
+            const radius = Math.max(20, dist || 40);
+            newElem = {
+                id,
+                type: 'circle',
+                data: { x: startX, y: startY, radius },
+                sort_order: elementList.value.length,
+            };
         } else if (activeTool.value === 'rect') {
-            const w = Math.abs(endX - startX);
-            const h = Math.abs(endY - startY);
-            if (w > 10 && h > 10) {
-                newElem = {
-                    id,
-                    type: 'rect',
-                    data: { x: Math.min(startX, endX), y: Math.min(startY, endY), width: w, height: h },
-                    sort_order: elementList.value.length,
-                };
-            }
+            const w = Math.abs(endX - startX) || 120;
+            const h = Math.abs(endY - startY) || 100;
+            newElem = {
+                id,
+                type: 'rect',
+                data: { x: Math.min(startX, endX), y: Math.min(startY, endY), width: w, height: h },
+                sort_order: elementList.value.length,
+            };
+        } else if (activeTool.value === 'arc') {
+            newElem = { id, type: 'arc', data: { x: startX, y: startY, radius: 50, angle: 90 }, sort_order: elementList.value.length };
         } else if (activeTool.value === 'column') {
             newElem = { id, type: 'column', data: { x: startX, y: startY, size: 30 }, sort_order: elementList.value.length };
         } else if (activeTool.value === 'door') {
             newElem = { id, type: 'door', data: { x: startX, y: startY, size: 80 }, sort_order: elementList.value.length };
+        } else if (activeTool.value === 'double_door') {
+            newElem = { id, type: 'double_door', data: { x: startX, y: startY, width: 120 }, sort_order: elementList.value.length };
+        } else if (activeTool.value === 'sliding_door') {
+            newElem = { id, type: 'sliding_door', data: { x: startX, y: startY, width: 120, height: 16 }, sort_order: elementList.value.length };
         } else if (activeTool.value === 'window') {
             newElem = { id, type: 'window', data: { x: startX, y: startY, width: 100, height: 16 }, sort_order: elementList.value.length };
         } else if (activeTool.value === 'stair') {
             newElem = { id, type: 'stair', data: { x: startX, y: startY, width: 80, height: 160 }, sort_order: elementList.value.length };
-        } else if (activeTool.value === 'toilet') {
-            newElem = { id, type: 'toilet', data: { x: startX, y: startY, width: 50, height: 45 }, sort_order: elementList.value.length };
+        } else if (activeTool.value === 'sofa') {
+            newElem = { id, type: 'sofa', data: { x: startX, y: startY, width: 140, height: 65 }, sort_order: elementList.value.length };
         } else if (activeTool.value === 'bed') {
             newElem = { id, type: 'bed', data: { x: startX, y: startY, width: 120, height: 140 }, sort_order: elementList.value.length };
         } else if (activeTool.value === 'table') {
             newElem = { id, type: 'table', data: { x: startX, y: startY, width: 100, height: 70 }, sort_order: elementList.value.length };
+        } else if (activeTool.value === 'kitchen') {
+            newElem = { id, type: 'kitchen', data: { x: startX, y: startY, width: 150, height: 60 }, sort_order: elementList.value.length };
+        } else if (activeTool.value === 'toilet') {
+            newElem = { id, type: 'toilet', data: { x: startX, y: startY, width: 50, height: 45 }, sort_order: elementList.value.length };
+        } else if (activeTool.value === 'washbasin') {
+            newElem = { id, type: 'washbasin', data: { x: startX, y: startY, width: 50, height: 40 }, sort_order: elementList.value.length };
+        } else if (activeTool.value === 'shower') {
+            newElem = { id, type: 'shower', data: { x: startX, y: startY, width: 80, height: 80 }, sort_order: elementList.value.length };
+        } else if (activeTool.value === 'car') {
+            newElem = { id, type: 'car', data: { x: startX, y: startY, width: 160, height: 75 }, sort_order: elementList.value.length };
+        } else if (activeTool.value === 'tree') {
+            newElem = { id, type: 'tree', data: { x: startX, y: startY, radius: 40 }, sort_order: elementList.value.length };
+        } else if (activeTool.value === 'north_arrow') {
+            newElem = { id, type: 'north_arrow', data: { x: startX, y: startY }, sort_order: elementList.value.length };
+        } else if (activeTool.value === 'elevation_marker') {
+            newElem = { id, type: 'elevation_marker', data: { x: startX, y: startY, text: '±0.00' }, sort_order: elementList.value.length };
         } else if (activeTool.value === 'room_label') {
             const labelText = prompt('Nama Ruangan (contoh: R. Tamu ±0.00):', 'R. Tamu\n±0.00');
             if (labelText) {
@@ -3661,6 +4763,16 @@ function setupDrawingInteractions() {
             mainLayer.add(shapeNode);
             mainLayer.batchDraw();
             pushHistory();
+            triggerAutoSaveDebounced();
+
+            // Auto-select objek baru agar langsung aktif dan terlihat propertinya
+            if (tr) {
+                tr.nodes([shapeNode]);
+                selectedNodeId.value = newElem.id;
+                selectedElementData.value = { ...newElem.data, type: newElem.type };
+                updateSelectionOverlay();
+                mainLayer.batchDraw();
+            }
         }
     });
 }
@@ -3828,27 +4940,76 @@ function handleKeyDown(e: KeyboardEvent) {
         return;
     }
 
+    // Close category menu on Escape
+    if (e.key === 'Escape') {
+        if (showCategoryMenu.value) {
+            showCategoryMenu.value = false;
+            return;
+        }
+    }
+
     // Delete selected element
     if (e.key === 'Delete' || e.key === 'Backspace') {
         deleteSelected();
         return;
     }
 
-    // Tool hotkeys
-    switch (e.key.toLowerCase()) {
-        case 'v': activeTool.value = 'select'; break;
-        case 'h': activeTool.value = 'pan'; break;
-        case 'z': if (!e.ctrlKey && !e.metaKey) { zoomToFit(); } break;
-        case 'w': activeTool.value = 'wall'; break;
-        case 'r': activeTool.value = 'rect'; break;
-        case 'd': activeTool.value = 'door'; break;
-        case 'j': activeTool.value = 'window'; break;
-        case 'c': activeTool.value = 'column'; break;
-        case 's': activeTool.value = 'stair'; break;
-        case 'm': activeTool.value = 'dimension'; break;
-        case 't': activeTool.value = 'room_label'; break;
-        case 'l': activeTool.value = 'line'; break;
-        case 'e': activeTool.value = 'eraser'; break;
+    // Tool hotkeys CAD Lengkap
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.shiftKey) {
+            // Kombinasi Shift + Tombol
+            switch (e.key.toLowerCase()) {
+                case 'd': selectCadTool('double_door'); break;       // Shift+D: Pintu Ganda / 2 Daun
+                case 'p': selectCadTool('sliding_door'); break;      // Shift+P: Pintu Geser / Sliding
+                case 't': selectCadTool('table'); break;             // Shift+T: Meja Makan & Kursi
+                case 'b': selectCadTool('washbasin'); break;         // Shift+B: Wastafel Kamar Mandi
+                case 's': selectCadTool('shower'); break;            // Shift+S: Area Shower Box
+                case 'c': selectCadTool('car'); break;               // Shift+C: Mobil Carport / Garasi
+                case 'r': selectCadTool('tree'); break;              // Shift+R: Pohon / Tanaman
+                case 'e': selectCadTool('elevation_marker'); break;  // Shift+E: Peil Ketinggian Lantai
+            }
+        } else {
+            // Tombol Tunggal (Single Key)
+            switch (e.key.toLowerCase()) {
+                // Navigasi & Seleksi
+                case 'v': selectCadTool('select'); break;
+                case 'h': selectCadTool('pan'); break;
+                case 'z': zoomToFit(); showCategoryMenu.value = false; break;
+
+                // Struktur Bangunan & Dinding
+                case 'w': selectCadTool('wall'); break;
+                case 'r': selectCadTool('rect'); break;
+                case 'c': selectCadTool('column'); break;
+                case 'g': selectCadTool('grid_line'); break;
+                case 's': selectCadTool('stair'); break;
+
+                // Bukaan Pintu & Jendela
+                case 'd': selectCadTool('door'); break;
+                case 'p': selectCadTool('sliding_door'); break;
+                case 'j': selectCadTool('window'); break;
+
+                // Perabot & Sanitair
+                case 'f': selectCadTool('sofa'); break;
+                case 'b': selectCadTool('bed'); break;
+                case 'k': selectCadTool('kitchen'); break;
+                case 'u': selectCadTool('toilet'); break;
+
+                // Simbol & Notasi Arsitektural
+                case 'n': selectCadTool('north_arrow'); break;
+                case 'x': selectCadTool('section_marker'); break;
+                case 'q': selectCadTool('leader_note'); break;
+                case 'm': selectCadTool('dimension'); break;
+                case 't': selectCadTool('room_label'); break;
+
+                // Bentuk Geometri CAD
+                case 'l': selectCadTool('line'); break;
+                case 'o': selectCadTool('circle'); break;
+                case 'a': selectCadTool('arc'); break;
+
+                // Penghapus
+                case 'e': selectCadTool('eraser'); break;
+            }
+        }
     }
 }
 
@@ -4437,6 +5598,23 @@ function navigateToSheet(targetId: string) {
     router.visit(`/drawings/${targetId}`);
 }
 
+function checkTopBarScroll() {
+    if (!topBarContainerRef.value) return;
+    const el = topBarContainerRef.value;
+    canScrollTopBarLeft.value = el.scrollLeft > 8;
+    canScrollTopBarRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 8;
+}
+
+function scrollTopBar(direction: 'left' | 'right') {
+    if (!topBarContainerRef.value) return;
+    const step = 280;
+    topBarContainerRef.value.scrollBy({
+        left: direction === 'right' ? step : -step,
+        behavior: 'smooth',
+    });
+    setTimeout(checkTopBarScroll, 320);
+}
+
 function checkHeaderScroll() {
     if (!headerContainerRef.value) return;
     const el = headerContainerRef.value;
@@ -4505,11 +5683,13 @@ onMounted(() => {
     loadPaperSizesFromStorage();
     nextTick(() => {
         initCanvas();
+        checkTopBarScroll();
         checkHeaderScroll();
         checkBottomHudScroll();
         checkLeftToolbarScroll();
         setTimeout(() => {
             zoomToFit();
+            checkTopBarScroll();
             checkHeaderScroll();
             checkBottomHudScroll();
             checkLeftToolbarScroll();
@@ -4518,10 +5698,12 @@ onMounted(() => {
 
     if (typeof ResizeObserver !== 'undefined') {
         uiResizeObserver = new ResizeObserver(() => {
+            checkTopBarScroll();
             checkHeaderScroll();
             checkBottomHudScroll();
             checkLeftToolbarScroll();
         });
+        if (topBarContainerRef.value) uiResizeObserver.observe(topBarContainerRef.value);
         if (headerContainerRef.value) uiResizeObserver.observe(headerContainerRef.value);
         if (bottomHudRef.value) uiResizeObserver.observe(bottomHudRef.value);
         if (leftToolbarRef.value) uiResizeObserver.observe(leftToolbarRef.value);
@@ -4538,6 +5720,7 @@ onMounted(() => {
         stage.width(containerRef.value.clientWidth);
         stage.height(containerRef.value.clientHeight);
         stage.batchDraw();
+        checkTopBarScroll();
         checkHeaderScroll();
         checkBottomHudScroll();
         checkLeftToolbarScroll();
@@ -4582,76 +5765,95 @@ onUnmounted(() => {
         <!-- TOP CAD 2-ROW HEADER & RIBBON TOOLBAR -->
         <header class="relative z-30 shrink-0 bg-slate-950 border-b border-white/10 flex flex-col">
             <!-- BARIS 1: NAVIGASI, JUDUL FILE, STATUS & ACTIONS UTAMA -->
-            <div class="h-11 px-3 sm:px-4 flex items-center justify-between gap-2 border-b border-white/5">
-                <!-- Kiri: Back, Icon, Judul Lembar, Tipe, Dropdown Switcher, File Baru -->
-                <div class="flex items-center gap-2 sm:gap-3 min-w-0">
-                    <Link
-                        href="/drawings"
-                        class="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors shrink-0"
-                        title="Kembali ke Daftar Lembar Kerja"
-                    >
-                        <ArrowLeft class="w-4 h-4" />
-                    </Link>
-
-                    <div class="w-7 h-7 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30 shrink-0">
-                        <DraftingCompass class="w-3.5 h-3.5" />
+            <div class="relative bg-slate-950 border-b border-white/5">
+                <!-- Petunjuk Gulir Kiri Baris 1 -->
+                <button
+                    v-if="canScrollTopBarLeft"
+                    @click="scrollTopBar('left')"
+                    type="button"
+                    class="absolute left-0 top-0 bottom-0 z-20 flex items-center pl-2 pr-4 bg-gradient-to-r from-slate-950 via-slate-900/95 to-transparent text-slate-300 hover:text-white transition-all cursor-pointer group"
+                    title="Geser menu navigasi ke kiri"
+                >
+                    <div class="w-6 h-6 rounded-full bg-slate-800/90 border border-white/20 flex items-center justify-center shadow-lg group-hover:bg-violet-600 transition-colors">
+                        <ChevronLeft class="w-4 h-4 text-white" />
                     </div>
+                </button>
 
-                    <div class="flex items-center gap-2 min-w-0">
-                        <h2 class="text-xs sm:text-sm font-bold text-white tracking-tight truncate max-w-[150px] sm:max-w-xs">{{ currentSheet.title }}</h2>
-
-                        <button
-                            v-if="canEdit"
-                            type="button"
-                            @click="showSheetSettingsModal = true"
-                            class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30 hover:bg-violet-500/40 transition flex items-center gap-1 cursor-pointer shrink-0"
-                            title="Klik untuk ubah Kategori / Skala / Unit"
+                <!-- Scrollable Baris 1 Container -->
+                <div
+                    ref="topBarContainerRef"
+                    @scroll="checkTopBarScroll"
+                    class="h-11 px-3 sm:px-4 flex items-center justify-between gap-4 overflow-x-auto scrollbar-none scroll-smooth min-w-0"
+                >
+                    <!-- Kiri: Back, Icon, Judul Lembar, Tipe, Dropdown Switcher, File Baru -->
+                    <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                        <Link
+                            href="/drawings"
+                            class="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors shrink-0"
+                            title="Kembali ke Daftar Lembar Kerja"
                         >
-                            <span>{{ currentSheet.type.toUpperCase() }}</span>
-                            <Settings class="w-2.5 h-2.5 text-violet-300" />
-                        </button>
-                        <span v-else class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30 shrink-0">
-                            {{ currentSheet.type.toUpperCase() }}
-                        </span>
-                        <span class="hidden md:inline-block text-[11px] text-slate-400 truncate max-w-[180px]">
-                            • {{ project.title }}
-                        </span>
+                            <ArrowLeft class="w-4 h-4" />
+                        </Link>
 
-                        <!-- Sheet Switcher Dropdown (Pilih Lembar Kerja / Ruangan) -->
-                        <div v-if="projectSheets && projectSheets.length > 0" class="relative inline-block shrink-0">
-                            <select
-                                :value="sheet.id"
-                                @change="switchSheet"
-                                class="bg-slate-900 border border-violet-500/40 text-violet-300 hover:text-white hover:border-violet-400 text-[11px] rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-400 font-medium cursor-pointer transition-colors shadow-sm max-w-[140px] sm:max-w-[190px] truncate [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white"
-                                title="Pilih Lembar Kerja Lainnya"
-                            >
-                                <option
-                                    v-for="(s, idx) in projectSheets"
-                                    :key="s.id"
-                                    :value="s.id"
-                                    class="bg-slate-900 text-white py-1"
-                                >
-                                    📄 Lembar {{ idx + 1 }}: {{ s.title }} ({{ s.scale }})
-                                </option>
-                                <option v-if="canEdit" value="__NEW_SHEET__" class="bg-violet-950 text-violet-300 font-medium py-1">
-                                    📄 + Buat File Lembar Baru...
-                                </option>
-                            </select>
+                        <div class="w-7 h-7 rounded-lg bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30 shrink-0">
+                            <DraftingCompass class="w-3.5 h-3.5" />
                         </div>
 
-                        <!-- Tombol Tambah Lembar / Kertas Baru Langsung -->
-                        <button
-                            v-if="canEdit"
-                            @click="openNewSheetModal"
-                            type="button"
-                            class="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-violet-600/25 hover:bg-violet-600 text-violet-300 hover:text-white border border-violet-500/30 transition-all cursor-pointer shadow-sm shrink-0"
-                            title="Buat Lembar Kerja / File Kertas Baru di Proyek Ini"
-                        >
-                            <Plus class="w-3 h-3" />
-                            <span>File Baru</span>
-                        </button>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <h2 class="text-xs sm:text-sm font-bold text-white tracking-tight truncate max-w-[150px] sm:max-w-xs">{{ currentSheet.title }}</h2>
+
+                            <button
+                                v-if="canEdit"
+                                type="button"
+                                @click="showSheetSettingsModal = true"
+                                class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30 hover:bg-violet-500/40 transition flex items-center gap-1 cursor-pointer shrink-0"
+                                title="Klik untuk ubah Kategori / Skala / Unit"
+                            >
+                                <span>{{ currentSheet.type.toUpperCase() }}</span>
+                                <Settings class="w-2.5 h-2.5 text-violet-300" />
+                            </button>
+                            <span v-else class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30 shrink-0">
+                                {{ currentSheet.type.toUpperCase() }}
+                            </span>
+                            <span class="hidden md:inline-block text-[11px] text-slate-400 truncate max-w-[180px]">
+                                • {{ project.title }}
+                            </span>
+
+                            <!-- Sheet Switcher Dropdown (Pilih Lembar Kerja / Ruangan) -->
+                            <div v-if="projectSheets && projectSheets.length > 0" class="relative inline-block shrink-0">
+                                <select
+                                    :value="sheet.id"
+                                    @change="switchSheet"
+                                    class="bg-slate-900 border border-violet-500/40 text-violet-300 hover:text-white hover:border-violet-400 text-[11px] rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-violet-400 font-medium cursor-pointer transition-colors shadow-sm max-w-[140px] sm:max-w-[190px] truncate [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-white"
+                                    title="Pilih Lembar Kerja Lainnya"
+                                >
+                                    <option
+                                        v-for="(s, idx) in projectSheets"
+                                        :key="s.id"
+                                        :value="s.id"
+                                        class="bg-slate-900 text-white py-1"
+                                    >
+                                        📄 Lembar {{ idx + 1 }}: {{ s.title }} ({{ s.scale }})
+                                    </option>
+                                    <option v-if="canEdit" value="__NEW_SHEET__" class="bg-violet-950 text-violet-300 font-medium py-1">
+                                        📄 + Buat File Lembar Baru...
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- Tombol Tambah Lembar / Kertas Baru Langsung -->
+                            <button
+                                v-if="canEdit"
+                                @click="openNewSheetModal"
+                                type="button"
+                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-violet-600/25 hover:bg-violet-600 text-violet-300 hover:text-white border border-violet-500/30 transition-all cursor-pointer shadow-sm shrink-0"
+                                title="Buat Lembar Kerja / File Kertas Baru di Proyek Ini"
+                            >
+                                <Plus class="w-3 h-3" />
+                                <span>File Baru</span>
+                            </button>
+                        </div>
                     </div>
-                </div>
 
                 <!-- Kanan: Undo / Redo, Copy / Paste, Bantuan, Status Auto-save / Simpan, Export Menu -->
                 <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
@@ -4729,6 +5931,17 @@ onUnmounted(() => {
                         <span>{{ isSaving ? 'Menyimpan...' : (isAutoSaving ? 'Auto-Save...' : (saveSuccess ? 'Tersimpan!' : 'Simpan')) }}</span>
                     </button>
 
+                    <!-- Mode Gambar Kerja Furniture (Shop Drawing) -->
+                    <button
+                        type="button"
+                        @click="switchEditorMode('shop_drawing')"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 transition-all cursor-pointer shrink-0"
+                        title="Buka Tampilan Gambar Kerja Furniture & Interior"
+                    >
+                        <Armchair class="w-3.5 h-3.5 text-sky-400" />
+                        <span class="hidden sm:inline">Mode Gambar Kerja</span>
+                    </button>
+
                     <!-- Booklet PDF Link Button -->
                     <Link
                         :href="`/projects/${project.id}/booklet`"
@@ -4753,7 +5966,7 @@ onUnmounted(() => {
 
                         <div
                             v-if="showExportMenu"
-                            class="absolute right-0 top-full mt-2 w-64 bg-slate-950 border border-white/15 rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-1 text-xs text-slate-200 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150"
+                            class="fixed right-3 sm:right-4 top-12 w-64 bg-slate-950 border border-white/15 rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-1 text-xs text-slate-200 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150"
                         >
                             <div class="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-white/10 mb-1">
                                 Ekspor Lembar Kerja
@@ -4861,6 +6074,23 @@ onUnmounted(() => {
                             </button>
                         </div>
                     </div>
+                </div>
+                </div>
+
+                <!-- Petunjuk Gulir Kanan Baris 1: Notifikasi visual bila layar kurang lebar -->
+                <div
+                    v-if="canScrollTopBarRight"
+                    class="absolute right-0 top-0 bottom-0 z-20 flex items-center pr-2 pl-6 bg-gradient-to-l from-slate-950 via-slate-900/95 to-transparent pointer-events-none"
+                >
+                    <button
+                        @click="scrollTopBar('right')"
+                        type="button"
+                        class="pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-600/95 hover:bg-violet-500 text-white shadow-xl border border-white/20 transition-all cursor-pointer animate-pulse text-xs font-semibold"
+                        title="Masih ada tools lainnya di kanan, klik untuk scroll"
+                    >
+                        <span>Tools Lainnya</span>
+                        <ChevronRight class="w-3.5 h-3.5" />
+                    </button>
                 </div>
             </div>
 
@@ -5073,249 +6303,518 @@ onUnmounted(() => {
 
         <!-- WORKSPACE BODY (TOOLBAR + CANVAS + INSPECTOR + LAYER PANEL) -->
         <div class="flex-1 flex relative overflow-hidden">
-            <!-- LEFT FLOATING CAD TOOLBAR (RESPONSIVE: DOES NOT COLLIDE WITH BOTTOM HUD) -->
-            <div class="absolute left-2 sm:left-4 top-3 sm:top-4 bottom-18 sm:bottom-20 z-30 flex flex-col pointer-events-none">
-                <div class="relative flex-1 flex flex-col min-h-0 pointer-events-auto">
+            <!-- LEFT FLOATING CAD TOOLBAR (RESPONSIVE: SLIM & COMPACT CAD PALETTE) -->
+            <div class="absolute left-2 sm:left-4 top-3 sm:top-4 bottom-18 sm:bottom-20 z-50 flex flex-col pointer-events-none w-12 sm:w-[50px]">
+                <!-- Invisible backdrop to dismiss popup when clicking anywhere outside -->
+                <div
+                    v-if="showCategoryMenu"
+                    class="fixed inset-0 z-40 pointer-events-auto"
+                    @click="showCategoryMenu = false"
+                ></div>
+
+                <div class="relative flex-1 flex flex-col min-h-0 pointer-events-auto w-full z-50">
                     <!-- Top Scroll Indicator (if scrolled down) -->
                     <button
                         v-if="canScrollToolbarUp"
                         @click="scrollToolbar('up')"
                         type="button"
-                        class="absolute -top-2.5 left-1/2 -translate-x-1/2 z-40 flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 hover:bg-violet-500 text-white shadow-lg border border-white/20 transition-all cursor-pointer animate-pulse"
+                        class="absolute -top-2.5 left-1/2 -translate-x-1/2 z-50 flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 hover:bg-violet-500 text-white shadow-lg border border-white/20 transition-all cursor-pointer animate-pulse"
                         title="Gulir menu tools ke atas"
                     >
                         <ChevronUp class="w-3.5 h-3.5" />
                     </button>
 
+                    <!-- Category Filter Dropdown Button (Compact Single Icon Pill) -->
+                    <div class="relative mb-1 shrink-0">
+                        <button
+                            type="button"
+                            @click="showCategoryMenu = !showCategoryMenu"
+                            :class="[
+                                'w-9 h-9 mx-auto flex items-center justify-center rounded-xl bg-slate-950/95 border shadow-lg transition-all cursor-pointer relative group',
+                                showCategoryMenu
+                                    ? 'border-violet-400 text-white bg-violet-600/40 ring-2 ring-violet-500/30'
+                                    : 'border-white/15 hover:border-violet-400 text-violet-400 hover:text-white hover:bg-violet-600/30'
+                            ]"
+                            :title="`Menu Filter Tools: ${currentCategoryObj.label} (Klik untuk buka/tutup)`"
+                        >
+                            <!-- Hamburger Icon Tetap Selalu Ada -->
+                            <Menu class="w-4 h-4 transition-transform group-hover:scale-110" />
+
+                            <!-- Badge Kategori Terpilih -->
+                            <span
+                                v-if="activeToolCategory !== 'all'"
+                                class="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 border border-slate-900 text-[10px] leading-none shadow-md select-none"
+                                :title="`Filter aktif: ${currentCategoryObj.label}`"
+                            >
+                                {{ currentCategoryObj.icon }}
+                            </span>
+                        </button>
+
+                        <!-- Flyout Menu Popover to the Right -->
+                        <div
+                            v-if="showCategoryMenu"
+                            class="absolute left-full top-0 ml-2 z-50 py-1.5 px-1 rounded-xl bg-slate-950/98 border border-white/20 shadow-2xl backdrop-blur-lg w-44 space-y-0.5"
+                        >
+                            <div class="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-white/10 mb-1 flex items-center justify-between">
+                                <span>Filter Tools</span>
+                                <button
+                                    type="button"
+                                    @click="showCategoryMenu = false"
+                                    class="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer transition-colors"
+                                    title="Tutup Menu Filter"
+                                >
+                                    <X class="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                            <button
+                                v-for="cat in toolCategories"
+                                :key="cat.key"
+                                type="button"
+                                @click="activeToolCategory = cat.key as any"
+                                :class="[
+                                    'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-left cursor-pointer',
+                                    activeToolCategory === cat.key
+                                        ? 'bg-violet-600 text-white font-semibold shadow-sm'
+                                        : 'text-slate-300 hover:text-white hover:bg-white/10'
+                                ]"
+                            >
+                                <span class="text-base shrink-0">{{ cat.icon }}</span>
+                                <span class="truncate">{{ cat.label }}</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Scrollable Tool Buttons Column -->
                     <div
                         ref="leftToolbarRef"
                         @scroll="checkLeftToolbarScroll"
-                        class="cad-toolbar flex-1 flex flex-col gap-1 p-1.5 sm:p-2 rounded-2xl bg-slate-950/95 backdrop-blur-md border border-white/10 shadow-2xl overflow-y-auto custom-scroll scroll-smooth max-h-full"
+                        class="cad-toolbar flex-1 flex flex-col items-center gap-1 p-1 rounded-2xl bg-slate-950/95 backdrop-blur-md border border-white/10 shadow-2xl overflow-y-auto overflow-x-hidden custom-scroll scroll-smooth max-h-full w-full"
                     >
-                        <!-- Select Tool -->
+                        <!-- NAVIGASI & SELEKSI -->
+                        <template v-if="activeToolCategory === 'all'">
+                            <!-- Select Tool -->
+                            <button
+                                @click="selectCadTool('select')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'select' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Pilih & Pindahkan Objek / Select (V)"
+                            >
+                                <MousePointer class="w-4 h-4" />
+                            </button>
+
+                            <!-- Pan / Hand Tool -->
+                            <button
+                                @click="selectCadTool('pan')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'pan' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Geser Kanvas Bebas / Pan (H / Spasi)"
+                            >
+                                <Hand class="w-4 h-4 text-emerald-400" />
+                            </button>
+
+                            <!-- Select All / Move Entire Project -->
+                            <button
+                                @click="selectAllElements"
+                                class="w-9 h-9 mx-auto flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer relative group shrink-0"
+                                title="Pilih Semua & Geser Seluruh Proyek (Ctrl+A)"
+                            >
+                                <Move class="w-4 h-4 text-amber-400" />
+                            </button>
+
+                            <!-- Zoom to Fit / Extents -->
+                            <button
+                                @click="zoomToFit"
+                                class="w-9 h-9 mx-auto flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer relative group shrink-0"
+                                title="Pusatkan Gambar ke Layar / Zoom Extents (Z)"
+                            >
+                                <Focus class="w-4 h-4 text-sky-400" />
+                            </button>
+
+                            <!-- Auto Fit Sheet to Drawing -->
+                            <button
+                                v-if="canvasMode === 'sheet'"
+                                @click="autoFitSheetToDrawing"
+                                class="w-9 h-9 mx-auto flex items-center justify-center rounded-xl text-indigo-400 hover:text-white hover:bg-indigo-600/20 transition-all cursor-pointer relative group shrink-0"
+                                title="Rapatkan Lembar Kerja ke Gambar (Hilangkan Jarak Kosong)"
+                            >
+                                <Sparkles class="w-4 h-4 text-indigo-400" />
+                            </button>
+
+                            <div class="h-px w-6 bg-white/15 my-0.5 shrink-0"></div>
+                        </template>
+
+                        <!-- STRUKTUR & DINDING -->
+                        <template v-if="activeToolCategory === 'all' || activeToolCategory === 'structure'">
+                            <!-- Wall Tool -->
+                            <button
+                                @click="selectCadTool('wall')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'wall' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Dinding Tebal / Wall (W)"
+                            >
+                                <Columns class="w-4 h-4 text-slate-200" />
+                            </button>
+
+                            <!-- Room / Rect Tool -->
+                            <button
+                                @click="selectCadTool('rect')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'rect' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Kotak Ruangan / Room Rect (R)"
+                            >
+                                <Square class="w-4 h-4 text-sky-300" />
+                            </button>
+
+                            <!-- Column Tool -->
+                            <button
+                                @click="selectCadTool('column')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'column' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Kolom Struktur Beton (C)"
+                            >
+                                <Building2 class="w-4 h-4 text-purple-400" />
+                            </button>
+
+                            <!-- Grid Line Tool -->
+                            <button
+                                @click="selectCadTool('grid_line')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'grid_line' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Garis As Bangunan & Kolom (G)"
+                            >
+                                <Hash class="w-4 h-4 text-cyan-400" />
+                            </button>
+
+                            <!-- Stair Symbol -->
+                            <button
+                                @click="selectCadTool('stair')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'stair' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Tangga Arsitektur 2D (S)"
+                            >
+                                <Move class="w-4 h-4 text-indigo-400 rotate-45" />
+                            </button>
+
+                            <div v-if="activeToolCategory === 'all'" class="h-px w-6 bg-white/15 my-0.5 shrink-0"></div>
+                        </template>
+
+                        <!-- BUKAAN PINTU & JENDELA -->
+                        <template v-if="activeToolCategory === 'all' || activeToolCategory === 'openings'">
+                            <!-- Single Swing Door -->
+                            <button
+                                @click="selectCadTool('door')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'door' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Pintu Swing Tunggal 1 Arah (D)"
+                            >
+                                <DoorClosed class="w-4 h-4 text-emerald-400" />
+                            </button>
+
+                            <!-- Double Swing Door -->
+                            <button
+                                @click="selectCadTool('double_door')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'double_door' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Pintu Ganda / Kupu-Tarung 2 Daun (Shift+D)"
+                            >
+                                <DoorOpen class="w-4 h-4 text-emerald-400" />
+                            </button>
+
+                            <!-- Sliding Door -->
+                            <button
+                                @click="selectCadTool('sliding_door')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'sliding_door' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Pintu Geser / Sliding Door (P)"
+                            >
+                                <SlidersHorizontal class="w-4 h-4 text-teal-400" />
+                            </button>
+
+                            <!-- Window Symbol -->
+                            <button
+                                @click="selectCadTool('window')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'window' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Bukaan Jendela (J)"
+                            >
+                                <Columns class="w-4 h-4 text-sky-400 rotate-90" />
+                            </button>
+
+                            <div v-if="activeToolCategory === 'all'" class="h-px w-6 bg-white/15 my-0.5 shrink-0"></div>
+                        </template>
+
+                        <!-- PERABOT & RUANGAN -->
+                        <template v-if="activeToolCategory === 'all' || activeToolCategory === 'furniture'">
+                            <!-- Sofa Ruang Tamu -->
+                            <button
+                                @click="selectCadTool('sofa')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'sofa' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Sofa Ruang Tamu 3-Seater (F)"
+                            >
+                                <Sofa class="w-4 h-4 text-amber-400" />
+                            </button>
+
+                            <!-- Meja Makan -->
+                            <button
+                                @click="selectCadTool('table')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'table' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Meja Makan & Kursi / Table (Shift+T)"
+                            >
+                                <Armchair class="w-4 h-4 text-rose-300" />
+                            </button>
+
+                            <!-- Tempat Tidur -->
+                            <button
+                                @click="selectCadTool('bed')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'bed' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Tempat Tidur / Bed (B)"
+                            >
+                                <Bed class="w-4 h-4 text-amber-300" />
+                            </button>
+
+                            <!-- Dapur & Kitchen Set -->
+                            <button
+                                @click="selectCadTool('kitchen')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'kitchen' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Meja Dapur: Bak Cuci Piring & Kompor Gas (K)"
+                            >
+                                <CookingPot class="w-4 h-4 text-orange-400" />
+                            </button>
+
+                            <!-- Toilet -->
+                            <button
+                                @click="selectCadTool('toilet')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'toilet' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Kloset Duduk / Toilet WC (U)"
+                            >
+                                <Bath class="w-4 h-4 text-cyan-400" />
+                            </button>
+
+                            <!-- Wastafel Kamar Mandi -->
+                            <button
+                                @click="selectCadTool('washbasin')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'washbasin' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Wastafel Cuci Tangan Kamar Mandi (Shift+B)"
+                            >
+                                <Droplets class="w-4 h-4 text-sky-400" />
+                            </button>
+
+                            <!-- Area Shower Box -->
+                            <button
+                                @click="selectCadTool('shower')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'shower' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Area Shower Box Kamar Mandi (Shift+S)"
+                            >
+                                <Sparkles class="w-4 h-4 text-cyan-300" />
+                            </button>
+
+                            <!-- Mobil Carport -->
+                            <button
+                                @click="selectCadTool('car')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'car' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Mobil Carport / Garasi 2D (Shift+C)"
+                            >
+                                <Car class="w-4 h-4 text-slate-300" />
+                            </button>
+
+                            <!-- Pohon Landscape -->
+                            <button
+                                @click="selectCadTool('tree')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'tree' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Pohon / Tanaman Landscape Taman (Shift+R)"
+                            >
+                                <Trees class="w-4 h-4 text-green-400" />
+                            </button>
+
+                            <div v-if="activeToolCategory === 'all'" class="h-px w-6 bg-white/15 my-0.5 shrink-0"></div>
+                        </template>
+
+                        <!-- SIMBOL ARSITEKTUR & ANOTASI -->
+                        <template v-if="activeToolCategory === 'all' || activeToolCategory === 'symbols'">
+                            <!-- North Arrow -->
+                            <button
+                                @click="selectCadTool('north_arrow')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'north_arrow' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Arah Mata Angin / Utara - North Arrow (N)"
+                            >
+                                <Compass class="w-4 h-4 text-indigo-400" />
+                            </button>
+
+                            <!-- Elevation Marker -->
+                            <button
+                                @click="selectCadTool('elevation_marker')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'elevation_marker' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Peil Ketinggian Lantai / Level (Shift+E)"
+                            >
+                                <Crosshair class="w-4 h-4 text-sky-400" />
+                            </button>
+
+                            <!-- Section Marker -->
+                            <button
+                                @click="selectCadTool('section_marker')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'section_marker' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Garis Potongan Arsitektur (X)"
+                            >
+                                <Split class="w-4 h-4 text-purple-400" />
+                            </button>
+
+                            <!-- Leader Note -->
+                            <button
+                                @click="selectCadTool('leader_note')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'leader_note' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Teks Catatan Panah Penunjuk Spesifikasi (Q)"
+                            >
+                                <ArrowUpRight class="w-4 h-4 text-amber-400" />
+                            </button>
+
+                            <!-- Dimension Tool -->
+                            <button
+                                @click="selectCadTool('dimension')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'dimension' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Penggaris Ukuran / Dimensi (M)"
+                            >
+                                <Ruler class="w-4 h-4 text-amber-400" />
+                            </button>
+
+                            <!-- Room Label Tool -->
+                            <button
+                                @click="selectCadTool('room_label')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'room_label' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Label Ruangan / Text (T)"
+                            >
+                                <Type class="w-4 h-4 text-white" />
+                            </button>
+
+                            <div v-if="activeToolCategory === 'all'" class="h-px w-6 bg-white/15 my-0.5 shrink-0"></div>
+                        </template>
+
+                        <!-- BENTUK GEOMETRI CAD -->
+                        <template v-if="activeToolCategory === 'all' || activeToolCategory === 'shapes'">
+                            <!-- Line Tool -->
+                            <button
+                                @click="selectCadTool('line')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'line' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Garis Bebas / Line (L)"
+                            >
+                                <Minus class="w-4 h-4" />
+                            </button>
+
+                            <!-- Circle Tool -->
+                            <button
+                                @click="selectCadTool('circle')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'circle' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Lingkaran CAD / Circle (O)"
+                            >
+                                <CircleIcon class="w-4 h-4 text-sky-400" />
+                            </button>
+
+                            <!-- Arc Tool -->
+                            <button
+                                @click="selectCadTool('arc')"
+                                :class="[
+                                    'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                    activeTool === 'arc' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ]"
+                                title="Busur Lengkung CAD / Arc (A)"
+                            >
+                                <RotateCw class="w-4 h-4 text-indigo-400" />
+                            </button>
+
+                            <div v-if="activeToolCategory === 'all'" class="h-px w-6 bg-white/15 my-0.5 shrink-0"></div>
+                        </template>
+
+                        <!-- Penghapus (Selalu Tampil) -->
                         <button
-                            @click="activeTool = 'select'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'select' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Pilih & Pindahkan Objek / Select (V)"
-                >
-                    <MousePointer class="w-4 h-4" />
-                </button>
-
-                <!-- Pan / Hand Tool -->
-                <button
-                    @click="activeTool = 'pan'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'pan' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Geser Kanvas Bebas / Pan (H)"
-                >
-                    <Hand class="w-4 h-4 text-emerald-400" />
-                </button>
-
-                <!-- Select All / Move Entire Project -->
-                <button
-                    @click="selectAllElements"
-                    class="p-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer relative group"
-                    title="Pilih Semua & Geser Seluruh Proyek (Ctrl+A)"
-                >
-                    <Move class="w-4 h-4 text-amber-400" />
-                </button>
-
-                <!-- Zoom to Fit / Extents -->
-                <button
-                    @click="zoomToFit"
-                    class="p-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer relative group"
-                    title="Pusatkan Gambar ke Layar / Zoom Extents (Z)"
-                >
-                    <Focus class="w-4 h-4 text-sky-400" />
-                </button>
-
-                <!-- Auto Fit Sheet to Drawing -->
-                <button
-                    v-if="canvasMode === 'sheet'"
-                    @click="autoFitSheetToDrawing"
-                    class="p-2.5 rounded-xl text-indigo-400 hover:text-white hover:bg-indigo-600/20 transition-all cursor-pointer relative group"
-                    title="Rapatkan Lembar Kerja ke Gambar (Hilangkan Jarak Kosong)"
-                >
-                    <Sparkles class="w-4 h-4 text-indigo-400" />
-                </button>
-
-                <div class="h-px w-full bg-white/10 my-0.5"></div>
-
-                <!-- Wall Tool -->
-                <button
-                    @click="activeTool = 'wall'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'wall' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Dinding Tebal / Wall (W)"
-                >
-                    <Columns class="w-4 h-4" />
-                </button>
-
-                <!-- Room / Rect Tool -->
-                <button
-                    @click="activeTool = 'rect'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'rect' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Kotak Ruangan / Room Rect (R)"
-                >
-                    <Square class="w-4 h-4" />
-                </button>
-
-                <!-- Column Tool -->
-                <button
-                    @click="activeTool = 'column'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'column' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Kolom Struktur Beton (C)"
-                >
-                    <Building2 class="w-4 h-4 text-purple-400" />
-                </button>
-
-                <!-- Door Symbol -->
-                <button
-                    @click="activeTool = 'door'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'door' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Simbol Pintu Swing (D)"
-                >
-                    <DoorClosed class="w-4 h-4 text-emerald-400" />
-                </button>
-
-                <!-- Window Symbol -->
-                <button
-                    @click="activeTool = 'window'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'window' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Bukaan Jendela (J)"
-                >
-                    <Columns class="w-4 h-4 text-sky-400 rotate-90" />
-                </button>
-
-                <!-- Stair Symbol -->
-                <button
-                    @click="activeTool = 'stair'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'stair' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Tangga Arsitektur 2D (S)"
-                >
-                    <Move class="w-4 h-4 text-indigo-400 rotate-45" />
-                </button>
-
-                <div class="h-px w-full bg-white/10 my-0.5"></div>
-
-                <!-- Sanitair: Toilet -->
-                <button
-                    @click="activeTool = 'toilet'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'toilet' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Kloset Duduk / Toilet (WC)"
-                >
-                    <Bath class="w-4 h-4 text-cyan-400" />
-                </button>
-
-                <!-- Furniture: Bed -->
-                <button
-                    @click="activeTool = 'bed'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'bed' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Tempat Tidur / Bed"
-                >
-                    <Bed class="w-4 h-4 text-amber-300" />
-                </button>
-
-                <!-- Furniture: Table -->
-                <button
-                    @click="activeTool = 'table'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'table' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Meja Makan / Table"
-                >
-                    <Armchair class="w-4 h-4 text-rose-300" />
-                </button>
-
-                <div class="h-px w-full bg-white/10 my-0.5"></div>
-
-                <!-- Dimension Tool -->
-                <button
-                    @click="activeTool = 'dimension'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'dimension' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Penggaris Ukuran / Dimensi (M)"
-                >
-                    <Ruler class="w-4 h-4 text-amber-400" />
-                </button>
-
-                <!-- Room Label Tool -->
-                <button
-                    @click="activeTool = 'room_label'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'room_label' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Label Ruangan / Text (T)"
-                >
-                    <Type class="w-4 h-4" />
-                </button>
-
-                <!-- Line Tool -->
-                <button
-                    @click="activeTool = 'line'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'line' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    ]"
-                    title="Garis Bebas / Line (L)"
-                >
-                    <Minus class="w-4 h-4" />
-                </button>
-
-                <div class="h-px w-full bg-white/10 my-0.5"></div>
-
-                <!-- Eraser Tool -->
-                <button
-                    @click="activeTool = 'eraser'"
-                    :class="[
-                        'p-2.5 rounded-xl transition-all cursor-pointer relative group',
-                        activeTool === 'eraser' ? 'bg-red-600 text-white shadow-md' : 'text-slate-400 hover:text-red-400 hover:bg-white/5'
-                    ]"
-                    title="Penghapus Elemen (E)"
-                >
-                    <Trash2 class="w-4 h-4" />
-                </button>
-            </div>
+                            @click="selectCadTool('eraser')"
+                            :class="[
+                                'w-9 h-9 mx-auto flex items-center justify-center rounded-xl transition-all cursor-pointer relative group shrink-0',
+                                activeTool === 'eraser' ? 'bg-red-600 text-white shadow-md' : 'text-slate-400 hover:text-red-400 hover:bg-white/5'
+                            ]"
+                            title="Penghapus Elemen (E)"
+                        >
+                            <Trash2 class="w-4 h-4" />
+                        </button>
+                    </div>
 
             <!-- Bottom Scroll Indicator (if more tools below on small screen) -->
             <button
                 v-if="canScrollToolbarDown"
                 @click="scrollToolbar('down')"
                 type="button"
-                class="absolute -bottom-2.5 left-1/2 -translate-x-1/2 z-40 flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 hover:bg-violet-500 text-white shadow-lg border border-white/20 transition-all cursor-pointer animate-bounce hover:animate-none"
+                class="absolute -bottom-2.5 left-1/2 -translate-x-1/2 z-50 flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 hover:bg-violet-500 text-white shadow-lg border border-white/20 transition-all cursor-pointer animate-bounce hover:animate-none"
                 title="Masih ada tools lainnya di bawah, klik untuk scroll"
             >
                 <ChevronDown class="w-3.5 h-3.5" />
@@ -5565,6 +7064,119 @@ onUnmounted(() => {
                         </p>
                     </div>
 
+                    <!-- Input Khusus Simbol Elevasi Lantai (Peil ±0.00) -->
+                    <div v-else-if="selectedElementData?.type === 'elevation_marker'" class="space-y-2 pt-2 border-t border-white/10">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-semibold text-emerald-400 flex items-center gap-1.5">
+                                <Crosshair class="w-3.5 h-3.5 text-emerald-400" />
+                                Nilai Elevasi Peil Lantai
+                            </span>
+                        </div>
+                        <input
+                            :value="selectedElementData.text || '±0.00'"
+                            @input="updateElementCustomText(($event.target as HTMLInputElement).value)"
+                            placeholder="±0.00"
+                            class="w-full text-xs px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                        />
+                        <div class="flex flex-wrap gap-1">
+                            <button
+                                v-for="preset in ['±0.00', '+0.05', '+0.10', '+0.50', '-0.15', '-0.20', '+1.00', '+3.50']"
+                                :key="preset"
+                                type="button"
+                                @click="updateElementCustomText(preset)"
+                                class="px-2 py-0.5 rounded text-[10px] font-mono bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border border-white/10 transition-colors cursor-pointer"
+                            >
+                                {{ preset }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Input Khusus Garis Grid Kolom (As A, B, 1, 2) -->
+                    <div v-else-if="selectedElementData?.type === 'grid_line'" class="space-y-2 pt-2 border-t border-white/10">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-semibold text-cyan-400 flex items-center gap-1.5">
+                                <Hash class="w-3.5 h-3.5 text-cyan-400" />
+                                Label Grid Kolom / As
+                            </span>
+                        </div>
+                        <input
+                            :value="selectedElementData.code || 'A'"
+                            @input="updateElementCustomCode(($event.target as HTMLInputElement).value)"
+                            placeholder="A"
+                            class="w-full text-xs px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono font-bold"
+                        />
+                        <div class="flex flex-wrap gap-1">
+                            <button
+                                v-for="preset in ['A', 'B', 'C', 'D', 'E', '1', '2', '3', '4', '5']"
+                                :key="preset"
+                                type="button"
+                                @click="updateElementCustomCode(preset)"
+                                class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-white/5 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 border border-white/10 transition-colors cursor-pointer"
+                            >
+                                {{ preset }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Input Khusus Notasi Garis Potongan (Section Marker) -->
+                    <div v-else-if="selectedElementData?.type === 'section_marker'" class="space-y-2 pt-2 border-t border-white/10">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-semibold text-amber-400 flex items-center gap-1.5">
+                                <Split class="w-3.5 h-3.5 text-amber-400" />
+                                Label Simbol Potongan
+                            </span>
+                        </div>
+                        <input
+                            :value="selectedElementData.text || 'A'"
+                            @input="updateElementCustomText(($event.target as HTMLInputElement).value)"
+                            placeholder="A"
+                            class="w-full text-xs px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono font-bold"
+                        />
+                        <div class="flex flex-wrap gap-1">
+                            <button
+                                v-for="preset in ['A', 'B', 'C', 'D', 'POTONGAN A-A', 'POTONGAN B-B']"
+                                :key="preset"
+                                type="button"
+                                @click="updateElementCustomText(preset)"
+                                class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-white/5 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 border border-white/10 transition-colors cursor-pointer"
+                            >
+                                {{ preset }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Input Khusus Leader Note (Panah Keterangan Teknis) -->
+                    <div v-else-if="selectedElementData?.type === 'leader_note'" class="space-y-2 pt-2 border-t border-white/10">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-semibold text-indigo-400 flex items-center gap-1.5">
+                                <ArrowUpRight class="w-3.5 h-3.5 text-indigo-400" />
+                                Teks Catatan Teknis (Leader)
+                            </span>
+                        </div>
+                        <textarea
+                            :value="selectedElementData.text || 'Catatan Arsitektur'"
+                            @input="updateElementCustomText(($event.target as HTMLTextAreaElement).value)"
+                            placeholder="Ketik spesifikasi bahan atau detail..."
+                            class="w-full text-xs p-2 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                            rows="2"
+                        ></textarea>
+                        <div class="space-y-1">
+                            <span class="text-[10px] text-slate-400 block">Preset Spesifikasi Cepat:</span>
+                            <div class="flex flex-wrap gap-1">
+                                <button
+                                    v-for="preset in ['Plester + Aci finishing cat', 'Pintu Kayu Kamper Samarinda', 'Lantai Granit Tile 60x60', 'Plafon Gypsum Board 9mm', 'Kusen Aluminium 4 inch', 'Dinding Bata Ringan t=10cm']"
+                                    :key="preset"
+                                    type="button"
+                                    @click="updateElementCustomText(preset)"
+                                    class="px-2 py-0.5 rounded text-[10px] bg-white/5 hover:bg-indigo-500/20 text-slate-300 hover:text-indigo-300 border border-white/10 transition-colors cursor-pointer truncate max-w-[200px]"
+                                    :title="preset"
+                                >
+                                    {{ preset }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Input Teks Label untuk Ruangan / Label Teks Umum -->
                     <div v-else-if="selectedElementData?.type === 'room_label' || selectedElementData?.text" class="space-y-1 pt-1">
                         <span class="text-slate-400 block">Teks Label:</span>
@@ -5692,6 +7304,76 @@ onUnmounted(() => {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- CAD Object Transform Cluster (Putar, Cermin, Z-Order) -->
+                <div v-if="selectedNodeId" class="space-y-1.5 pt-2 border-t border-white/10">
+                    <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                        <SlidersHorizontal class="w-3.5 h-3.5 text-violet-400" />
+                        Transformasi CAD
+                    </span>
+
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <button
+                            type="button"
+                            @click="rotateSelected(90)"
+                            class="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-[11px] font-medium bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 hover:border-violet-500/40 transition-colors cursor-pointer"
+                            title="Putar Searah Jarum Jam (+90°)"
+                        >
+                            <RotateCw class="w-3.5 h-3.5 text-violet-400" />
+                            <span>Putar +90°</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            @click="rotateSelected(-90)"
+                            class="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-[11px] font-medium bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 hover:border-violet-500/40 transition-colors cursor-pointer"
+                            title="Putar Berlawanan Jarum Jam (-90°)"
+                        >
+                            <RotateCcw class="w-3.5 h-3.5 text-violet-400" />
+                            <span>Putar -90°</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            @click="flipSelected('h')"
+                            class="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-[11px] font-medium bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 hover:border-sky-500/40 transition-colors cursor-pointer"
+                            title="Cermin Mendatar (Flip Horizontal)"
+                        >
+                            <FlipHorizontal class="w-3.5 h-3.5 text-sky-400" />
+                            <span>Flip Horiz</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            @click="flipSelected('v')"
+                            class="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-[11px] font-medium bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 hover:border-sky-500/40 transition-colors cursor-pointer"
+                            title="Cermin Tegak (Flip Vertical)"
+                        >
+                            <FlipVertical class="w-3.5 h-3.5 text-sky-400" />
+                            <span>Flip Vert</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            @click="bringSelectedToFront"
+                            class="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-[11px] font-medium bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 hover:border-emerald-500/40 transition-colors cursor-pointer"
+                            title="Bawa Objek ke Lapisan Terdepan"
+                        >
+                            <BringToFront class="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Ke Depan</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            @click="sendSelectedToBack"
+                            class="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-[11px] font-medium bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 hover:border-amber-500/40 transition-colors cursor-pointer"
+                            title="Kirim Objek ke Lapisan Terbelakang"
+                        >
+                            <SendToBack class="w-3.5 h-3.5 text-amber-400" />
+                            <span>Ke Belakang</span>
+                        </button>
                     </div>
                 </div>
 
@@ -5979,12 +7661,12 @@ onUnmounted(() => {
                         </div>
                     </div>
 
-                    <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider pt-2">Pintasan Alat Gambar (Drawing Tools)</div>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 font-mono">
-                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                            <span class="text-slate-400">Pilih (Select)</span>
-                            <span class="text-violet-400 font-bold">V</span>
-                        </div>
+                    <!-- KATEGORI 1: STRUKTUR & RUANGAN -->
+                    <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider pt-2 flex items-center gap-1.5">
+                        <span>🏛️</span>
+                        <span>Struktur & Bangunan (Structure)</span>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 font-mono">
                         <div class="p-2 rounded-xl bg-white/5 flex justify-between">
                             <span class="text-slate-400">Dinding Tebal</span>
                             <span class="text-violet-400 font-bold">W</span>
@@ -5994,24 +7676,108 @@ onUnmounted(() => {
                             <span class="text-violet-400 font-bold">R</span>
                         </div>
                         <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                            <span class="text-slate-400">Garis Bebas (Line)</span>
-                            <span class="text-violet-400 font-bold">L</span>
-                        </div>
-                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                            <span class="text-slate-400">Pintu Swing</span>
-                            <span class="text-violet-400 font-bold">D</span>
-                        </div>
-                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                            <span class="text-slate-400">Jendela</span>
-                            <span class="text-violet-400 font-bold">J</span>
-                        </div>
-                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
                             <span class="text-slate-400">Kolom Beton</span>
                             <span class="text-violet-400 font-bold">C</span>
                         </div>
                         <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Garis As (Grid)</span>
+                            <span class="text-violet-400 font-bold">G</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
                             <span class="text-slate-400">Tangga 2D</span>
                             <span class="text-violet-400 font-bold">S</span>
+                        </div>
+                    </div>
+
+                    <!-- KATEGORI 2: BUKAAN PINTU & JENDELA -->
+                    <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider pt-2 flex items-center gap-1.5">
+                        <span>🚪</span>
+                        <span>Bukaan Pintu & Jendela (Openings)</span>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono">
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Pintu Swing Tunggal</span>
+                            <span class="text-emerald-400 font-bold">D</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Pintu Ganda (2 Daun)</span>
+                            <span class="text-emerald-400 font-bold">Shift+D</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Pintu Geser (Sliding)</span>
+                            <span class="text-emerald-400 font-bold">P</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Bukaan Jendela</span>
+                            <span class="text-emerald-400 font-bold">J</span>
+                        </div>
+                    </div>
+
+                    <!-- KATEGORI 3: PERABOT & RUANGAN -->
+                    <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider pt-2 flex items-center gap-1.5">
+                        <span>🛋️</span>
+                        <span>Perabot & Sanitair (Furniture & Fixtures)</span>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 font-mono">
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Sofa Ruang Tamu</span>
+                            <span class="text-amber-400 font-bold">F</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Meja Makan & Kursi</span>
+                            <span class="text-amber-400 font-bold">Shift+T</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Tempat Tidur</span>
+                            <span class="text-amber-400 font-bold">B</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Dapur (Kitchen Set)</span>
+                            <span class="text-amber-400 font-bold">K</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Kloset WC Duduk</span>
+                            <span class="text-cyan-400 font-bold">U</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Wastafel Cuci</span>
+                            <span class="text-cyan-400 font-bold">Shift+B</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Shower Box</span>
+                            <span class="text-cyan-400 font-bold">Shift+S</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-300">Mobil Garasi</span>
+                            <span class="text-slate-300 font-bold">Shift+C</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Pohon Taman</span>
+                            <span class="text-green-400 font-bold">Shift+R</span>
+                        </div>
+                    </div>
+
+                    <!-- KATEGORI 4: SIMBOL ARSITEKTUR & ANOTASI -->
+                    <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider pt-2 flex items-center gap-1.5">
+                        <span>📐</span>
+                        <span>Simbol & Anotasi (Annotations & Symbols)</span>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 font-mono">
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Arah Utara</span>
+                            <span class="text-sky-400 font-bold">N</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Peil Level</span>
+                            <span class="text-sky-400 font-bold">Shift+E</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Potongan (A-A)</span>
+                            <span class="text-purple-400 font-bold">X</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Panah Catatan</span>
+                            <span class="text-amber-400 font-bold">Q</span>
                         </div>
                         <div class="p-2 rounded-xl bg-white/5 flex justify-between">
                             <span class="text-slate-400">Dimensi Ukuran</span>
@@ -6021,9 +7787,29 @@ onUnmounted(() => {
                             <span class="text-slate-400">Teks / Label</span>
                             <span class="text-violet-400 font-bold">T</span>
                         </div>
+                    </div>
+
+                    <!-- KATEGORI 5: GEOMETRI CAD & UTILITAS -->
+                    <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider pt-2 flex items-center gap-1.5">
+                        <span>⭕</span>
+                        <span>Bentuk Geometri CAD & Utilitas</span>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono">
                         <div class="p-2 rounded-xl bg-white/5 flex justify-between">
-                            <span class="text-slate-400">Penghapus</span>
-                            <span class="text-violet-400 font-bold">E</span>
+                            <span class="text-slate-400">Garis Bebas (Line)</span>
+                            <span class="text-violet-400 font-bold">L</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Lingkaran (Circle)</span>
+                            <span class="text-sky-400 font-bold">O</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Busur (Arc)</span>
+                            <span class="text-indigo-400 font-bold">A</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/5 flex justify-between">
+                            <span class="text-slate-400">Penghapus (Eraser)</span>
+                            <span class="text-rose-400 font-bold">E</span>
                         </div>
                     </div>
                 </div>
@@ -6571,6 +8357,26 @@ onUnmounted(() => {
 </template>
 
 <style>
+/* Custom sleek dark scrollbar for CAD toolbar and modals */
+.custom-scroll, .cad-toolbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.custom-scroll::-webkit-scrollbar, .cad-toolbar::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+}
+.custom-scroll::-webkit-scrollbar-track, .cad-toolbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-scroll::-webkit-scrollbar-thumb, .cad-toolbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 9999px;
+}
+.custom-scroll::-webkit-scrollbar-thumb:hover, .cad-toolbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.45);
+}
+
 @media print {
     .cad-header, .cad-toolbar, .cad-bottom-hud, .cad-inspector, .inspector-panel, .layer-panel, .konva-overlay, .no-print {
         display: none !important;
