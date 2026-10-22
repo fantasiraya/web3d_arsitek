@@ -129,13 +129,19 @@ const props = defineProps<{
 }>();
 
 // Mode Editor: Gambar Kerja (Shop Drawing) vs CAD Denah Arsitektural
+const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+const requestedMode = urlParams?.get('mode');
+
 const activeEditorMode = ref<'shop_drawing' | 'cad'>(
-    (props.sheet.id === '01a16100-3421-70f5-ac75-f9db46e8c46f' ||
-     props.sheet.type === 'furniture' ||
-     props.sheet.type === 'shop_drawing' ||
-     (typeof window !== 'undefined' && window.innerWidth < 1024))
+    requestedMode === 'shop_drawing'
         ? 'shop_drawing'
-        : 'shop_drawing'
+        : requestedMode === 'cad'
+            ? 'cad'
+            : (props.sheet.id === '01a16100-3421-70f5-ac75-f9db46e8c46f' ||
+               props.sheet.type === 'furniture' ||
+               props.sheet.type === 'shop_drawing')
+                ? 'shop_drawing'
+                : 'cad'
 );
 
 function switchEditorMode(mode: 'shop_drawing' | 'cad') {
@@ -3705,6 +3711,10 @@ function setupZoomAndPanEvents() {
 
 // Keyboard shortcuts listener
 function handleKeyDown(e: KeyboardEvent) {
+    if (activeEditorMode.value === 'shop_drawing') {
+        return;
+    }
+
     if (e.key === 'Control' || e.ctrlKey || e.metaKey) {
         isCtrlHeld.value = true;
     }
@@ -6514,7 +6524,7 @@ onUnmounted(() => {
 
 <style>
 @media print {
-    header, footer, .cad-toolbar, .cad-bottom-hud, .cad-inspector, .inspector-panel, .layer-panel, .konva-overlay, [class*="fixed"], [class*="absolute"] {
+    .cad-header, .cad-toolbar, .cad-bottom-hud, .cad-inspector, .inspector-panel, .layer-panel, .konva-overlay, .no-print {
         display: none !important;
     }
     body, html {

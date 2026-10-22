@@ -177,7 +177,7 @@ class DrawingSheetController extends Controller
     }
 
     /**
-     * Simpan lembar kerja 2D baru dan buka di editor.
+     * Simpan lembar kerja 2D baru.
      */
     public function store(CreateDrawingSheetRequest $request, CreateDrawingSheetAction $action): RedirectResponse
     {
@@ -186,7 +186,12 @@ class DrawingSheetController extends Controller
 
         $sheet = $action->execute($user, $project, $request->validated());
 
-        return redirect()->route('drawings.editor', $sheet->id)
+        if ($request->boolean('open_editor')) {
+            return redirect()->route('drawings.editor', $sheet->id)
+                ->with('success', "Lembar kerja 2D '{$sheet->title}' berhasil dibuat.");
+        }
+
+        return redirect()->route('drawings.index')
             ->with('success', "Lembar kerja 2D '{$sheet->title}' berhasil dibuat.");
     }
 

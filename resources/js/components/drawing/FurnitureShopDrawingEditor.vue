@@ -48,6 +48,8 @@ import {
     Wand2,
     Undo2,
     Redo2,
+    Copy,
+    ClipboardPaste,
     Package,
     Search,
 } from '@lucide/vue';
@@ -205,13 +207,21 @@ const startPanY = ref(0);
 let initialPinchDistance = 0;
 let initialPinchScale = 1;
 
+const isDemoSheet = props.sheet?.id === '01a16100-3421-70f5-ac75-f9db46e8c46f';
+const hasSavedData = Boolean(props.elements && props.elements.length && props.elements.some((e: any) => e.type === 'shop_drawing' || e.data?.cabinet));
+
 // ── INTERACTIVE CABINET DATA MODEL (FULLY EDITABLE & REACTIVE) ──────────────
 const cabinet = ref({
-    name: 'Backdrop TV & Floating Credenza',
-    category: 'Living Room & Interior TV Console',
-    furnitureType: 'credenza_tv' as 'credenza_tv' | 'kitchen_bar' | 'wardrobe_3door',
+    name: props.sheet?.title || (isDemoSheet ? 'Backdrop TV & Floating Credenza' : 'Lembar Kerja Baru'),
+    category: isDemoSheet ? 'Living Room & Interior TV Console' : 'Gambar Kerja',
+    furnitureType: (isDemoSheet || hasSavedData) ? ('credenza_tv' as 'credenza_tv' | 'kitchen_bar' | 'wardrobe_3door' | 'blank') : ('blank' as 'credenza_tv' | 'kitchen_bar' | 'wardrobe_3door' | 'blank'),
     titleBlockPosition: 'side' as 'side' | 'top' | 'bottom',
     projectName: props.project?.title || 'Renovasi & Interior SEMANGKOKae',
+    viewTitle: 'TAMPAK DEPAN',
+    viewNumber: '1',
+    viewTitleOffsetX: 0,
+    viewTitleOffsetY: 0,
+    showViewTitle: true,
     width: 3600,
     depth: 450,
     height: 2400,
@@ -223,9 +233,9 @@ const cabinet = ref({
     hasFridge: false,
     fridgeWidth: 1000,
     fridgeHeight: 1850,
-    hasSlats: true,
+    hasSlats: isDemoSheet,
     slatsColor: '#7E5334',
-    hasGlassShelves: true,
+    hasGlassShelves: isDemoSheet,
     hasSink: false,
     counterHeight: 450,
     countertopColor: '#ECEAE6',
@@ -235,24 +245,45 @@ const cabinet = ref({
     tallUnitColor: '#7E5334',
     tallUnitChevron: false,
     hasNiche: false,
-    notes: [
+    notes: isDemoSheet ? [
         '1. Semua ukuran dalam millimeter (mm).',
         '2. Braket TV 65" ditanam ke dinding bata + penguat multiplek 18mm.',
         '3. Sediakan conduit kabel HDMI & stop kontak di balik panel marmer.',
         '4. Rel laci tandem slowmotion clip-on beban 35kg.',
         '5. Trafo LED 12V 10A diletakkan di dalam modul laci tengah.',
+    ] : [
+        '1. Semua ukuran dalam millimeter (mm).',
+        '2. Periksa kembali ukuran di lapangan sebelum pabrikasi.',
     ],
-    materials: [
+    materials: isDemoSheet ? [
         { code: 'M-01', name: 'TH 235 AC', color: '#7E5334', desc: 'Panel Dinding Kisi-kisi Kayu Akasia' },
         { code: 'M-02', name: 'Calacatta White', color: '#ECEAE6', desc: 'Panel Marmer Dinding TV / Bookmatch' },
         { code: 'LM-01', name: 'Wood 16', color: '#BFA07A', desc: 'HPL Serat Kayu Floating Credenza' },
         { code: 'M-04', name: 'Black Anodized', color: '#18181b', desc: 'Frame Aluminium Hitam & Smart TV 65"' },
         { code: 'LED-01', name: 'Warm White 3000K', color: '#f59e0b', desc: 'Indirect LED Strip Light Cove' },
-    ],
+    ] : [],
 });
 
 // Preset Options for Quick Generating
-function applyPreset(type: 'kitchen_bar' | 'wardrobe_3door' | 'credenza_tv' | 'minimalist_kitchen') {
+function applyPreset(type: 'kitchen_bar' | 'wardrobe_3door' | 'credenza_tv' | 'minimalist_kitchen' | 'blank') {
+    if (type === 'blank') {
+        cabinet.value.name = props.sheet?.title || 'Lembar Kerja Baru';
+        cabinet.value.category = 'Gambar Kerja';
+        cabinet.value.furnitureType = 'blank';
+        cabinet.value.hasFridge = false;
+        cabinet.value.hasSlats = false;
+        cabinet.value.hasGlassShelves = false;
+        cabinet.value.hasSink = false;
+        cabinet.value.materials = [];
+        cabinet.value.notes = [];
+        annotations.value = [];
+        selectedElement.value = null;
+        selectedObjectId.value = null;
+        cabinet.value.showViewTitle = true;
+        toast.success('Kanvas lembar kerja dikosongkan.');
+        showCabinetModal.value = false;
+        return;
+    }
     if (type === 'kitchen_bar') {
         cabinet.value.name = 'Kitchen & Pantry Set';
         cabinet.value.category = 'Kitchen & Cabinet Set';
@@ -375,18 +406,24 @@ interface AnnotationItem {
     hasBox?: boolean;
     accessoryType?: string;
     scale?: number;
+    view?: 'depan' | 'atas' | 'samping' | 'bawah';
+    rotation?: number;
+    flipH?: boolean;
+    flipV?: boolean;
 }
 
-const annotations = ref<AnnotationItem[]>([
-    { id: 'ann-1', type: 'label', x: 975, y: 220, targetX: 820, targetY: 260, text: 'TH 076 SB', subText: 'M-02' },
-    { id: 'ann-2', type: 'label', x: 975, y: 310, targetX: 490, targetY: 300, text: 'TH 235 AC', subText: 'M-01' },
-    { id: 'ann-3', type: 'label', x: 975, y: 430, targetX: 550, targetY: 425, text: 'DeepPink', subText: 'M-03' },
-    { id: 'ann-4', type: 'label', x: 975, y: 485, targetX: 230, targetY: 460, text: 'a660dbd0ee9ad7629b20e10b9571b', subText: 'M-04' },
-    { id: 'ann-5', type: 'label', x: 975, y: 535, targetX: 430, targetY: 510, text: 'Wood 16', subText: 'LM-01' },
-    { id: 'ann-6', type: 'text', x: 260, y: 645, text: 'POTONGAN A-A', color: '#000000', fontSize: 13, isBold: true, hasBox: false },
-    { id: 'ann-7', type: 'measure', x: 410, y: 155, text: '5190 mm' },
-    { id: 'ln-sample', type: 'line', x: 320, y: 390, x2: 500, y2: 390, lengthMm: 1200, lineStyle: 'solid', lineWidth: 2, color: '#2563eb' },
-]);
+const annotations = ref<AnnotationItem[]>(
+    isDemoSheet ? [
+        { id: 'ann-1', type: 'label', x: 975, y: 220, targetX: 820, targetY: 260, text: 'TH 076 SB', subText: 'M-02' },
+        { id: 'ann-2', type: 'label', x: 975, y: 310, targetX: 490, targetY: 300, text: 'TH 235 AC', subText: 'M-01' },
+        { id: 'ann-3', type: 'label', x: 975, y: 430, targetX: 550, targetY: 425, text: 'DeepPink', subText: 'M-03' },
+        { id: 'ann-4', type: 'label', x: 975, y: 485, targetX: 230, targetY: 460, text: 'a660dbd0ee9ad7629b20e10b9571b', subText: 'M-04' },
+        { id: 'ann-5', type: 'label', x: 975, y: 535, targetX: 430, targetY: 510, text: 'Wood 16', subText: 'LM-01' },
+        { id: 'ann-6', type: 'text', x: 260, y: 645, text: 'POTONGAN A-A', color: '#000000', fontSize: 13, isBold: true, hasBox: false },
+        { id: 'ann-7', type: 'measure', x: 410, y: 155, text: '5190 mm' },
+        { id: 'ln-sample', type: 'line', x: 320, y: 390, x2: 500, y2: 390, lengthMm: 1200, lineStyle: 'solid', lineWidth: 2, color: '#2563eb' },
+    ] : []
+);
 
 // ── UNDO / REDO HISTORY ENGINE ──────────────────────────────────────────────
 interface HistorySnapshot {
@@ -477,7 +514,7 @@ function redo() {
 interface AccessoryDef {
     id: string;
     name: string;
-    category: 'kitchen' | 'living' | 'wardrobe' | 'decor' | 'mep';
+    category: 'kitchen' | 'living' | 'bedroom' | 'wardrobe' | 'bathroom' | 'decor' | 'mep';
     icon: string;
     desc: string;
     tags: string[];
@@ -489,15 +526,189 @@ interface AccessoryDef {
 
 const ACCESSORY_CATEGORIES = [
     { id: 'all', label: 'Semua', icon: '✨' },
-    { id: 'kitchen', label: 'Dapur', icon: '🍳' },
-    { id: 'living', label: 'Living', icon: '📺' },
-    { id: 'wardrobe', label: 'Wardrobe', icon: '🚪' },
+    { id: 'living', label: 'Ruang Tamu & Duduk', icon: '🛋️' },
+    { id: 'bedroom', label: 'Kamar Tidur', icon: '🛏️' },
+    { id: 'kitchen', label: 'Dapur & Makan', icon: '🍳' },
+    { id: 'wardrobe', label: 'Wardrobe & Rias', icon: '🚪' },
+    { id: 'bathroom', label: 'Kamar Mandi & Sanitari', icon: '🚿' },
     { id: 'decor', label: 'Dekor & Lampu', icon: '🪴' },
-    { id: 'mep', label: 'Listrik / MEP', icon: '🔌' },
+    { id: 'mep', label: 'Listrik & Elektronik', icon: '🔌' },
 ];
 
 const ACCESSORY_CATALOG: AccessoryDef[] = [
-    // ── 1. DAPUR & KITCHEN APPLIANCES ──
+    // ── 1. RUANG TAMU & DUDUK (LIVING ROOM) ──
+    {
+        id: 'sofa',
+        name: 'Sofa 3 Dudukan Minimalis',
+        category: 'living',
+        icon: '🛋️',
+        desc: 'Sofa empuk fabric 3-seater + bantal cushion',
+        tags: ['sofa', 'couch', 'kursi tamu', 'ruang tamu', 'living', 'duduk', 'bantal', 'santai'],
+        baseW: 180,
+        baseH: 80,
+        defaultWmm: 2000,
+        defaultHmm: 850,
+    },
+    {
+        id: 'armchair',
+        name: 'Armchair / Kursi Santai Tunggal',
+        category: 'living',
+        icon: '🪑',
+        desc: 'Kursi single lounge busa empuk + sandaran tangan',
+        tags: ['armchair', 'kursi santai', 'lounge chair', 'single chair', 'ruang tamu', 'living'],
+        baseW: 80,
+        baseH: 85,
+        defaultWmm: 800,
+        defaultHmm: 850,
+    },
+    {
+        id: 'coffee_table',
+        name: 'Meja Kopi Ruang Tamu',
+        category: 'living',
+        icon: '☕',
+        desc: 'Coffee table minimalis kayu/marmer depan sofa',
+        tags: ['meja kopi', 'coffee table', 'meja tamu', 'living', 'meja rendah', 'ruang tamu'],
+        baseW: 100,
+        baseH: 45,
+        defaultWmm: 1000,
+        defaultHmm: 450,
+    },
+    {
+        id: 'rug',
+        name: 'Karpet Lantai Motif Modern',
+        category: 'living',
+        icon: '🧶',
+        desc: 'Karpet permadani lantai tebal motif geometris hangat',
+        tags: ['karpet', 'rug', 'permadani', 'lantai', 'living', 'kamar', 'alas lantai'],
+        baseW: 180,
+        baseH: 16,
+        defaultWmm: 2000,
+        defaultHmm: 150,
+    },
+    {
+        id: 'tv',
+        name: 'Smart TV 65 Inch',
+        category: 'living',
+        icon: '📺',
+        desc: 'Layar lebar TV 16:9 + braket gantung',
+        tags: ['tv', 'televisi', 'smart tv', 'screen', 'layar', 'living', 'backdrop'],
+        baseW: 180,
+        baseH: 105,
+        defaultWmm: 1450,
+        defaultHmm: 840,
+    },
+    {
+        id: 'soundbar',
+        name: 'Soundbar Audio System',
+        category: 'living',
+        icon: '🔊',
+        desc: 'Speaker panjang gantung meja TV',
+        tags: ['soundbar', 'audio', 'speaker', 'suara', 'musik', 'tv', 'backdrop'],
+        baseW: 140,
+        baseH: 16,
+        defaultWmm: 1000,
+        defaultHmm: 80,
+    },
+    {
+        id: 'game_console',
+        name: 'Game Console / Media Box',
+        category: 'living',
+        icon: '🎮',
+        desc: 'Unit konsol game / TV box receiver',
+        tags: ['console', 'ps5', 'game', 'box', 'stb', 'receiver', 'living'],
+        baseW: 60,
+        baseH: 25,
+        defaultWmm: 400,
+        defaultHmm: 150,
+    },
+    {
+        id: 'speaker',
+        name: 'Speaker Bookshelf / Tower',
+        category: 'living',
+        icon: '🎙️',
+        desc: 'Sepasang speaker audio stereo',
+        tags: ['speaker', 'audio', 'sound', 'stereo', 'living'],
+        baseW: 40,
+        baseH: 70,
+        defaultWmm: 220,
+        defaultHmm: 400,
+    },
+    {
+        id: 'study_desk',
+        name: 'Meja Kerja & Belajar Minimalis',
+        category: 'living',
+        icon: '🖥️',
+        desc: 'Meja kerja laptop + laci arsip & lampu baca',
+        tags: ['meja kerja', 'meja belajar', 'desk', 'laptop', 'komputer', 'belajar', 'kantor'],
+        baseW: 120,
+        baseH: 75,
+        defaultWmm: 1200,
+        defaultHmm: 750,
+    },
+    {
+        id: 'office_chair',
+        name: 'Kursi Kerja Ergonomis',
+        category: 'living',
+        icon: '💺',
+        desc: 'Kursi kantor putar hidrolik sandaran jaring mesh',
+        tags: ['kursi kantor', 'kursi kerja', 'office chair', 'ergonomis', 'kursi putar', 'hidrolik'],
+        baseW: 60,
+        baseH: 95,
+        defaultWmm: 600,
+        defaultHmm: 950,
+    },
+
+    // ── 2. KAMAR TIDUR (BEDROOM) ──
+    {
+        id: 'bed',
+        name: 'Tempat Tidur Queen / King & Headboard',
+        category: 'bedroom',
+        icon: '🛏️',
+        desc: 'Ranjang kasur empuk + headboard sandaran & bantal guling',
+        tags: ['tempat tidur', 'kasur', 'bed', 'headboard', 'ranjang', 'bantal', 'kamar tidur', 'bedroom'],
+        baseW: 160,
+        baseH: 100,
+        defaultWmm: 1600,
+        defaultHmm: 1000,
+    },
+    {
+        id: 'bedside_table',
+        name: 'Meja Nakas Samping Kasur',
+        category: 'bedroom',
+        icon: '🗄️',
+        desc: 'Nakas 2 laci samping tempat tidur + lampu meja',
+        tags: ['nakas', 'bedside', 'nightstand', 'meja samping', 'kamar', 'laci'],
+        baseW: 50,
+        baseH: 55,
+        defaultWmm: 500,
+        defaultHmm: 550,
+    },
+
+    // ── 3. DAPUR & RUANG MAKAN (KITCHEN & DINING) ──
+    {
+        id: 'dining_table',
+        name: 'Meja Makan 4-6 Orang & Kursi',
+        category: 'kitchen',
+        icon: '🍽️',
+        desc: 'Set meja makan kayu solid + kursi makan ramping',
+        tags: ['meja makan', 'dining table', 'kursi makan', 'makan', 'kitchen', 'ruang makan'],
+        baseW: 160,
+        baseH: 78,
+        defaultWmm: 1600,
+        defaultHmm: 780,
+    },
+    {
+        id: 'barstool',
+        name: 'Kursi Barstool Cafe',
+        category: 'kitchen',
+        icon: '🪑',
+        desc: 'Kursi tinggi hidrolik meja island/bar',
+        tags: ['kursi', 'barstool', 'stool', 'bangku', 'bar', 'island', 'dapur'],
+        baseW: 50,
+        baseH: 90,
+        defaultWmm: 450,
+        defaultHmm: 950,
+    },
     {
         id: 'sink',
         name: 'Kitchen Sink & Kran Cuci',
@@ -559,6 +770,18 @@ const ACCESSORY_CATALOG: AccessoryDef[] = [
         defaultHmm: 1800,
     },
     {
+        id: 'washing_machine',
+        name: 'Mesin Cuci Front Loading',
+        category: 'kitchen',
+        icon: '🧺',
+        desc: 'Mesin cuci tabung bukaan depan + panel digital laundry',
+        tags: ['mesin cuci', 'washing machine', 'laundry', 'cuci baju', 'tabung depan', 'service', 'dapur'],
+        baseW: 65,
+        baseH: 90,
+        defaultWmm: 600,
+        defaultHmm: 850,
+    },
+    {
         id: 'dish_rack',
         name: 'Rak Piring Gantung Stainless',
         category: 'kitchen',
@@ -582,70 +805,32 @@ const ACCESSORY_CATALOG: AccessoryDef[] = [
         defaultWmm: 350,
         defaultHmm: 1050,
     },
-
-    // ── 2. LIVING ROOM & MULTIMEDIA ──
     {
-        id: 'tv',
-        name: 'Smart TV 65 Inch',
-        category: 'living',
-        icon: '📺',
-        desc: 'Layar lebar TV 16:9 + braket gantung',
-        tags: ['tv', 'televisi', 'smart tv', 'screen', 'layar', 'living', 'backdrop'],
-        baseW: 180,
-        baseH: 105,
-        defaultWmm: 1450,
-        defaultHmm: 840,
-    },
-    {
-        id: 'soundbar',
-        name: 'Soundbar Audio System',
-        category: 'living',
-        icon: '🔊',
-        desc: 'Speaker panjang gantung meja TV',
-        tags: ['soundbar', 'audio', 'speaker', 'suara', 'musik', 'tv', 'backdrop'],
-        baseW: 140,
-        baseH: 16,
-        defaultWmm: 1000,
-        defaultHmm: 80,
-    },
-    {
-        id: 'game_console',
-        name: 'Game Console / Media Box',
-        category: 'living',
-        icon: '🎮',
-        desc: 'Unit konsol game / TV box receiver',
-        tags: ['console', 'ps5', 'game', 'box', 'stb', 'receiver', 'living'],
-        baseW: 60,
-        baseH: 25,
-        defaultWmm: 400,
-        defaultHmm: 150,
-    },
-    {
-        id: 'speaker',
-        name: 'Speaker Bookshelf / Tower',
-        category: 'living',
-        icon: '🎙️',
-        desc: 'Sepasang speaker audio stereo',
-        tags: ['speaker', 'audio', 'sound', 'stereo', 'living'],
-        baseW: 40,
-        baseH: 70,
-        defaultWmm: 220,
-        defaultHmm: 400,
-    },
-    {
-        id: 'clock',
-        name: 'Jam Dinding Minimalis',
-        category: 'living',
-        icon: '⏰',
-        desc: 'Jam dinding analog modern estetik',
-        tags: ['jam', 'clock', 'dinding', 'waktu', 'pajangan'],
-        baseW: 50,
+        id: 'trash_bin',
+        name: 'Tempat Sampah Pedal Stainless',
+        category: 'kitchen',
+        icon: '🗑️',
+        desc: 'Tong sampah injak pedal stainless steel 20 Liter',
+        tags: ['tempat sampah', 'tong sampah', 'trash bin', 'pedal', 'dapur', 'interior', 'kebersihan'],
+        baseW: 35,
         baseH: 50,
-        defaultWmm: 350,
-        defaultHmm: 350,
+        defaultWmm: 300,
+        defaultHmm: 450,
     },
 
-    // ── 3. LEMARI, WARDROBE & KAMAR ──
+    // ── 4. WARDROBE, LEMARI & RIAS ──
+    {
+        id: 'vanity_table',
+        name: 'Meja Rias Vanity & Stool',
+        category: 'wardrobe',
+        icon: '💄',
+        desc: 'Meja rias konsol laci + cermin arch LED & stool empuk',
+        tags: ['meja rias', 'vanity', 'dresser', 'rias', 'makeup', 'stool', 'cermin rias', 'kamar'],
+        baseW: 100,
+        baseH: 140,
+        defaultWmm: 1000,
+        defaultHmm: 1400,
+    },
     {
         id: 'wardrobe_door',
         name: 'Pintu Lemari Wardrobe Solid',
@@ -711,7 +896,7 @@ const ACCESSORY_CATALOG: AccessoryDef[] = [
         name: 'Cermin Bulat LED Backlit',
         category: 'wardrobe',
         icon: '🪞',
-        desc: 'Cermin rias bulat dengan cahaya LED',
+        desc: 'Cermin rias bulat dengan cahaya LED warm white',
         tags: ['cermin', 'mirror', 'bulat', 'led', 'rias', 'meja rias', 'vanity'],
         baseW: 70,
         baseH: 70,
@@ -731,7 +916,93 @@ const ACCESSORY_CATALOG: AccessoryDef[] = [
         defaultHmm: 1500,
     },
 
-    // ── 4. DEKORASI & PENCAHAYAAN ──
+    // ── 5. KAMAR MANDI & SANITARI (BATHROOM) ──
+    {
+        id: 'toilet',
+        name: 'Kloset Duduk Sanitari',
+        category: 'bathroom',
+        icon: '🚽',
+        desc: 'Monoblok kloset duduk keramik putih + tombol dual flush',
+        tags: ['kloset', 'toilet', 'wc', 'water closet', 'sanitari', 'kamar mandi', 'bathroom'],
+        baseW: 45,
+        baseH: 80,
+        defaultWmm: 400,
+        defaultHmm: 750,
+    },
+    {
+        id: 'shower',
+        name: 'Shower Tiang & Rain Shower',
+        category: 'bathroom',
+        icon: '🚿',
+        desc: 'Tiang shower stainless + rain shower & hand shower',
+        tags: ['shower', 'rain shower', 'tiang shower', 'mandi', 'kamar mandi', 'sanitari'],
+        baseW: 40,
+        baseH: 120,
+        defaultWmm: 350,
+        defaultHmm: 1200,
+    },
+    {
+        id: 'bathroom_vanity',
+        name: 'Wastafel Kabinet Kamar Mandi',
+        category: 'bathroom',
+        icon: '🪞',
+        desc: 'Wastafel cuci tangan keramik + kabinet gantung & cermin',
+        tags: ['wastafel', 'vanity', 'kamar mandi', 'cuci tangan', 'basin', 'bathroom', 'kabinet'],
+        baseW: 70,
+        baseH: 85,
+        defaultWmm: 700,
+        defaultHmm: 850,
+    },
+    {
+        id: 'water_heater',
+        name: 'Water Heater Listrik Dinding',
+        category: 'bathroom',
+        icon: '♨️',
+        desc: 'Pemanas air elektrik dinding 15-30L + display digital',
+        tags: ['water heater', 'pemanas air', 'mandi', 'kamar mandi', 'listrik', 'mep'],
+        baseW: 50,
+        baseH: 50,
+        defaultWmm: 450,
+        defaultHmm: 450,
+    },
+    {
+        id: 'towel_rail',
+        name: 'Gantungan Handuk & Rak Sanitari',
+        category: 'bathroom',
+        icon: '🧣',
+        desc: 'Gantungan handuk ganda stainless kamar mandi',
+        tags: ['gantungan handuk', 'towel rail', 'handuk', 'rak handuk', 'kamar mandi', 'sanitari'],
+        baseW: 70,
+        baseH: 55,
+        defaultWmm: 600,
+        defaultHmm: 450,
+    },
+
+    // ── 6. DEKORASI & PENCAHAYAAN (DECOR & LIGHTING) ──
+    {
+        id: 'curtain',
+        name: 'Gorden & Tirai Jendela Kain',
+        category: 'decor',
+        icon: '🪟',
+        desc: 'Tirai kain gorden jendela lipat vertikal + vitrase',
+        tags: ['gorden', 'tirai', 'curtain', 'jendela', 'vitrase', 'kain', 'dekorasi'],
+        baseW: 130,
+        baseH: 180,
+        defaultWmm: 1500,
+        defaultHmm: 2200,
+    },
+    {
+        id: 'floor_lamp',
+        name: 'Standing Floor Lamp Sudut',
+        category: 'decor',
+        icon: '🏮',
+        desc: 'Lampu tiang berdiri estetik sudut ruang keluarga/kamar',
+        tags: ['standing lamp', 'floor lamp', 'lampu lantai', 'lampu sudut', 'lampu berdiri', 'dekor'],
+        baseW: 45,
+        baseH: 150,
+        defaultWmm: 450,
+        defaultHmm: 1600,
+    },
     {
         id: 'books',
         name: 'Deretan Buku & Pajangan',
@@ -804,8 +1075,44 @@ const ACCESSORY_CATALOG: AccessoryDef[] = [
         defaultWmm: 1200,
         defaultHmm: 30,
     },
+    {
+        id: 'clock',
+        name: 'Jam Dinding Minimalis',
+        category: 'decor',
+        icon: '⏰',
+        desc: 'Jam dinding analog modern estetik',
+        tags: ['jam', 'clock', 'dinding', 'waktu', 'pajangan', 'dekorasi'],
+        baseW: 50,
+        baseH: 50,
+        defaultWmm: 350,
+        defaultHmm: 350,
+    },
 
-    // ── 5. MEP, LISTRIK & SANITARI ──
+    // ── 7. LISTRIK & ELEKTRONIK / MEP ──
+    {
+        id: 'ac_indoor',
+        name: 'AC Split Indoor Unit',
+        category: 'mep',
+        icon: '❄️',
+        desc: 'Indoor AC pendingin ruangan split wall',
+        tags: ['ac', 'air conditioner', 'pendingin', 'split', 'mep', 'kamar', 'living'],
+        baseW: 130,
+        baseH: 45,
+        defaultWmm: 850,
+        defaultHmm: 300,
+    },
+    {
+        id: 'ceiling_fan',
+        name: 'Kipas Angin Gantung Plafon',
+        category: 'mep',
+        icon: '🌪️',
+        desc: 'Kipas plafon modern 3 baling-baling kayu + lampu LED',
+        tags: ['kipas', 'ceiling fan', 'kipas plafon', 'kipas angin', 'ventilasi', 'mep'],
+        baseW: 120,
+        baseH: 40,
+        defaultWmm: 1200,
+        defaultHmm: 400,
+    },
     {
         id: 'power_outlet',
         name: 'Stop Kontak Listrik Dinding',
@@ -830,33 +1137,11 @@ const ACCESSORY_CATALOG: AccessoryDef[] = [
         defaultWmm: 80,
         defaultHmm: 80,
     },
-    {
-        id: 'ac_indoor',
-        name: 'AC Split Indoor Unit',
-        category: 'mep',
-        icon: '❄️',
-        desc: 'Indoor AC pendingin ruangan split wall',
-        tags: ['ac', 'air conditioner', 'pendingin', 'split', 'mep', 'kamar'],
-        baseW: 130,
-        baseH: 45,
-        defaultWmm: 850,
-        defaultHmm: 300,
-    },
-    {
-        id: 'barstool',
-        name: 'Kursi Barstool Cafe',
-        category: 'mep',
-        icon: '🪑',
-        desc: 'Kursi tinggi hidrolik meja island/bar',
-        tags: ['kursi', 'barstool', 'stool', 'bangku', 'bar', 'island'],
-        baseW: 50,
-        baseH: 90,
-        defaultWmm: 450,
-        defaultHmm: 950,
-    },
 ];
 
 const showAccessoryMenu = ref(false);
+type AccessoryViewAngle = 'depan' | 'atas' | 'samping' | 'bawah';
+const accessoryActiveView = ref<AccessoryViewAngle>('depan');
 const accessoryButtonRef = ref<HTMLElement | null>(null);
 const accessoryDropdownPos = ref({ top: 80, left: 200 });
 const accessorySearchQuery = ref('');
@@ -898,6 +1183,13 @@ function toggleAccessoryMenu() {
         accessorySearchQuery.value = '';
         accessorySelectedCategory.value = 'all';
 
+        // Auto-match active view from main canvas
+        if (activeView.value === 'atas') {
+            accessoryActiveView.value = 'atas';
+        } else if (activeView.value === 'samping' || activeView.value === 'potongan') {
+            accessoryActiveView.value = 'samping';
+        }
+
         nextTick(() => {
             accessorySearchInputRef.value?.focus();
         });
@@ -905,20 +1197,125 @@ function toggleAccessoryMenu() {
     showAccessoryMenu.value = !showAccessoryMenu.value;
 }
 
-function getAccessoryBaseSize(type?: string): { w: number; h: number } {
+function getAccessoryBaseSize(type?: string, view: string = 'depan'): { w: number; h: number } {
     const item = ACCESSORY_CATALOG.find(a => a.id === type);
-    if (item) return { w: item.baseW, h: item.baseH };
-    return { w: 120, h: 80 };
+    const defW = item ? item.baseW : 120;
+    const defH = item ? item.baseH : 80;
+
+    if (!type) return { w: defW, h: defH };
+
+    if (view === 'atas') {
+        switch (type) {
+            case 'bed': return { w: 160, h: 180 };
+            case 'sofa': return { w: 180, h: 80 };
+            case 'armchair': return { w: 80, h: 80 };
+            case 'coffee_table': return { w: 100, h: 55 };
+            case 'dining_table': return { w: 160, h: 90 };
+            case 'dining_chair': return { w: 45, h: 45 };
+            case 'sink': return { w: 110, h: 70 };
+            case 'stove': return { w: 110, h: 70 };
+            case 'tv': return { w: 180, h: 22 };
+            case 'soundbar': return { w: 140, h: 18 };
+            case 'toilet': return { w: 50, h: 80 };
+            case 'bathtub': return { w: 160, h: 80 };
+            case 'fridge_standalone': return { w: 90, h: 75 };
+            case 'oven': return { w: 100, h: 70 };
+            case 'hood': return { w: 110, h: 60 };
+            case 'wardrobe_door': return { w: 120, h: 65 };
+            case 'plant': return { w: 50, h: 50 };
+            case 'downlight': return { w: 24, h: 24 };
+            case 'rug': return { w: 180, h: 120 };
+            case 'drawer': return { w: 100, h: 60 };
+            case 'books': return { w: 100, h: 30 };
+            default: return { w: defW, h: Math.max(30, Math.round(defH * 0.8)) };
+        }
+    } else if (view === 'samping') {
+        switch (type) {
+            case 'bed': return { w: 180, h: 90 };
+            case 'sofa': return { w: 80, h: 80 };
+            case 'armchair': return { w: 80, h: 85 };
+            case 'coffee_table': return { w: 55, h: 45 };
+            case 'dining_table': return { w: 85, h: 75 };
+            case 'dining_chair': return { w: 45, h: 85 };
+            case 'sink': return { w: 70, h: 50 };
+            case 'stove': return { w: 70, h: 25 };
+            case 'tv': return { w: 22, h: 105 };
+            case 'toilet': return { w: 80, h: 85 };
+            case 'bathtub': return { w: 80, h: 60 };
+            case 'fridge_standalone': return { w: 75, h: 180 };
+            case 'oven': return { w: 70, h: 80 };
+            case 'hood': return { w: 60, h: 60 };
+            case 'wardrobe_door': return { w: 65, h: 150 };
+            case 'barstool': return { w: 45, h: 90 };
+            case 'drawer': return { w: 70, h: 90 };
+            case 'plant': return { w: 45, h: 65 };
+            default: return { w: Math.max(30, Math.round(defW * 0.6)), h: defH };
+        }
+    } else if (view === 'bawah') {
+        switch (type) {
+            case 'downlight': return { w: 24, h: 24 };
+            case 'pendant_light': return { w: 32, h: 32 };
+            case 'led_strip': return { w: 140, h: 14 };
+            case 'sink': return { w: 110, h: 70 };
+            case 'dining_table': return { w: 160, h: 90 };
+            case 'coffee_table': return { w: 100, h: 55 };
+            case 'sofa': return { w: 180, h: 80 };
+            case 'bed': return { w: 160, h: 180 };
+            default: return { w: defW, h: defH };
+        }
+    }
+
+    return { w: defW, h: defH };
 }
 
 function getAccessoryWidthPx(ann: AnnotationItem): number {
-    const base = getAccessoryBaseSize(ann.accessoryType);
+    const base = getAccessoryBaseSize(ann.accessoryType, ann.view || 'depan');
     return ann.width || Math.round(base.w * (ann.scale || 1));
 }
 
 function getAccessoryHeightPx(ann: AnnotationItem): number {
-    const base = getAccessoryBaseSize(ann.accessoryType);
+    const base = getAccessoryBaseSize(ann.accessoryType, ann.view || 'depan');
     return ann.height || Math.round(base.h * (ann.scale || 1));
+}
+
+function setAccessoryView(ann: AnnotationItem, view: AccessoryViewAngle) {
+    if (ann.view === view) return;
+    const oldView = ann.view || 'depan';
+    ann.view = view;
+
+    const baseOld = getAccessoryBaseSize(ann.accessoryType, oldView);
+    const baseNew = getAccessoryBaseSize(ann.accessoryType, view);
+    if (baseOld.w !== baseNew.w || baseOld.h !== baseNew.h) {
+        ann.width = baseNew.w;
+        ann.height = baseNew.h;
+    }
+
+    captureSnapshot();
+    const viewLabels: Record<AccessoryViewAngle, string> = {
+        depan: 'Tampak Depan (Elevasi)',
+        atas: 'Tampak Atas (Denah/Plan)',
+        samping: 'Tampak Samping (Potongan)',
+        bawah: 'Tampak Bawah (Plafon/Kolong)',
+    };
+    toast.success(`Sudut pandang diubah ke: ${viewLabels[view]}`);
+}
+
+function rotateAccessory(ann: AnnotationItem) {
+    ann.rotation = ((ann.rotation || 0) + 90) % 360;
+    captureSnapshot();
+    toast.success(`Aksesoris diputar ke ${ann.rotation}°`);
+}
+
+function flipAccessoryH(ann: AnnotationItem) {
+    ann.flipH = !ann.flipH;
+    captureSnapshot();
+    toast.success(`Aksesoris dibalik horisontal ${ann.flipH ? '(ON)' : '(OFF)'}`);
+}
+
+function flipAccessoryV(ann: AnnotationItem) {
+    ann.flipV = !ann.flipV;
+    captureSnapshot();
+    toast.success(`Aksesoris dibalik vertikal ${ann.flipV ? '(ON)' : '(OFF)'}`);
 }
 
 function getAccessoryWidthMm(ann: AnnotationItem): number {
@@ -962,7 +1359,7 @@ function stepAccessoryHeight(ann: AnnotationItem, deltaMm: number) {
 }
 
 function resetAccessorySize(ann: AnnotationItem) {
-    const base = getAccessoryBaseSize(ann.accessoryType);
+    const base = getAccessoryBaseSize(ann.accessoryType, ann.view || 'depan');
     ann.width = base.w;
     ann.height = base.h;
     ann.scale = 1;
@@ -976,11 +1373,13 @@ function applyAccessoryPreset(ann: AnnotationItem, wMm: number, hMm: number) {
     toast.success(`Ukuran diatur ke ${wMm} × ${hMm} mm`);
 }
 
-function stampAccessory(type: string) {
+function stampAccessory(type: string, viewAngle?: AccessoryViewAngle) {
     showAccessoryMenu.value = false;
+    const view = viewAngle || accessoryActiveView.value || 'depan';
     const item = ACCESSORY_CATALOG.find(a => a.id === type);
-    const baseW = item ? item.baseW : 120;
-    const baseH = item ? item.baseH : 80;
+    const base = getAccessoryBaseSize(type, view);
+    const baseW = base.w;
+    const baseH = base.h;
     const label = item ? item.name : 'Aksesoris';
 
     const defaultX = Math.round(furnitureSvgX.value + (furnitureSvgWidth.value / 2) - (baseW / 2));
@@ -995,14 +1394,18 @@ function stampAccessory(type: string) {
         height: baseH,
         text: label,
         accessoryType: type,
+        view: view,
+        rotation: 0,
+        flipH: false,
+        flipV: false,
         scale: 1,
     };
 
     annotations.value.push(newAcc);
     selectedObjectId.value = newAcc.id;
-    selectedElement.value = { type: 'accessory', id: newAcc.id, name: label };
+    selectedElement.value = { type: 'accessory', id: newAcc.id, name: `${label} (${view})` };
     captureSnapshot();
-    toast.success(`Aksesoris "${label}" ditambahkan. Anda dapat menarik tepi atau sudutnya untuk resize!`);
+    toast.success(`Aksesoris "${label}" (${view}) berhasil ditambahkan ke kanvas.`);
 }
 
 // ── MODAL KOP GAMBAR LENGKAP ────────────────────────────────────────────────
@@ -1030,16 +1433,69 @@ const furnitureSvgWidth = computed(() => {
     return 780;
 });
 
+// Multi-View 4-Quadrant Frame Coordinates (Dynamic according to Title Block Position)
+const multiViewFrames = computed(() => {
+    if (titleBlockPos.value === 'side') {
+        return {
+            f1: { x: 45, y: 45, w: 430, h: 365 },
+            f2: { x: 495, y: 45, w: 430, h: 365 },
+            f3: { x: 45, y: 430, w: 430, h: 365 },
+            f4: { x: 495, y: 430, w: 430, h: 365 },
+        };
+    } else if (titleBlockPos.value === 'top') {
+        return {
+            f1: { x: 45, y: 125, w: 540, h: 325 },
+            f2: { x: 605, y: 125, w: 540, h: 325 },
+            f3: { x: 45, y: 470, w: 540, h: 325 },
+            f4: { x: 605, y: 470, w: 540, h: 325 },
+        };
+    } else {
+        // bottom
+        return {
+            f1: { x: 45, y: 45, w: 540, h: 325 },
+            f2: { x: 605, y: 45, w: 540, h: 325 },
+            f3: { x: 45, y: 390, w: 540, h: 325 },
+            f4: { x: 605, y: 390, w: 540, h: 325 },
+        };
+    }
+});
+
+function selectView(view: ViewType) {
+    activeView.value = view;
+    layoutMode.value = 'single';
+    activeSheetTab.value = '01';
+
+    const defaultTitles: Record<ViewType, { title: string; num: string }> = {
+        depan: { title: 'TAMPAK DEPAN', num: '1' },
+        tanpa_pintu: { title: 'TAMPAK DEPAN TANPA PINTU', num: '2' },
+        samping: { title: 'TAMPAK SAMPING', num: '3' },
+        potongan: { title: 'POTONGAN A-A', num: '4' },
+        atas: { title: 'TAMPAK ATAS (PLAN)', num: '5' },
+        iso: { title: 'ISOMETRI 3D', num: '6' },
+    };
+    if (defaultTitles[view]) {
+        cabinet.value.viewTitle = defaultTitles[view].title;
+        cabinet.value.viewNumber = defaultTitles[view].num;
+    }
+    captureSnapshot();
+}
+
 // Direct Drag & Drop direct manipulation engine
 const isDraggingObject = ref(false);
-const selectedObjectId = ref<string | null>('tv');
+const isCtrlDrag = ref(false);
+const isCtrlPressed = ref(false);
+const clipboardObject = ref<AnnotationItem | any | null>(null);
+const pasteOffsetCount = ref(1);
+const selectedObjectId = ref<string | null>(isDemoSheet ? 'tv' : null);
 const hoveredAccessoryId = ref<string | null>(null);
 const dragPayload = ref<{
-    type: 'annotation' | 'annotation_target' | 'section_line' | 'shelves' | 'shelves_resize' | 'sink' | 'divider_fridge' | 'divider_tall' | 'countertop' | 'component' | 'line_body' | 'line_endpoint_a' | 'line_endpoint_b' | 'tv' | 'credenza' | 'accessory_resize_se' | 'accessory_resize_e' | 'accessory_resize_s' | 'accessory_resize_w' | 'accessory_resize_n' | 'accessory_resize_nw' | 'accessory_resize_ne' | 'accessory_resize_sw';
+    type: 'view_title' | 'annotation' | 'annotation_target' | 'section_line' | 'shelves' | 'shelves_resize' | 'sink' | 'divider_fridge' | 'divider_tall' | 'countertop' | 'component' | 'line_body' | 'line_endpoint_a' | 'line_endpoint_b' | 'tv' | 'credenza' | 'accessory_resize_se' | 'accessory_resize_e' | 'accessory_resize_s' | 'accessory_resize_w' | 'accessory_resize_n' | 'accessory_resize_nw' | 'accessory_resize_ne' | 'accessory_resize_sw';
     id: string;
     startX: number;
     startY: number;
     initialData: Record<string, any>;
+    isCtrl?: boolean;
+    cloned?: boolean;
 } | null>(null);
 
 // Scale conversions between mm and SVG pixels
@@ -1115,11 +1571,13 @@ function promptChangeLineLength(ann: AnnotationItem) {
 }
 
 // Selected element & annotation computed
-const selectedElement = ref<{ type: string; id: string; name: string } | null>({
-    type: 'component',
-    id: 'fridge',
-    name: 'Ruang Kulkas 2 Pintu',
-});
+const selectedElement = ref<{ type: string; id: string; name: string } | null>(
+    isDemoSheet ? {
+        type: 'component',
+        id: 'fridge',
+        name: 'Ruang Kulkas 2 Pintu',
+    } : null
+);
 
 const selectedAnnotation = computed(() => {
     return annotations.value.find(a => a.id === selectedObjectId.value) || null;
@@ -1127,14 +1585,24 @@ const selectedAnnotation = computed(() => {
 
 // Load saved data from database props if available
 function initFromProps() {
-    if (!props.elements || !props.elements.length) return;
+    if (!props.elements || !props.elements.length) {
+        if (!isDemoSheet) {
+            annotations.value = [];
+            cabinet.value.name = props.sheet?.title || 'Lembar Kerja Baru';
+            cabinet.value.projectName = props.project?.title || '';
+            cabinet.value.furnitureType = 'blank';
+            cabinet.value.materials = [];
+            selectedElement.value = null;
+        }
+        return;
+    }
     const shopEl = props.elements.find((e: any) => e.type === 'shop_drawing' || e.data?.cabinet);
     if (shopEl?.data) {
         const d = typeof shopEl.data === 'string' ? JSON.parse(shopEl.data) : shopEl.data;
         if (d.cabinet) {
             cabinet.value = { ...cabinet.value, ...d.cabinet };
         }
-        if (d.annotations && Array.isArray(d.annotations) && d.annotations.length > 0) {
+        if (d.annotations && Array.isArray(d.annotations)) {
             annotations.value = d.annotations;
         }
     }
@@ -1174,6 +1642,9 @@ function startObjectDrag(e: MouseEvent | TouchEvent, type: string, id: string, i
     const touch = 'touches' in e && e.touches.length > 0 ? e.touches[0] : (e as MouseEvent);
     const pt = getSvgPoint(touch);
 
+    const isCtrl = ('ctrlKey' in e && (e.ctrlKey || e.metaKey)) || isCtrlPressed.value;
+    isCtrlDrag.value = isCtrl;
+
     isDraggingObject.value = true;
     selectedObjectId.value = id;
     selectedElement.value = { type, id, name: initialData.name || id };
@@ -1184,6 +1655,8 @@ function startObjectDrag(e: MouseEvent | TouchEvent, type: string, id: string, i
         startX: pt.x,
         startY: pt.y,
         initialData: { ...initialData },
+        isCtrl,
+        cloned: false,
     };
 }
 
@@ -1193,6 +1666,47 @@ function doObjectDrag(pointEvent: MouseEvent | Touch) {
     const dx = pt.x - dragPayload.value.startX;
     const dy = pt.y - dragPayload.value.startY;
     const target = dragPayload.value;
+
+    const isCtrlNow = target.isCtrl || ('ctrlKey' in pointEvent && (pointEvent.ctrlKey || (pointEvent as any).metaKey)) || isCtrlPressed.value;
+
+    // Duplikasi saat geser dengan Ctrl (Ctrl + Klik Kiri Geser)
+    if (isCtrlNow && !target.cloned && (target.type === 'annotation' || target.type === 'line_body')) {
+        const dist = Math.hypot(dx, dy);
+        if (dist >= 3) {
+            const originalIndex = annotations.value.findIndex(a => a.id === target.id);
+            if (originalIndex !== -1) {
+                const original = annotations.value[originalIndex];
+
+                // Kembalikan objek asli ke posisi awal
+                original.x = target.initialData.x;
+                original.y = target.initialData.y;
+                if (target.initialData.x2 !== undefined) original.x2 = target.initialData.x2;
+                if (target.initialData.y2 !== undefined) original.y2 = target.initialData.y2;
+                if (target.initialData.targetX !== undefined) original.targetX = target.initialData.targetX;
+                if (target.initialData.targetY !== undefined) original.targetY = target.initialData.targetY;
+
+                // Buat salinan baru yang akan bergerak mengikuti kursor mouse
+                const cloneId = `${original.type || 'obj'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                const clonedItem: AnnotationItem = {
+                    ...JSON.parse(JSON.stringify(original)),
+                    id: cloneId,
+                };
+                annotations.value.push(clonedItem);
+
+                // Arahkan proses drag ke objek kloning baru
+                target.id = cloneId;
+                target.cloned = true;
+                target.isCtrl = true;
+                isCtrlDrag.value = true;
+                selectedObjectId.value = cloneId;
+                selectedElement.value = {
+                    type: clonedItem.type,
+                    id: cloneId,
+                    name: clonedItem.text || clonedItem.accessoryType || 'Objek Duplikat',
+                };
+            }
+        }
+    }
 
     if (target.type === 'annotation') {
         const ann = annotations.value.find(a => a.id === target.id);
@@ -1204,6 +1718,12 @@ function doObjectDrag(pointEvent: MouseEvent | Touch) {
             }
             if (ann.y2 !== undefined && target.initialData.y2 !== undefined) {
                 ann.y2 = target.initialData.y2 + dy;
+            }
+            if (ann.targetX !== undefined && target.initialData.targetX !== undefined) {
+                ann.targetX = target.initialData.targetX + dx;
+            }
+            if (ann.targetY !== undefined && target.initialData.targetY !== undefined) {
+                ann.targetY = target.initialData.targetY + dy;
             }
         }
     } else if (target.type === 'line_body') {
@@ -1257,6 +1777,9 @@ function doObjectDrag(pointEvent: MouseEvent | Touch) {
     } else if (target.type === 'tv') {
         tvOffsetX.value = target.initialData.tvOffsetX + dx;
         tvOffsetY.value = Math.min(Math.max(-60, target.initialData.tvOffsetY + dy), 60);
+    } else if (target.type === 'view_title') {
+        cabinet.value.viewTitleOffsetX = target.initialData.x + dx;
+        cabinet.value.viewTitleOffsetY = target.initialData.y + dy;
     } else if (target.type.startsWith('accessory_resize_')) {
         const ann = annotations.value.find(a => a.id === target.id);
         if (ann) {
@@ -1307,10 +1830,37 @@ function handleGlobalMouseMove(e: MouseEvent) {
     }
 }
 
-function handleGlobalMouseUp() {
+function handleGlobalMouseUp(e?: MouseEvent) {
     if (isDraggingObject.value) {
+        const payload = dragPayload.value;
+        const releasedWithCtrl = (e && (e.ctrlKey || e.metaKey)) || isCtrlDrag.value || isCtrlPressed.value;
+
+        // Jika user melepas drag dengan menahan tombol Ctrl dan belum di-clone:
+        if (releasedWithCtrl && payload && !payload.cloned && (payload.type === 'annotation' || payload.type === 'line_body')) {
+            const movedItem = annotations.value.find(a => a.id === payload.id);
+            if (movedItem) {
+                // Buat salinan di posisi awal
+                const originalClone: AnnotationItem = {
+                    ...JSON.parse(JSON.stringify(movedItem)),
+                    id: `${movedItem.type || 'obj'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                    x: payload.initialData.x,
+                    y: payload.initialData.y,
+                };
+                if (payload.initialData.x2 !== undefined) originalClone.x2 = payload.initialData.x2;
+                if (payload.initialData.y2 !== undefined) originalClone.y2 = payload.initialData.y2;
+                if (payload.initialData.targetX !== undefined) originalClone.targetX = payload.initialData.targetX;
+                if (payload.initialData.targetY !== undefined) originalClone.targetY = payload.initialData.targetY;
+
+                annotations.value.push(originalClone);
+                toast.success('Objek berhasil diduplikasi.');
+            }
+        } else if (payload && payload.cloned) {
+            toast.success('Objek berhasil diduplikasi.');
+        }
+
         isDraggingObject.value = false;
         dragPayload.value = null;
+        isCtrlDrag.value = false;
         captureSnapshot();
     }
     if (isPanning.value) {
@@ -1333,7 +1883,12 @@ function handleGlobalTouchEnd() {
 
 function onCanvasClick(e: MouseEvent) {
     if (isDraggingObject.value) return;
-    if (activeTool.value === 'select') return;
+    if (hasPannedDistance.value) return;
+
+    if (activeTool.value === 'select') {
+        clearSelection();
+        return;
+    }
 
     const pt = getSvgPoint(e);
     const clickX = pt.x;
@@ -1443,6 +1998,12 @@ function selectComponent(name: string, id: string) {
     toast.info(`Elemen terpilih: ${name}`);
 }
 
+function clearSelection() {
+    selectedObjectId.value = null;
+    selectedElement.value = null;
+    hoveredAccessoryId.value = null;
+}
+
 function deleteSelectedObject() {
     if (!selectedObjectId.value) return;
 
@@ -1490,12 +2051,202 @@ function deleteSelectedObject() {
         toast.success('Kulkas disembunyikan.');
         return;
     }
+    if (id === 'view_title') {
+        cabinet.value.showViewTitle = false;
+        selectedObjectId.value = null;
+        selectedElement.value = null;
+        captureSnapshot();
+        toast.success('Judul tampak berhasil dihapus. Tekan tombol "+ Judul View" atau Ctrl+Z untuk memunculkannya kembali.');
+        return;
+    }
 
     selectedObjectId.value = null;
     selectedElement.value = null;
 }
 
+function addOrRestoreViewTitle() {
+    cabinet.value.showViewTitle = true;
+    if (!cabinet.value.viewTitle) {
+        cabinet.value.viewTitle = 'TAMPAK DEPAN';
+    }
+    if (!cabinet.value.viewNumber) {
+        cabinet.value.viewNumber = '1';
+    }
+    if (!cabinet.value.scaleSingle) {
+        cabinet.value.scaleSingle = '1 : 20';
+    }
+    selectedObjectId.value = 'view_title';
+    selectedElement.value = {
+        type: 'component',
+        id: 'view_title',
+        name: `Judul Gambar: ${cabinet.value.viewTitle}`,
+    };
+    if (!isDesktopSidebarOpen.value && !isMobileScreen.value) {
+        isDesktopSidebarOpen.value = true;
+    }
+    captureSnapshot();
+    toast.success('Judul tampak berhasil ditambahkan ke kanvas.');
+}
+
+function toggleViewTitle() {
+    if (cabinet.value.showViewTitle === false) {
+        addOrRestoreViewTitle();
+    } else {
+        selectedObjectId.value = 'view_title';
+        deleteSelectedObject();
+    }
+}
+
+function copySelectedObject() {
+    if (!selectedObjectId.value) {
+        toast.info('Pilih objek terlebih dahulu untuk disalin (Ctrl+C).');
+        return;
+    }
+
+    const id = selectedObjectId.value;
+    const ann = annotations.value.find(a => a.id === id);
+
+    if (ann) {
+        clipboardObject.value = JSON.parse(JSON.stringify(ann));
+        pasteOffsetCount.value = 1;
+        const name = ann.text || ann.accessoryType || ann.type || 'Objek';
+        toast.success(`"${name}" disalin ke clipboard (Ctrl+V untuk menempel).`);
+        return;
+    }
+
+    if (id === 'view_title') {
+        clipboardObject.value = {
+            id: 'temp',
+            type: 'label',
+            x: Math.round(furnitureSvgX.value + (furnitureSvgWidth.value / 2) - 80 + (cabinet.value.viewTitleOffsetX || 0)),
+            y: Math.round(645 + (cabinet.value.viewTitleOffsetY || 0)),
+            text: `${cabinet.value.viewNumber || '1'} ${cabinet.value.viewTitle || 'TAMPAK DEPAN'} (${cabinet.value.scaleSingle || '1 : 20'})`,
+            code: cabinet.value.viewNumber || '1',
+            desc: cabinet.value.scaleSingle || '1 : 20',
+        };
+        pasteOffsetCount.value = 1;
+        toast.success(`"Judul: ${cabinet.value.viewTitle || 'TAMPAK DEPAN'}" disalin (Ctrl+V untuk menempel).`);
+        return;
+    }
+
+    // Built-in furniture accessories
+    if (id === 'tv') {
+        clipboardObject.value = {
+            id: 'temp',
+            type: 'accessory',
+            accessoryType: 'tv',
+            x: 550 + tvOffsetX.value,
+            y: 280 + tvOffsetY.value,
+            text: 'Smart TV 65"',
+            scale: 1,
+        };
+        pasteOffsetCount.value = 1;
+        toast.success('"Smart TV" disalin (Ctrl+V untuk menempel).');
+        return;
+    }
+
+    if (id === 'sink') {
+        clipboardObject.value = {
+            id: 'temp',
+            type: 'accessory',
+            accessoryType: 'sink',
+            x: 500 + sinkOffsetX.value,
+            y: 420,
+            text: 'Sink Wastafel',
+            scale: 1,
+        };
+        pasteOffsetCount.value = 1;
+        toast.success('"Sink Wastafel" disalin (Ctrl+V untuk menempel).');
+        return;
+    }
+
+    toast.info('Pilih objek notasi atau aksesoris untuk disalin.');
+}
+
+function pasteCopiedObject() {
+    if (!clipboardObject.value) {
+        toast.info('Clipboard kosong. Pilih objek lalu tekan Ctrl+C terlebih dahulu.');
+        return;
+    }
+
+    const raw = clipboardObject.value;
+    const offset = 25 * pasteOffsetCount.value;
+    pasteOffsetCount.value += 1;
+
+    const newId = `${raw.type || 'obj'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const newItem: AnnotationItem = {
+        ...JSON.parse(JSON.stringify(raw)),
+        id: newId,
+        x: Math.min(1140, Math.max(35, (raw.x ?? 500) + offset)),
+        y: Math.min(780, Math.max(35, (raw.y ?? 350) + offset)),
+    };
+
+    if (raw.x2 !== undefined) {
+        newItem.x2 = Math.min(1140, Math.max(35, raw.x2 + offset));
+    }
+    if (raw.y2 !== undefined) {
+        newItem.y2 = Math.min(780, Math.max(35, raw.y2 + offset));
+    }
+    if (raw.targetX !== undefined) {
+        newItem.targetX = Math.min(1140, Math.max(35, raw.targetX + offset));
+    }
+    if (raw.targetY !== undefined) {
+        newItem.targetY = Math.min(780, Math.max(35, raw.targetY + offset));
+    }
+
+    annotations.value.push(newItem);
+
+    // Otomatis pilih objek hasil paste
+    selectedObjectId.value = newItem.id;
+    selectedElement.value = {
+        type: newItem.type,
+        id: newItem.id,
+        name: newItem.text || newItem.accessoryType || 'Objek Hasil Salinan',
+    };
+
+    captureSnapshot();
+    toast.success(`"${newItem.text || newItem.accessoryType || 'Objek'}" berhasil ditempel.`);
+}
+
+function duplicateSelectedObject() {
+    if (!selectedObjectId.value) return;
+    copySelectedObject();
+    pasteCopiedObject();
+}
+
 function handleGlobalKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Control' || e.key === 'Meta') {
+        isCtrlPressed.value = true;
+    }
+
+    // Tombol Escape (Batalkan seleksi objek aktif / tutup modal & menu)
+    if (e.key === 'Escape' || e.key === 'Esc' || e.code === 'Escape' || e.keyCode === 27) {
+        if (showAccessoryMenu.value) {
+            showAccessoryMenu.value = false;
+            return;
+        }
+        if (showKopModal.value) {
+            showKopModal.value = false;
+            return;
+        }
+        if (showCabinetModal.value) {
+            showCabinetModal.value = false;
+            return;
+        }
+        if (showTutorialModal.value) {
+            showTutorialModal.value = false;
+            return;
+        }
+        if (editingField.value) {
+            editingField.value = null;
+            return;
+        }
+        e.preventDefault();
+        clearSelection();
+        toast.info('Seleksi objek dibatalkan.');
+        return;
+    }
+
     // Abaikan jika fokus sedang mengetik di input / textarea
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
@@ -1519,12 +2270,55 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
         return;
     }
 
+    // Ctrl+C atau Cmd+C (Copy / Salin Objek Terpilih)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && !e.shiftKey) {
+        const textSelection = window.getSelection()?.toString();
+        if (!textSelection || textSelection.trim().length === 0) {
+            if (selectedObjectId.value) {
+                e.preventDefault();
+                copySelectedObject();
+                return;
+            }
+        }
+    }
+
+    // Ctrl+V atau Cmd+V (Paste / Tempel Objek)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && !e.shiftKey) {
+        if (clipboardObject.value) {
+            e.preventDefault();
+            pasteCopiedObject();
+            return;
+        }
+    }
+
+    // Ctrl+D atau Cmd+D (Duplikasi Cepat Objek)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && !e.shiftKey) {
+        if (selectedObjectId.value) {
+            e.preventDefault();
+            duplicateSelectedObject();
+            return;
+        }
+    }
+
+    // Ctrl+P atau Cmd+P (Cetak / Ekspor PDF Gambar Kerja)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        exportPdf();
+        return;
+    }
+
     // Tombol Delete atau Backspace (Hapus objek yang dipilih)
     if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedObjectId.value) {
             e.preventDefault();
             deleteSelectedObject();
         }
+    }
+}
+
+function handleGlobalKeyUp(e: KeyboardEvent) {
+    if (e.key === 'Control' || e.key === 'Meta') {
+        isCtrlPressed.value = false;
     }
 }
 
@@ -1570,11 +2364,96 @@ function deleteAnnotation(id: string) {
 
 // ── DYNAMIC CUTTING LIST COMPUTATION (RECALCULATES AUTOMATICALLY!) ────────────
 const cutListItems = computed(() => {
-    const list = [];
+    const list: Array<{
+        id: number;
+        name: string;
+        qty: number;
+        length: number;
+        width: number;
+        thick: number;
+        mat: string;
+        finish: string;
+        edging: string;
+    }> = [];
     let id = 1;
-    const w = cabinet.value.width;
-    const d = cabinet.value.depth;
-    const h = cabinet.value.height;
+    const w = cabinet.value.width || 2400;
+    const d = cabinet.value.depth || 600;
+    const h = cabinet.value.height || 2200;
+
+    // JIKA TIPE BLANK (LEMBAR GAMBAR BEBAS / AKSESORIS KUSTOM FURNITUR)
+    if (cabinet.value.furnitureType === 'blank') {
+        const accessories = annotations.value.filter(a => a.type === 'accessory');
+
+        if (accessories.length > 0) {
+            accessories.forEach((ann, aIdx) => {
+                const accName = ann.text || ann.accessoryType || `Komponen ${aIdx + 1}`;
+                const accW = getAccessoryWidthMm(ann);
+                const accH = getAccessoryHeightMm(ann);
+                const type = ann.accessoryType;
+
+                if (type === 'bed') {
+                    const bedW = Math.max(1200, accW);
+                    const bedHeadH = Math.max(800, accH);
+                    list.push({ id: id++, name: `Panel Headboard Dinding (${accName})`, qty: 1, length: bedW, width: bedHeadH, thick: 18, mat: 'Multiplek 18mm + Busa / HPL', finish: 'Upholstery Fabric / HPL Wood Grain', edging: '4 Sisi Edging' });
+                    list.push({ id: id++, name: `Dinding Samping Rangka Dipan Kiri & Kanan (${accName})`, qty: 2, length: 2000, width: 300, thick: 18, mat: 'Multiplek 18mm', finish: 'HPL Wood Grain', edging: 'P1, L1' });
+                    list.push({ id: id++, name: `Dinding Depan Footboard Dipan (${accName})`, qty: 1, length: bedW, width: 300, thick: 18, mat: 'Multiplek 18mm', finish: 'HPL Wood Grain', edging: 'P1, L1' });
+                    list.push({ id: id++, name: `Balok Gelagar Rangka Tengah Dipan (${accName})`, qty: 1, length: 1950, width: 80, thick: 40, mat: 'Kayu Solid Kamper / Meranti', finish: 'Mentahan Halus Presisi', edging: 'Tanpa Edging' });
+                    list.push({ id: id++, name: `Rangka Slat Penyangga Kasur (${accName})`, qty: 8, length: bedW - 40, width: 70, thick: 20, mat: 'Kayu Solid Kamper', finish: 'Mentahan Halus Presisi', edging: 'Tanpa Edging' });
+                    list.push({ id: id++, name: `Panel Tutup Alas Kasur (${accName})`, qty: 2, length: Math.round((bedW - 36) / 2), width: 980, thick: 9, mat: 'Multiplek 9mm Melaminto', finish: 'Melaminto Putih', edging: 'Tanpa Edging' });
+                } else if (type === 'sofa' || type === 'armchair') {
+                    const sofaW = Math.max(800, accW);
+                    const sofaH = Math.max(600, accH);
+                    list.push({ id: id++, name: `Rangka Bawah Dudukan (${accName})`, qty: 1, length: sofaW, width: 750, thick: 18, mat: 'Multiplek 18mm / Kayu Solid', finish: 'Melaminto / Mentahan', edging: 'P1' });
+                    list.push({ id: id++, name: `Rangka Sandaran Punggung (${accName})`, qty: 1, length: sofaW, width: sofaH, thick: 18, mat: 'Multiplek 18mm + Busa D24', finish: 'Upholstery Fabric', edging: 'Tanpa Edging' });
+                    list.push({ id: id++, name: `Rangka Sandaran Lengan Kiri & Kanan (${accName})`, qty: 2, length: 750, width: Math.round(sofaH * 0.75), thick: 18, mat: 'Multiplek 18mm + Busa', finish: 'Upholstery Fabric', edging: 'Tanpa Edging' });
+                    list.push({ id: id++, name: `Kaki Penyangga Sofa (${accName})`, qty: 4, length: 150, width: 50, thick: 50, mat: 'Kayu Solid Bubut / Stainless Steel', finish: 'Natural Doff / Chrome', edging: 'Poles Keliling' });
+                } else if (type === 'drawer') {
+                    const drawerW = Math.max(400, accW);
+                    const drawerH = Math.max(400, accH);
+                    const faceH = Math.round(drawerH / 3) - 6;
+                    list.push({ id: id++, name: `Muka Panel Laci (${accName})`, qty: 3, length: drawerW - 4, width: faceH, thick: 18, mat: 'Multiplek 18mm', finish: 'HPL Wood Grain / Duco', edging: '4 Sisi J-Pull' });
+                    list.push({ id: id++, name: `Kotak Samping Laci (${accName})`, qty: 6, length: 450, width: Math.max(120, faceH - 40), thick: 15, mat: 'Multiplek 15mm Melaminto', finish: 'Melaminto Putih', edging: 'P1' });
+                    list.push({ id: id++, name: `Kotak Depan & Belakang Laci (${accName})`, qty: 6, length: drawerW - 64, width: Math.max(120, faceH - 40), thick: 15, mat: 'Multiplek 15mm Melaminto', finish: 'Melaminto Putih', edging: 'P1' });
+                    list.push({ id: id++, name: `Alas Bawah Kotak Laci (${accName})`, qty: 3, length: drawerW - 40, width: 440, thick: 6, mat: 'Multiplek 6mm Melaminto', finish: 'Melaminto Putih', edging: 'Tanpa Edging' });
+                    list.push({ id: id++, name: `Rel Laci Tandem Slowmotion (${accName})`, qty: 3, length: 450, width: 45, thick: 35, mat: 'Besi Galvanis Cold Rolled', finish: 'Zinc Plated Slowmotion', edging: 'Fitting Hardware' });
+                } else if (type === 'wardrobe_door' || type === 'wardrobe') {
+                    const wardW = Math.max(600, accW);
+                    const wardH = Math.max(1200, accH);
+                    list.push({ id: id++, name: `Dinding Samping Luar Lemari (${accName})`, qty: 2, length: wardH, width: 600, thick: 18, mat: 'Multiplek 18mm', finish: 'HPL Wood Grain', edging: 'P1, L1' });
+                    list.push({ id: id++, name: `Daun Pintu Lemari Pakaian (${accName})`, qty: 2, length: wardH - 80, width: Math.round(wardW / 2) - 4, thick: 18, mat: 'Multiplek 18mm', finish: 'HPL Solid / Wood', edging: '4 Sisi Edging 2mm' });
+                    list.push({ id: id++, name: `Ambalan Rak Baju Internal (${accName})`, qty: 4, length: wardW - 36, width: 550, thick: 18, mat: 'Multiplek 18mm Melaminto', finish: 'Melaminto Putih', edging: 'P1' });
+                    list.push({ id: id++, name: `Top Panel & Alas Bawah Lemari (${accName})`, qty: 2, length: wardW, width: 600, thick: 18, mat: 'Multiplek 18mm', finish: 'Melaminto Putih', edging: 'P1' });
+                    list.push({ id: id++, name: `Backing Belakang Lemari (${accName})`, qty: 1, length: wardW, width: wardH - 80, thick: 6, mat: 'Multiplek 6mm Melaminto', finish: 'Melaminto Putih', edging: 'Tanpa Edging' });
+                    list.push({ id: id++, name: `Plinth / Kaki Bawah Lemari (${accName})`, qty: 1, length: wardW, width: 80, thick: 18, mat: 'Multiplek 18mm', finish: 'Hitam Doff', edging: 'P1' });
+                } else if (type === 'coffee_table' || type === 'dining_table' || type === 'table') {
+                    const tblW = Math.max(600, accW);
+                    const tblD = Math.max(400, accH);
+                    list.push({ id: id++, name: `Top Table Meja (${accName})`, qty: 1, length: tblW, width: tblD, thick: 25, mat: 'Multiplek Double 25mm / Solid Surface', finish: 'HPL Marmer / Kayu Solid', edging: '4 Sisi Bevel' });
+                    list.push({ id: id++, name: `Rangka Apron Panjang Meja (${accName})`, qty: 2, length: tblW - 100, width: 90, thick: 18, mat: 'Multiplek 18mm', finish: 'HPL / Cat Duco', edging: 'P1' });
+                    list.push({ id: id++, name: `Rangka Apron Pendek Meja (${accName})`, qty: 2, length: Math.max(300, tblD - 100), width: 90, thick: 18, mat: 'Multiplek 18mm', finish: 'HPL / Cat Duco', edging: 'P1' });
+                    list.push({ id: id++, name: `Kaki Penyangga Meja (${accName})`, qty: 4, length: 720, width: 60, thick: 60, mat: 'Hollow Besi / Kayu Solid', finish: 'Powder Coating / Natural', edging: 'Poles Keliling' });
+                } else if (type === 'tv') {
+                    const tvW = Math.max(800, accW);
+                    const tvH = Math.max(500, accH);
+                    list.push({ id: id++, name: `Panel Backdrop Dinding TV (${accName})`, qty: 1, length: tvW + 200, width: tvH + 200, thick: 18, mat: 'Multiplek 18mm', finish: 'HPL Marmer / Wood', edging: '4 Sisi' });
+                    list.push({ id: id++, name: `Rangka Penguat Braket TV (${accName})`, qty: 2, length: tvW, width: 100, thick: 18, mat: 'Multiplek 18mm', finish: 'Mentahan', edging: 'Tanpa Edging' });
+                } else if (type === 'sink') {
+                    const sinkW = Math.max(600, accW);
+                    list.push({ id: id++, name: `Top Table Kabinet Wastafel (${accName})`, qty: 1, length: sinkW + 100, width: 550, thick: 30, mat: 'Solid Surface / Granit', finish: 'White Polished Bevel', edging: '3 Sisi Chamfer' });
+                    list.push({ id: id++, name: `Pintu Kabinet Wastafel Bawah (${accName})`, qty: 2, length: 650, width: Math.round(sinkW / 2), thick: 18, mat: 'Multiplek 18mm', finish: 'HPL Duco Waterproof', edging: '4 Sisi' });
+                } else {
+                    const itemW = Math.max(300, accW);
+                    const itemH = Math.max(200, accH);
+                    list.push({ id: id++, name: `Panel Bodi Utama (${accName})`, qty: 1, length: itemW, width: itemH, thick: 18, mat: 'Multiplek 18mm', finish: 'HPL Wood Grain / Solid', edging: 'P1, L1' });
+                    list.push({ id: id++, name: `Rangka Bodi Samping (${accName})`, qty: 2, length: itemH, width: 350, thick: 18, mat: 'Multiplek 18mm', finish: 'Melaminto Putih', edging: 'P1' });
+                    list.push({ id: id++, name: `Alas & Penutup Atas (${accName})`, qty: 2, length: Math.max(200, itemW - 36), width: 350, thick: 18, mat: 'Multiplek 18mm', finish: 'Melaminto Putih', edging: 'P1' });
+                }
+            });
+            return list;
+        }
+
+        return [];
+    }
 
     // Cutting list khusus Backdrop TV & Floating Credenza
     if (cabinet.value.furnitureType === 'credenza_tv') {
@@ -1644,6 +2523,18 @@ const totalPcs = computed(() => cutListItems.value.reduce((acc, cur) => acc + cu
 const editingField = ref<string | null>(null);
 const editValue = ref('');
 
+function promptEditViewTitle() {
+    openEditField('viewTitle', cabinet.value.viewTitle || 'TAMPAK DEPAN');
+}
+
+function promptEditViewNumber() {
+    openEditField('viewNumber', cabinet.value.viewNumber || '1');
+}
+
+function promptEditViewScale() {
+    openEditField('scaleSingle', cabinet.value.scaleSingle || '1 : 20');
+}
+
 function openEditField(field: string, currentVal: string) {
     if (!props.canEdit) return;
     editingField.value = field;
@@ -1653,11 +2544,15 @@ function openEditField(field: string, currentVal: string) {
 function saveFieldEdit() {
     if (!editingField.value) return;
     if (editingField.value === 'name') cabinet.value.name = editValue.value || 'Lemari';
+    if (editingField.value === 'viewTitle') cabinet.value.viewTitle = editValue.value ? editValue.value.toUpperCase() : 'TAMPAK DEPAN';
+    if (editingField.value === 'viewNumber') cabinet.value.viewNumber = editValue.value || '1';
+    if (editingField.value === 'scaleSingle') cabinet.value.scaleSingle = editValue.value || '1 : 20';
     if (editingField.value === 'width') cabinet.value.width = Number(editValue.value) || 5190;
     if (editingField.value === 'depth') cabinet.value.depth = Number(editValue.value) || 675;
     if (editingField.value === 'height') cabinet.value.height = Number(editValue.value) || 2390;
     if (editingField.value === 'date') cabinet.value.date = editValue.value;
     editingField.value = null;
+    captureSnapshot();
     toast.success('Data lembar kerja berhasil diperbarui.');
 }
 
@@ -1682,20 +2577,35 @@ function handleWheel(e: WheelEvent) {
     zoomScale.value = Math.min(Math.max(zoomScale.value * factor, 0.3), 4.0);
 }
 
+const panStartClientX = ref(0);
+const panStartClientY = ref(0);
+const hasPannedDistance = ref(false);
+
 function startPan(clientX: number, clientY: number) {
     isPanning.value = true;
+    hasPannedDistance.value = false;
+    panStartClientX.value = clientX;
+    panStartClientY.value = clientY;
     startPanX.value = clientX - panX.value;
     startPanY.value = clientY - panY.value;
 }
 
 function doPan(clientX: number, clientY: number) {
     if (!isPanning.value) return;
+    const dx = clientX - panStartClientX.value;
+    const dy = clientY - panStartClientY.value;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+        hasPannedDistance.value = true;
+    }
     panX.value = clientX - startPanX.value;
     panY.value = clientY - startPanY.value;
 }
 
 function endPan() {
     isPanning.value = false;
+    setTimeout(() => {
+        hasPannedDistance.value = false;
+    }, 100);
 }
 
 function onMouseDown(e: MouseEvent) {
@@ -1710,9 +2620,9 @@ function onMouseMove(e: MouseEvent) {
     doPan(e.clientX, e.clientY);
 }
 
-function onMouseUp() {
+function onMouseUp(e?: MouseEvent) {
     if (isDraggingObject.value) {
-        handleGlobalMouseUp();
+        handleGlobalMouseUp(e);
         return;
     }
     endPan();
@@ -1795,9 +2705,153 @@ async function saveToDatabase() {
     }
 }
 
-function exportPdf() {
-    window.print();
-    toast.success('Membuka dialog cetak / Simpan PDF...');
+async function exportPdf() {
+    toast.info('Mempersiapkan dokumen PDF...');
+
+    // Hapus sementara seleksi objek agar bounding box dan handle tidak ikut tercetak
+    const prevSelectedId = selectedObjectId.value;
+    const prevSelectedEl = selectedElement.value;
+    selectedObjectId.value = null;
+    selectedElement.value = null;
+    await nextTick();
+
+    try {
+        let printIframe = document.getElementById('shop-drawing-print-frame') as HTMLIFrameElement;
+        if (!printIframe) {
+            printIframe = document.createElement('iframe');
+            printIframe.id = 'shop-drawing-print-frame';
+            printIframe.style.position = 'fixed';
+            printIframe.style.right = '0';
+            printIframe.style.bottom = '0';
+            printIframe.style.width = '0';
+            printIframe.style.height = '0';
+            printIframe.style.border = '0';
+            printIframe.style.visibility = 'hidden';
+            document.body.appendChild(printIframe);
+        }
+
+        const doc = printIframe.contentWindow?.document;
+        if (!doc) {
+            window.print();
+            return;
+        }
+
+        const isTab02 = activeSheetTab.value === '02';
+        const paper = paperSize.value === 'A4' ? 'A4 landscape' : 'A3 landscape';
+        const sheetTitle = isTab02
+            ? 'Lembar 02 - Daftar Potong'
+            : (cabinet.value.viewTitle || 'Lembar 01 - Gambar Kerja');
+        const docTitle = `${cabinet.value.name || 'Gambar Kerja'} - ${sheetTitle}`;
+
+        let contentHtml = '';
+        if (isTab02) {
+            const cutEl = document.getElementById('cutting-list-sheet');
+            if (cutEl) {
+                const clone = cutEl.cloneNode(true) as HTMLElement;
+                clone.style.display = 'flex';
+                // Hilangkan batasan scroll agar seluruh daftar potong tercetak penuh
+                const tableContainer = clone.querySelector('.overflow-y-auto') as HTMLElement;
+                if (tableContainer) {
+                    tableContainer.style.maxHeight = 'none';
+                    tableContainer.style.overflow = 'visible';
+                }
+                contentHtml = `<div class="sheet-container">${clone.outerHTML}</div>`;
+            }
+        } else {
+            const svgEl = document.getElementById('shop-drawing-svg');
+            if (svgEl) {
+                const svgClone = svgEl.cloneNode(true) as SVGElement;
+                svgClone.setAttribute('width', '100%');
+                svgClone.setAttribute('height', '100%');
+                contentHtml = `<div class="sheet-container">${svgClone.outerHTML}</div>`;
+            }
+        }
+
+        // Salin seluruh stylesheet parent agar styling Tailwind, font, dan elemen persis seperti di layar
+        const parentStyles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+            .map(el => el.outerHTML)
+            .join('\n');
+
+        doc.open();
+        doc.write(`
+            <!DOCTYPE html>
+            <html lang="id">
+            <head>
+                <meta charset="utf-8" />
+                <title>${docTitle}</title>
+                ${parentStyles}
+                <style>
+                    @page {
+                        size: ${paper};
+                        margin: 0mm;
+                    }
+                    * {
+                        box-sizing: border-box;
+                        margin: 0;
+                        padding: 0;
+                    }
+                    html, body {
+                        width: 100%;
+                        height: 100%;
+                        background: #ffffff !important;
+                        margin: 0;
+                        padding: 0;
+                        overflow: hidden;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    .sheet-container {
+                        width: 100vw;
+                        height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background: #ffffff;
+                    }
+                    .sheet-container svg {
+                        width: 100%;
+                        height: 100%;
+                        max-width: 100%;
+                        max-height: 100%;
+                        display: block;
+                    }
+                    #cutting-list-sheet {
+                        width: 100vw !important;
+                        height: 100vh !important;
+                        max-width: 100vw !important;
+                        max-height: 100vh !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                        border-radius: 0 !important;
+                        padding: 24px 32px !important;
+                        box-sizing: border-box !important;
+                    }
+                </style>
+            </head>
+            <body>
+                ${contentHtml}
+            </body>
+            </html>
+        `);
+        doc.close();
+
+        setTimeout(() => {
+            try {
+                printIframe.contentWindow?.focus();
+                printIframe.contentWindow?.print();
+                toast.success('Membuka dialog Simpan PDF...');
+            } catch (err) {
+                console.error('Print iframe error:', err);
+                window.print();
+            }
+        }, 350);
+    } catch (err) {
+        console.error('Export PDF failed:', err);
+        toast.error('Gagal membuka dialog PDF.');
+    } finally {
+        selectedObjectId.value = prevSelectedId;
+        selectedElement.value = prevSelectedEl;
+    }
 }
 
 function exportPng() {
@@ -1861,6 +2915,7 @@ onMounted(() => {
     window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
     window.addEventListener('touchend', handleGlobalTouchEnd);
     window.addEventListener('keydown', handleGlobalKeyDown);
+    window.addEventListener('keyup', handleGlobalKeyUp);
     nextTick(() => {
         checkToolsScroll();
         checkHeaderScroll();
@@ -1879,6 +2934,7 @@ onUnmounted(() => {
     window.removeEventListener('touchmove', handleGlobalTouchMove);
     window.removeEventListener('touchend', handleGlobalTouchEnd);
     window.removeEventListener('keydown', handleGlobalKeyDown);
+    window.removeEventListener('keyup', handleGlobalKeyUp);
 });
 </script>
 
@@ -2102,6 +3158,30 @@ onUnmounted(() => {
                         </button>
                     </div>
 
+                    <!-- Tombol Salin Objek Terpilih (Ctrl+C) -->
+                    <button
+                        v-if="selectedObjectId"
+                        type="button"
+                        @click="copySelectedObject"
+                        class="px-2 py-1 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/15 text-slate-200 border border-white/10 flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                        title="Salin Objek Terpilih (Ctrl+C)"
+                    >
+                        <Copy class="w-3.5 h-3.5 text-amber-400" />
+                        <span class="hidden sm:inline">Salin</span>
+                    </button>
+
+                    <!-- Tombol Tempel Objek dari Clipboard (Ctrl+V) -->
+                    <button
+                        v-if="clipboardObject"
+                        type="button"
+                        @click="pasteCopiedObject"
+                        class="px-2 py-1 rounded-lg text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                        title="Tempel Objek (Ctrl+V)"
+                    >
+                        <ClipboardPaste class="w-3.5 h-3.5 text-amber-400" />
+                        <span class="hidden sm:inline">Tempel</span>
+                    </button>
+
                     <!-- Tombol Hapus Objek Terpilih (Delete / Backspace) -->
                     <button
                         v-if="selectedObjectId"
@@ -2172,6 +3252,19 @@ onUnmounted(() => {
                             <span>Kotak</span>
                         </button>
                     </div>
+
+                    <!-- Judul View Tool: [ Judul View / + Judul View ] -->
+                    <button
+                        type="button"
+                        @click="cabinet.showViewTitle !== false ? selectComponent(`Judul Gambar: ${cabinet.viewTitle || 'TAMPAK DEPAN'}`, 'view_title') : addOrRestoreViewTitle()"
+                        :class="cabinet.showViewTitle !== false ? (selectedObjectId === 'view_title' ? 'bg-amber-500 text-slate-950 font-bold shadow-sm' : 'bg-white/5 text-slate-300 hover:bg-white/10') : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 font-semibold'"
+                        class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                        :title="cabinet.showViewTitle !== false ? 'Pilih / kelola Judul View di kanvas' : 'Tambahkan kembali Judul View (TAMPAK DEPAN) ke kanvas'"
+                    >
+                        <Plus v-if="cabinet.showViewTitle === false" class="w-3.5 h-3.5 text-amber-400" />
+                        <Tag v-else class="w-3.5 h-3.5" :class="selectedObjectId === 'view_title' ? 'text-slate-950' : 'text-amber-400'" />
+                        <span>{{ cabinet.showViewTitle !== false ? 'Judul View' : '+ Judul View' }}</span>
+                    </button>
 
                     <!-- Aksesoris Stamper Tool: [ 📦 + Aksesoris ▾ ] -->
                     <div class="relative shrink-0">
@@ -2307,7 +3400,12 @@ onUnmounted(() => {
             <!-- CANVAS CONTAINER -->
             <div
                 ref="canvasContainerRef"
-                class="flex-1 h-full bg-[#0d0d0f] relative overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none"
+                class="flex-1 h-full bg-[#0d0d0f] relative overflow-hidden flex items-center justify-center touch-none select-none"
+                :class="[
+                    (isDraggingObject && (isCtrlPressed || isCtrlDrag))
+                        ? '!cursor-copy'
+                        : (isPanning ? 'cursor-grabbing' : 'cursor-grab')
+                ]"
                 @mousedown="onMouseDown"
                 @mousemove="onMouseMove"
                 @mouseup="onMouseUp"
@@ -2330,14 +3428,20 @@ onUnmounted(() => {
                         v-show="activeSheetTab === '01'"
                         class="bg-white text-slate-900 border border-slate-300 rounded shadow-2xl relative"
                         style="width: 1200px; height: 840px; box-sizing: border-box;"
+                        @click="onCanvasClick"
                     >
                         <!-- PURE VECTOR SVG CANVAS -->
                         <svg
                             id="shop-drawing-svg"
                             viewBox="0 0 1200 840"
                             class="w-full h-full block font-sans"
+                            :class="{ '!cursor-copy': isDraggingObject && (isCtrlPressed || isCtrlDrag) }"
                             xmlns="http://www.w3.org/2000/svg"
+                            @click="onCanvasClick"
                         >
+                            <!-- BACKGROUND DASAR PUTIH -->
+                            <rect width="1200" height="840" fill="#ffffff" @click="onCanvasClick" />
+
                             <!-- KERTAS BORDER ARSITEKTURAL -->
                             <rect x="25" y="25" width="1150" height="790" fill="none" stroke="#222" stroke-width="1.5" />
                             <rect x="30" y="30" width="1140" height="780" fill="none" stroke="#666" stroke-width="0.5" />
@@ -2345,10 +3449,10 @@ onUnmounted(() => {
                             <!-- ============================================================== -->
                             <!-- MODE SINGLE: PER-TAMPAK (FOKUS 1 VIEW BESAR, SEPERTI GAMBAR 1 & 3) -->
                             <!-- ============================================================== -->
-                            <g v-if="layoutMode === 'single'">
+                            <g v-if="layoutMode === 'single'" id="single-view-layout">
                                 <!-- SECTION CUTTING LINE A - A (BISA DIGESER / DITARIK HORISONTAL) -->
                                 <g
-                                    v-if="activeView === 'depan' || activeView === 'tanpa_pintu'"
+                                    v-if="(activeView === 'depan' || activeView === 'tanpa_pintu') && cabinet.furnitureType !== 'blank'"
                                     id="section-line-A-A"
                                     class="cursor-ew-resize select-none"
                                     @mousedown.stop="startObjectDrag($event, 'section_line', 'section_line', { x: sectionLineX, name: 'Garis Potongan A-A' })"
@@ -2375,31 +3479,33 @@ onUnmounted(() => {
                                 </g>
 
                                 <!-- DIMENSION LINES (WIDTH MM TOP, HEIGHT MM LEFT) -->
-                                <!-- Horizontal Width -->
-                                <g stroke="#666" stroke-width="0.7">
-                                    <line :x1="furnitureSvgX" y1="120" :x2="furnitureSvgX" y2="180" stroke="#999" />
-                                    <line :x1="furnitureSvgX + furnitureSvgWidth" y1="120" :x2="furnitureSvgX + furnitureSvgWidth" y2="180" stroke="#999" />
-                                    <line :x1="furnitureSvgX" y1="130" :x2="furnitureSvgX + furnitureSvgWidth" y2="130" stroke="#222" stroke-width="0.8" />
-                                    <!-- 45-deg tick marks -->
-                                    <line :x1="furnitureSvgX - 4" y1="134" :x2="furnitureSvgX + 4" y2="126" stroke="#000" stroke-width="1.2" />
-                                    <line :x1="furnitureSvgX + furnitureSvgWidth - 4" y1="134" :x2="furnitureSvgX + furnitureSvgWidth + 4" y2="126" stroke="#000" stroke-width="1.2" />
-                                </g>
-                                <text :x="furnitureSvgX + furnitureSvgWidth / 2" y="125" font-size="12" font-family="monospace" font-weight="bold" fill="#111" text-anchor="middle">
-                                    {{ cabinet.width }}
-                                </text>
+                                <g v-if="cabinet.furnitureType !== 'blank'">
+                                    <!-- Horizontal Width -->
+                                    <g stroke="#666" stroke-width="0.7">
+                                        <line :x1="furnitureSvgX" y1="120" :x2="furnitureSvgX" y2="180" stroke="#999" />
+                                        <line :x1="furnitureSvgX + furnitureSvgWidth" y1="120" :x2="furnitureSvgX + furnitureSvgWidth" y2="180" stroke="#999" />
+                                        <line :x1="furnitureSvgX" y1="130" :x2="furnitureSvgX + furnitureSvgWidth" y2="130" stroke="#222" stroke-width="0.8" />
+                                        <!-- 45-deg tick marks -->
+                                        <line :x1="furnitureSvgX - 4" y1="134" :x2="furnitureSvgX + 4" y2="126" stroke="#000" stroke-width="1.2" />
+                                        <line :x1="furnitureSvgX + furnitureSvgWidth - 4" y1="134" :x2="furnitureSvgX + furnitureSvgWidth + 4" y2="126" stroke="#000" stroke-width="1.2" />
+                                    </g>
+                                    <text :x="furnitureSvgX + furnitureSvgWidth / 2" y="125" font-size="12" font-family="monospace" font-weight="bold" fill="#111" text-anchor="middle">
+                                        {{ cabinet.width }}
+                                    </text>
 
-                                <!-- Vertical Height -->
-                                <g stroke="#666" stroke-width="0.7">
-                                    <line :x1="furnitureSvgX - 50" y1="180" :x2="furnitureSvgX - 5" y2="180" stroke="#999" />
-                                    <line :x1="furnitureSvgX - 50" y1="600" :x2="furnitureSvgX - 5" y2="600" stroke="#999" />
-                                    <line :x1="furnitureSvgX - 40" y1="180" :x2="furnitureSvgX - 40" y2="600" stroke="#222" stroke-width="0.8" />
-                                    <!-- 45-deg tick marks -->
-                                    <line :x1="furnitureSvgX - 44" y1="184" :x2="furnitureSvgX - 36" y2="176" stroke="#000" stroke-width="1.2" />
-                                    <line :x1="furnitureSvgX - 44" y1="604" :x2="furnitureSvgX - 36" y2="596" stroke="#000" stroke-width="1.2" />
+                                    <!-- Vertical Height -->
+                                    <g stroke="#666" stroke-width="0.7">
+                                        <line :x1="furnitureSvgX - 50" y1="180" :x2="furnitureSvgX - 5" y2="180" stroke="#999" />
+                                        <line :x1="furnitureSvgX - 50" y1="600" :x2="furnitureSvgX - 5" y2="600" stroke="#999" />
+                                        <line :x1="furnitureSvgX - 40" y1="180" :x2="furnitureSvgX - 40" y2="600" stroke="#222" stroke-width="0.8" />
+                                        <!-- 45-deg tick marks -->
+                                        <line :x1="furnitureSvgX - 44" y1="184" :x2="furnitureSvgX - 36" y2="176" stroke="#000" stroke-width="1.2" />
+                                        <line :x1="furnitureSvgX - 44" y1="604" :x2="furnitureSvgX - 36" y2="596" stroke="#000" stroke-width="1.2" />
+                                    </g>
+                                    <text :x="furnitureSvgX - 47" y="390" font-size="12" font-family="monospace" font-weight="bold" fill="#111" :transform="`rotate(-90, ${furnitureSvgX - 47}, 390)`" text-anchor="middle">
+                                        {{ cabinet.height }}
+                                    </text>
                                 </g>
-                                <text :x="furnitureSvgX - 47" y="390" font-size="12" font-family="monospace" font-weight="bold" fill="#111" :transform="`rotate(-90, ${furnitureSvgX - 47}, 390)`" text-anchor="middle">
-                                    {{ cabinet.height }}
-                                </text>
 
                                 <!-- ── TV CREDENZA GRAPHIC (BUKAN DAPUR, BENDA UTAMA SMART TV 65" & FLOATING CREDENZA) ── -->
                                 <g v-if="cabinet.furnitureType === 'credenza_tv'" id="tv-credenza-graphic">
@@ -2613,6 +3719,9 @@ onUnmounted(() => {
                                     </g>
                                 </g>
 
+                                <!-- ── BLANK CANVAS GRAPHIC (LEMBAR KOSONG PUTIH BERSIH) ── -->
+                                <g v-else-if="cabinet.furnitureType === 'blank'" id="blank-sheet-graphic" />
+
                                 <!-- ── MAIN GRAPHIC: TAMPAK DEPAN KITCHEN SET (JIKA BUKAN TV CREDENZA) ── -->
                                 <g v-else id="cabinet-front-graphic">
                                     <!-- Outer Casing / Dinding Luar -->
@@ -2825,8 +3934,8 @@ onUnmounted(() => {
                                     <g
                                         v-if="ann.type === 'label'"
                                         class="cursor-move select-none"
-                                        @mousedown.stop="startObjectDrag($event, 'annotation', ann.id, { x: ann.x, y: ann.y, name: `Label Material: ${ann.text}` })"
-                                        @touchstart.stop="startObjectDrag($event, 'annotation', ann.id, { x: ann.x, y: ann.y, name: `Label Material: ${ann.text}` })"
+                                        @mousedown.stop="startObjectDrag($event, 'annotation', ann.id, { x: ann.x, y: ann.y, targetX: ann.targetX ?? (ann.x - 120), targetY: ann.targetY ?? ann.y, name: `Label Material: ${ann.text}` })"
+                                        @touchstart.stop="startObjectDrag($event, 'annotation', ann.id, { x: ann.x, y: ann.y, targetX: ann.targetX ?? (ann.x - 120), targetY: ann.targetY ?? ann.y, name: `Label Material: ${ann.text}` })"
                                         @click.stop="selectComponent(`Label Material: ${ann.text}`, ann.id)"
                                     >
                                         <!-- Leader Line from Tip Anchor to Balloon -->
@@ -3083,6 +4192,8 @@ onUnmounted(() => {
                                         <!-- 1. Central Body: Draggable to move position -->
                                         <g
                                             class="cursor-move"
+                                            :transform="`rotate(${ann.rotation || 0}, ${getAccessoryWidthPx(ann)/2}, ${getAccessoryHeightPx(ann)/2}) scale(${ann.flipH ? -1 : 1}, ${ann.flipV ? -1 : 1})`"
+                                            :style="`transform-origin: ${getAccessoryWidthPx(ann)/2}px ${getAccessoryHeightPx(ann)/2}px;`"
                                             @mousedown.stop="startObjectDrag($event, 'annotation', ann.id, { x: ann.x, y: ann.y, name: `Aksesoris: ${ann.text || ann.accessoryType}` })"
                                             @touchstart.stop="startObjectDrag($event, 'annotation', ann.id, { x: ann.x, y: ann.y, name: `Aksesoris: ${ann.text || ann.accessoryType}` })"
                                         >
@@ -3096,9 +4207,390 @@ onUnmounted(() => {
                                             />
 
                                             <!-- Scaled Graphic Elements to match exact width & height -->
-                                            <g :transform="`scale(${getAccessoryWidthPx(ann) / getAccessoryBaseSize(ann.accessoryType).w}, ${getAccessoryHeightPx(ann) / getAccessoryBaseSize(ann.accessoryType).h})`">
-                                                <!-- 1. TV 65 Inch -->
-                                                <g v-if="ann.accessoryType === 'tv'">
+                                            <g :transform="`scale(${getAccessoryWidthPx(ann) / getAccessoryBaseSize(ann.accessoryType, ann.view || 'depan').w}, ${getAccessoryHeightPx(ann) / getAccessoryBaseSize(ann.accessoryType, ann.view || 'depan').h})`">
+                                                <!-- ============================================================== -->
+                                                <!-- 1. TAMPAK ATAS (TOP VIEW / PLAN VIEW / DENAH HORISONTAL)       -->
+                                                <!-- ============================================================== -->
+                                                <g v-if="ann.view === 'atas'">
+                                                    <!-- Sofa Tampak Atas -->
+                                                    <g v-if="ann.accessoryType === 'sofa'">
+                                                        <rect x="0" y="0" width="180" height="80" fill="#e2e8f0" stroke="#334155" stroke-width="1.5" rx="4" />
+                                                        <rect x="0" y="0" width="180" height="24" fill="#cbd5e1" stroke="#475569" stroke-width="1" rx="3" />
+                                                        <rect x="0" y="24" width="20" height="56" fill="#94a3b8" stroke="#475569" stroke-width="1" rx="3" />
+                                                        <rect x="160" y="24" width="20" height="56" fill="#94a3b8" stroke="#475569" stroke-width="1" rx="3" />
+                                                        <rect x="22" y="26" width="44" height="52" fill="#f8fafc" stroke="#64748b" stroke-width="0.8" rx="3" />
+                                                        <rect x="68" y="26" width="44" height="52" fill="#f8fafc" stroke="#64748b" stroke-width="0.8" rx="3" />
+                                                        <rect x="114" y="26" width="44" height="52" fill="#f8fafc" stroke="#64748b" stroke-width="0.8" rx="3" />
+                                                        <text x="90" y="74" font-size="7.5" fill="#475569" text-anchor="middle" font-weight="bold">SOFA (ATAS)</text>
+                                                    </g>
+                                                    <!-- Armchair Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'armchair'">
+                                                        <rect x="0" y="0" width="80" height="80" fill="#e2e8f0" stroke="#334155" stroke-width="1.5" rx="4" />
+                                                        <rect x="0" y="0" width="80" height="22" fill="#cbd5e1" stroke="#475569" stroke-width="1" rx="3" />
+                                                        <rect x="0" y="22" width="16" height="58" fill="#94a3b8" rx="2" />
+                                                        <rect x="64" y="22" width="16" height="58" fill="#94a3b8" rx="2" />
+                                                        <rect x="18" y="24" width="44" height="54" fill="#f8fafc" stroke="#64748b" stroke-width="0.8" rx="3" />
+                                                        <text x="40" y="72" font-size="7" fill="#475569" text-anchor="middle">KURSI (ATAS)</text>
+                                                    </g>
+                                                    <!-- Kasur (Bed) Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'bed'">
+                                                        <rect x="0" y="0" width="160" height="20" fill="#78350f" stroke="#451a03" stroke-width="1.2" rx="2" />
+                                                        <rect x="5" y="20" width="150" height="155" fill="#f8fafc" stroke="#334155" stroke-width="1.2" rx="3" />
+                                                        <rect x="15" y="26" width="55" height="32" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="4" />
+                                                        <line x1="22" y1="42" x2="63" y2="42" stroke="#e2e8f0" stroke-width="0.8" />
+                                                        <rect x="90" y="26" width="55" height="32" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="4" />
+                                                        <line x1="97" y1="42" x2="138" y2="42" stroke="#e2e8f0" stroke-width="0.8" />
+                                                        <rect x="55" y="64" width="50" height="16" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.8" rx="8" />
+                                                        <rect x="5" y="85" width="150" height="90" fill="#e2e8f0" stroke="#64748b" stroke-width="1" rx="2" />
+                                                        <path d="M5,115 C55,108 105,122 155,115 M5,145 C55,138 105,152 155,145" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="3,2" fill="none" />
+                                                        <text x="80" y="165" font-size="7.5" fill="#475569" text-anchor="middle" font-weight="bold">KASUR (TAMPAK ATAS)</text>
+                                                    </g>
+                                                    <!-- Nakas (Bedside Table) Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'bedside_table'">
+                                                        <rect x="0" y="0" width="45" height="45" fill="#d4b483" stroke="#8c6d37" stroke-width="1.2" rx="2" />
+                                                        <circle cx="22" cy="22" r="8" fill="#f59e0b" stroke="#b45309" stroke-width="0.8" />
+                                                        <text x="22" y="40" font-size="6" fill="#451a03" text-anchor="middle">NAKAS</text>
+                                                    </g>
+                                                    <!-- Sink Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'sink'">
+                                                        <rect x="0" y="0" width="110" height="70" fill="#f1f5f9" stroke="#334155" stroke-width="1.5" rx="3" />
+                                                        <rect x="6" y="6" width="65" height="58" fill="#cbd5e1" stroke="#475569" stroke-width="1.2" rx="4" />
+                                                        <circle cx="38" cy="35" r="9" fill="#94a3b8" stroke="#475569" stroke-width="1" />
+                                                        <circle cx="38" cy="35" r="3" fill="#334155" />
+                                                        <line x1="78" y1="18" x2="102" y2="18" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round" />
+                                                        <line x1="78" y1="28" x2="102" y2="28" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round" />
+                                                        <line x1="78" y1="38" x2="102" y2="38" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round" />
+                                                        <line x1="78" y1="48" x2="102" y2="48" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round" />
+                                                        <circle cx="6" cy="35" r="5" fill="#334155" />
+                                                        <path d="M6,35 L26,35" stroke="#1e293b" stroke-width="3" stroke-linecap="round" />
+                                                        <text x="55" y="61" font-size="7" fill="#1e293b" font-weight="bold" text-anchor="middle">SINK (ATAS)</text>
+                                                    </g>
+                                                    <!-- Stove / Kompor Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'stove'">
+                                                        <rect x="0" y="0" width="110" height="70" fill="#09090b" stroke="#27272a" stroke-width="1.5" rx="4" />
+                                                        <circle cx="32" cy="35" r="20" fill="#18181b" stroke="#ef4444" stroke-width="1.2" stroke-dasharray="3,2" />
+                                                        <circle cx="32" cy="35" r="10" fill="#27272a" stroke="#ef4444" stroke-width="1" />
+                                                        <circle cx="78" cy="35" r="16" fill="#18181b" stroke="#ef4444" stroke-width="1.2" stroke-dasharray="3,2" />
+                                                        <circle cx="78" cy="35" r="8" fill="#27272a" stroke="#ef4444" stroke-width="1" />
+                                                        <rect x="47" y="58" width="16" height="6" fill="#27272a" rx="1" />
+                                                        <text x="55" y="20" font-size="6.5" fill="#a1a1aa" text-anchor="middle">KOMPOR (ATAS)</text>
+                                                    </g>
+                                                    <!-- TV Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'tv'">
+                                                        <line x1="0" y1="3" x2="180" y2="3" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4,2" />
+                                                        <rect x="75" y="3" width="30" height="6" fill="#334155" rx="1" />
+                                                        <rect x="0" y="9" width="180" height="8" fill="#0f172a" stroke="#334155" stroke-width="1" rx="1" />
+                                                        <line x1="10" y1="13" x2="80" y2="13" stroke="rgba(255,255,255,0.25)" stroke-width="1" />
+                                                        <text x="90" y="15" font-size="6" fill="#94a3b8" text-anchor="middle">TV 65" (TAMPAK ATAS)</text>
+                                                    </g>
+                                                    <!-- Soundbar Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'soundbar'">
+                                                        <rect x="0" y="0" width="140" height="18" fill="#18181b" stroke="#3f3f46" stroke-width="1.2" rx="2" />
+                                                        <circle cx="65" cy="9" r="1.5" fill="#71717a" />
+                                                        <circle cx="70" cy="9" r="1.5" fill="#38bdf8" />
+                                                        <circle cx="75" cy="9" r="1.5" fill="#71717a" />
+                                                        <circle cx="20" cy="9" r="5" fill="#27272a" />
+                                                        <circle cx="120" cy="9" r="5" fill="#27272a" />
+                                                    </g>
+                                                    <!-- Kloset / Toilet Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'toilet'">
+                                                        <rect x="5" y="0" width="40" height="20" fill="#f8fafc" stroke="#334155" stroke-width="1.2" rx="2" />
+                                                        <circle cx="25" cy="10" r="4" fill="#cbd5e1" stroke="#64748b" stroke-width="0.8" />
+                                                        <path d="M10,20 Q10,75 25,78 Q40,75 40,20 Z" fill="#ffffff" stroke="#334155" stroke-width="1.5" />
+                                                        <path d="M14,24 Q14,68 25,70 Q36,68 36,24 Z" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1" />
+                                                        <circle cx="16" cy="20" r="2" fill="#64748b" />
+                                                        <circle cx="34" cy="20" r="2" fill="#64748b" />
+                                                        <text x="25" y="48" font-size="6.5" fill="#475569" text-anchor="middle">KLOSET</text>
+                                                    </g>
+                                                    <!-- Bathtub Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'bathtub'">
+                                                        <rect x="0" y="0" width="160" height="80" fill="#f8fafc" stroke="#334155" stroke-width="1.5" rx="16" />
+                                                        <rect x="10" y="8" width="140" height="64" fill="#e2e8f0" stroke="#64748b" stroke-width="1.2" rx="12" />
+                                                        <path d="M12,25 Q30,40 12,55" fill="none" stroke="#94a3b8" stroke-width="1" />
+                                                        <circle cx="135" cy="40" r="5" fill="#cbd5e1" stroke="#475569" stroke-width="1" />
+                                                        <text x="80" y="44" font-size="7.5" fill="#475569" font-weight="bold" text-anchor="middle">BATHTUB (ATAS)</text>
+                                                    </g>
+                                                    <!-- Kulkas Standalone Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'fridge_standalone'">
+                                                        <rect x="0" y="0" width="90" height="70" fill="#f1f5f9" stroke="#334155" stroke-width="1.5" rx="2" />
+                                                        <path d="M0,70 Q45,76 90,70" stroke="#0f172a" stroke-width="2" fill="none" />
+                                                        <path d="M0,70 A70,70 0 0,0 70,0" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="3,3" fill="none" />
+                                                        <text x="45" y="40" font-size="7.5" fill="#334155" text-anchor="middle" font-weight="bold">KULKAS (ATAS)</text>
+                                                    </g>
+                                                    <!-- Meja Kopi & Meja Makan Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'coffee_table' || ann.accessoryType === 'dining_table'">
+                                                        <rect x="0" y="0" :width="getAccessoryBaseSize(ann.accessoryType, 'atas').w" :height="getAccessoryBaseSize(ann.accessoryType, 'atas').h" fill="#e2d9cc" stroke="#78350f" stroke-width="1.5" rx="3" />
+                                                        <rect x="4" y="4" :width="getAccessoryBaseSize(ann.accessoryType, 'atas').w - 8" :height="getAccessoryBaseSize(ann.accessoryType, 'atas').h - 8" fill="none" stroke="#b45309" stroke-width="0.8" stroke-dasharray="6,3" />
+                                                        <text :x="getAccessoryBaseSize(ann.accessoryType, 'atas').w / 2" :y="getAccessoryBaseSize(ann.accessoryType, 'atas').h / 2 + 3" font-size="7.5" font-weight="bold" fill="#78350f" text-anchor="middle">MEJA (ATAS)</text>
+                                                    </g>
+                                                    <!-- Kursi Makan / Barstool Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'dining_chair' || ann.accessoryType === 'barstool'">
+                                                        <rect x="0" y="0" width="45" height="45" fill="#f1f5f9" stroke="#334155" stroke-width="1.2" rx="4" />
+                                                        <circle cx="22.5" cy="22.5" r="16" fill="#e2e8f0" stroke="#64748b" stroke-width="1" />
+                                                        <text x="22.5" y="25" font-size="6" fill="#475569" text-anchor="middle">KURSI</text>
+                                                    </g>
+                                                    <!-- Tanaman Hias Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'plant'">
+                                                        <circle cx="25" cy="25" r="14" fill="#d97706" stroke="#78350f" stroke-width="1.2" />
+                                                        <circle cx="25" cy="25" r="6" fill="#451a03" />
+                                                        <ellipse cx="25" cy="8" rx="4" ry="7" fill="#22c55e" stroke="#15803d" stroke-width="0.6" />
+                                                        <ellipse cx="25" cy="42" rx="4" ry="7" fill="#22c55e" stroke="#15803d" stroke-width="0.6" />
+                                                        <ellipse cx="8" cy="25" rx="7" ry="4" fill="#22c55e" stroke="#15803d" stroke-width="0.6" />
+                                                        <ellipse cx="42" cy="25" rx="7" ry="4" fill="#22c55e" stroke="#15803d" stroke-width="0.6" />
+                                                        <ellipse cx="13" cy="13" rx="6" ry="4" transform="rotate(-45, 13, 13)" fill="#16a34a" stroke="#14532d" stroke-width="0.6" />
+                                                        <ellipse cx="37" cy="13" rx="6" ry="4" transform="rotate(45, 37, 13)" fill="#16a34a" stroke="#14532d" stroke-width="0.6" />
+                                                        <ellipse cx="13" cy="37" rx="6" ry="4" transform="rotate(45, 13, 37)" fill="#16a34a" stroke="#14532d" stroke-width="0.6" />
+                                                        <ellipse cx="37" cy="37" rx="6" ry="4" transform="rotate(-45, 37, 37)" fill="#16a34a" stroke="#14532d" stroke-width="0.6" />
+                                                    </g>
+                                                    <!-- Downlight Tampak Atas (Plafon) -->
+                                                    <g v-else-if="ann.accessoryType === 'downlight'">
+                                                        <circle cx="12" cy="12" r="11" fill="#ffffff" stroke="#f59e0b" stroke-width="1.2" />
+                                                        <circle cx="12" cy="12" r="5" fill="#fbbf24" stroke="#d97706" stroke-width="0.8" />
+                                                        <line x1="1" y1="12" x2="23" y2="12" stroke="#d97706" stroke-width="0.8" />
+                                                        <line x1="12" y1="1" x2="12" y2="23" stroke="#d97706" stroke-width="0.8" />
+                                                    </g>
+                                                    <!-- Karpet (Rug) Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'rug'">
+                                                        <rect x="0" y="0" width="180" height="120" fill="#fef3c7" stroke="#b45309" stroke-width="1.5" rx="2" />
+                                                        <rect x="8" y="8" width="164" height="104" fill="none" stroke="#d97706" stroke-width="1" stroke-dasharray="5,3" />
+                                                        <rect x="20" y="20" width="140" height="80" fill="#fffbeb" stroke="#f59e0b" stroke-width="0.8" />
+                                                        <text x="90" y="63" font-size="8" font-weight="bold" fill="#92400e" text-anchor="middle">KARPET LANTAI</text>
+                                                    </g>
+                                                    <!-- Lemari / Wardrobe Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'wardrobe_door'">
+                                                        <rect x="0" y="0" width="120" height="65" fill="#f8fafc" stroke="#334155" stroke-width="1.2" />
+                                                        <line x1="10" y1="32" x2="110" y2="32" stroke="#64748b" stroke-width="2" />
+                                                        <line x1="0" y1="60" x2="65" y2="60" stroke="#0f172a" stroke-width="2.5" />
+                                                        <line x1="55" y1="64" x2="120" y2="64" stroke="#0f172a" stroke-width="2.5" />
+                                                        <text x="60" y="22" font-size="7" fill="#475569" text-anchor="middle">LEMARI (ATAS)</text>
+                                                    </g>
+                                                    <!-- Laci (Drawer) Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'drawer'">
+                                                        <rect x="0" y="0" width="100" height="60" fill="#d4b483" stroke="#8c6d37" stroke-width="1.2" />
+                                                        <line x1="3" y1="0" x2="3" y2="60" stroke="#71717a" stroke-width="2" />
+                                                        <line x1="97" y1="0" x2="97" y2="60" stroke="#71717a" stroke-width="2" />
+                                                        <rect x="35" y="57" width="30" height="4" fill="#1c1917" rx="1" />
+                                                        <text x="50" y="34" font-size="7" fill="#5c4033" text-anchor="middle">LACI (ATAS)</text>
+                                                    </g>
+                                                    <!-- Cooker Hood Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'hood'">
+                                                        <rect x="0" y="0" width="110" height="60" fill="#cbd5e1" stroke="#334155" stroke-width="1.2" rx="2" />
+                                                        <circle cx="55" cy="30" r="18" fill="#94a3b8" stroke="#334155" stroke-width="1.5" />
+                                                        <circle cx="55" cy="30" r="6" fill="#64748b" />
+                                                        <text x="55" y="55" font-size="6.5" fill="#334155" text-anchor="middle">HOOD EXHAUST</text>
+                                                    </g>
+                                                    <!-- Oven Tampak Atas -->
+                                                    <g v-else-if="ann.accessoryType === 'oven'">
+                                                        <rect x="0" y="0" width="100" height="70" fill="#0f172a" stroke="#334155" stroke-width="1.5" rx="2" />
+                                                        <rect x="10" y="65" width="80" height="4" fill="#cbd5e1" rx="1" />
+                                                        <text x="50" y="38" font-size="7" fill="#94a3b8" text-anchor="middle">OVEN (ATAS)</text>
+                                                    </g>
+                                                    <!-- Fallback Universal Tampak Atas -->
+                                                    <g v-else>
+                                                        <rect :x="0" :y="0" :width="getAccessoryBaseSize(ann.accessoryType, 'atas').w" :height="getAccessoryBaseSize(ann.accessoryType, 'atas').h" fill="#f8fafc" stroke="#475569" stroke-width="1.2" stroke-dasharray="4,2" rx="2" />
+                                                        <line :x1="0" :y1="getAccessoryBaseSize(ann.accessoryType, 'atas').h / 2" :x2="getAccessoryBaseSize(ann.accessoryType, 'atas').w" :y2="getAccessoryBaseSize(ann.accessoryType, 'atas').h / 2" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="2,2" />
+                                                        <line :x1="getAccessoryBaseSize(ann.accessoryType, 'atas').w / 2" :y1="0" :x2="getAccessoryBaseSize(ann.accessoryType, 'atas').w / 2" :y2="getAccessoryBaseSize(ann.accessoryType, 'atas').h" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="2,2" />
+                                                        <text :x="getAccessoryBaseSize(ann.accessoryType, 'atas').w / 2" :y="getAccessoryBaseSize(ann.accessoryType, 'atas').h / 2 + 3" font-size="7" font-weight="bold" fill="#334155" text-anchor="middle">
+                                                            {{ (ann.text || ann.accessoryType).toUpperCase() }} (ATAS)
+                                                        </text>
+                                                    </g>
+                                                </g>
+
+                                                <!-- ============================================================== -->
+                                                <!-- 2. TAMPAK SAMPING (SIDE VIEW / POTONGAN / SISI TEBAL)          -->
+                                                <!-- ============================================================== -->
+                                                <g v-else-if="ann.view === 'samping'">
+                                                    <!-- Kasur (Bed) Tampak Samping -->
+                                                    <g v-if="ann.accessoryType === 'bed'">
+                                                        <rect x="0" y="0" width="16" height="90" fill="#78350f" stroke="#451a03" stroke-width="1.2" rx="2" />
+                                                        <rect x="16" y="50" width="160" height="25" fill="#92400e" stroke="#451a03" stroke-width="1" />
+                                                        <rect x="16" y="28" width="158" height="24" fill="#ffffff" stroke="#475569" stroke-width="1" rx="3" />
+                                                        <ellipse cx="36" cy="22" rx="14" ry="7" fill="#ffffff" stroke="#94a3b8" stroke-width="0.8" />
+                                                        <path d="M70,30 L174,30 L174,65 L170,65" fill="#cbd5e1" stroke="#64748b" stroke-width="0.8" />
+                                                        <rect x="25" y="75" width="8" height="15" fill="#451a03" />
+                                                        <rect x="160" y="75" width="8" height="15" fill="#451a03" />
+                                                        <text x="95" y="44" font-size="7" fill="#64748b" text-anchor="middle">KASUR (SAMPING)</text>
+                                                    </g>
+                                                    <!-- Sofa Tampak Samping -->
+                                                    <g v-else-if="ann.accessoryType === 'sofa'">
+                                                        <path d="M0,0 L20,0 L25,50 L5,50 Z" fill="#cbd5e1" stroke="#475569" stroke-width="1.2" />
+                                                        <rect x="20" y="38" width="56" height="20" fill="#f8fafc" stroke="#475569" stroke-width="1" rx="4" />
+                                                        <path d="M15,20 Q40,15 65,22 Q75,35 75,58 L15,58 Z" fill="#94a3b8" stroke="#475569" stroke-width="1.2" rx="4" />
+                                                        <line x1="25" y1="58" x2="18" y2="78" stroke="#78350f" stroke-width="3.5" stroke-linecap="round" />
+                                                        <line x1="65" y1="58" x2="72" y2="78" stroke="#78350f" stroke-width="3.5" stroke-linecap="round" />
+                                                        <text x="40" y="48" font-size="6.5" fill="#334155" text-anchor="middle">SOFA (SISI)</text>
+                                                    </g>
+                                                    <!-- Armchair Tampak Samping -->
+                                                    <g v-else-if="ann.accessoryType === 'armchair'">
+                                                        <path d="M0,0 L18,0 L22,50 L4,50 Z" fill="#cbd5e1" stroke="#475569" stroke-width="1.2" />
+                                                        <rect x="18" y="38" width="58" height="22" fill="#f8fafc" stroke="#475569" stroke-width="1" rx="4" />
+                                                        <path d="M12,20 Q38,15 65,22 Q76,35 76,60 L12,60 Z" fill="#94a3b8" stroke="#475569" stroke-width="1.2" rx="4" />
+                                                        <line x1="22" y1="60" x2="16" y2="82" stroke="#78350f" stroke-width="3.5" stroke-linecap="round" />
+                                                        <line x1="64" y1="60" x2="70" y2="82" stroke="#78350f" stroke-width="3.5" stroke-linecap="round" />
+                                                    </g>
+                                                    <!-- Sink Tampak Samping / Potongan -->
+                                                    <g v-else-if="ann.accessoryType === 'sink'">
+                                                        <rect x="0" y="10" width="70" height="5" fill="#cbd5e1" stroke="#475569" stroke-width="1" />
+                                                        <path d="M5,15 L12,40 L58,40 L65,15" fill="#94a3b8" stroke="#334155" stroke-width="1.2" />
+                                                        <path d="M35,40 L35,48 A6,6 0 0,0 47,48 L47,38" fill="none" stroke="#475569" stroke-width="3" />
+                                                        <path d="M12,10 C12,-5 28,-5 28,6" fill="none" stroke="#1e293b" stroke-width="2.5" />
+                                                        <text x="35" y="30" font-size="6.5" fill="#1e293b" text-anchor="middle">SINK (POT)</text>
+                                                    </g>
+                                                    <!-- TV Tampak Samping -->
+                                                    <g v-else-if="ann.accessoryType === 'tv'">
+                                                        <rect x="0" y="40" width="8" height="25" fill="#334155" />
+                                                        <rect x="8" y="0" width="8" height="105" fill="#0f172a" stroke="#334155" stroke-width="1" rx="1" />
+                                                        <rect x="16" y="2" width="2" height="101" fill="#38bdf8" />
+                                                        <text x="12" y="80" font-size="6" fill="#94a3b8" transform="rotate(-90, 12, 80)" text-anchor="middle">TV (SISI)</text>
+                                                    </g>
+                                                    <!-- Kloset / Toilet Tampak Samping -->
+                                                    <g v-else-if="ann.accessoryType === 'toilet'">
+                                                        <rect x="0" y="0" width="26" height="60" fill="#f8fafc" stroke="#334155" stroke-width="1.2" rx="2" />
+                                                        <path d="M26,30 L72,30 Q78,45 65,55 L45,55 L45,85 L15,85 L15,60" fill="#ffffff" stroke="#334155" stroke-width="1.5" />
+                                                        <rect x="24" y="27" width="50" height="3" fill="#cbd5e1" rx="1.5" />
+                                                        <circle cx="13" cy="15" r="4" fill="#cbd5e1" stroke="#64748b" stroke-width="0.8" />
+                                                        <text x="45" y="48" font-size="6.5" fill="#475569" text-anchor="middle">TOILET</text>
+                                                    </g>
+                                                    <!-- Bathtub Tampak Samping -->
+                                                    <g v-else-if="ann.accessoryType === 'bathtub'">
+                                                        <path d="M0,5 L80,5 L75,55 L5,55 Z" fill="#ffffff" stroke="#334155" stroke-width="1.5" />
+                                                        <path d="M5,10 L72,10 L68,48 L10,48 Z" fill="#e2e8f0" stroke="#64748b" stroke-width="1" />
+                                                        <rect x="10" y="55" width="8" height="5" fill="#334155" />
+                                                        <rect x="62" y="55" width="8" height="5" fill="#334155" />
+                                                        <text x="40" y="32" font-size="7" fill="#475569" text-anchor="middle">BATHTUB</text>
+                                                    </g>
+                                                    <!-- Kulkas Standalone Tampak Samping -->
+                                                    <g v-else-if="ann.accessoryType === 'fridge_standalone'">
+                                                        <rect x="0" y="0" width="70" height="175" fill="#f1f5f9" stroke="#334155" stroke-width="1.5" rx="2" />
+                                                        <line x1="65" y1="0" x2="65" y2="175" stroke="#334155" stroke-width="1" />
+                                                        <rect x="68" y="60" width="4" height="40" fill="#0f172a" rx="1" />
+                                                        <rect x="8" y="175" width="8" height="5" fill="#334155" />
+                                                        <rect x="54" y="175" width="8" height="5" fill="#334155" />
+                                                        <text x="35" y="90" font-size="7" fill="#475569" transform="rotate(-90, 35, 90)" text-anchor="middle">KULKAS (SAMPING)</text>
+                                                    </g>
+                                                    <!-- Kompor Tampak Samping -->
+                                                    <g v-else-if="ann.accessoryType === 'stove'">
+                                                        <rect x="0" y="5" width="70" height="4" fill="#09090b" stroke="#27272a" />
+                                                        <rect x="15" y="0" width="20" height="5" fill="#3f3f46" />
+                                                        <rect x="42" y="0" width="18" height="5" fill="#3f3f46" />
+                                                        <rect x="6" y="9" width="58" height="16" fill="#18181b" stroke="#3f3f46" stroke-width="1" />
+                                                    </g>
+                                                    <!-- Cooker Hood Tampak Samping -->
+                                                    <g v-else-if="ann.accessoryType === 'hood'">
+                                                        <polygon points="0,0 20,0 20,20 60,45 60,60 0,60" fill="#cbd5e1" stroke="#334155" stroke-width="1.2" />
+                                                    </g>
+                                                    <!-- Oven Tampak Samping -->
+                                                    <g v-else-if="ann.accessoryType === 'oven'">
+                                                        <rect x="0" y="0" width="65" height="80" fill="#0f172a" stroke="#334155" stroke-width="1.2" rx="2" />
+                                                        <rect x="65" y="15" width="5" height="40" fill="#cbd5e1" rx="1" />
+                                                    </g>
+                                                    <!-- Meja Kopi / Makan Tampak Samping -->
+                                                    <g v-else-if="ann.accessoryType === 'coffee_table' || ann.accessoryType === 'dining_table'">
+                                                        <rect x="0" y="0" :width="getAccessoryBaseSize(ann.accessoryType, 'samping').w" height="6" fill="#78350f" stroke="#451a03" stroke-width="1" />
+                                                        <rect x="4" y="6" :width="getAccessoryBaseSize(ann.accessoryType, 'samping').w - 8" height="4" fill="#92400e" />
+                                                        <rect x="6" y="10" width="6" :height="getAccessoryBaseSize(ann.accessoryType, 'samping').h - 10" fill="#451a03" />
+                                                        <rect :x="getAccessoryBaseSize(ann.accessoryType, 'samping').w - 12" y="10" width="6" :height="getAccessoryBaseSize(ann.accessoryType, 'samping').h - 10" fill="#451a03" />
+                                                    </g>
+                                                    <!-- Kursi / Barstool Tampak Samping -->
+                                                    <g v-else-if="ann.accessoryType === 'dining_chair' || ann.accessoryType === 'barstool'">
+                                                        <path d="M5,0 L10,0 L12,45 L7,45 Z" fill="#451a03" />
+                                                        <rect x="8" y="42" width="34" height="6" fill="#f8fafc" stroke="#451a03" stroke-width="1" rx="2" />
+                                                        <line x1="12" y1="48" x2="8" y2="84" stroke="#451a03" stroke-width="3" stroke-linecap="round" />
+                                                        <line x1="38" y1="48" x2="42" y2="84" stroke="#451a03" stroke-width="3" stroke-linecap="round" />
+                                                    </g>
+                                                    <!-- Lemari Tampak Samping -->
+                                                    <g v-else-if="ann.accessoryType === 'wardrobe_door'">
+                                                        <rect x="0" y="0" width="65" height="150" fill="#e2e8f0" stroke="#64748b" stroke-width="1.2" />
+                                                        <line x1="60" y1="0" x2="60" y2="150" stroke="#475569" stroke-width="1.5" />
+                                                        <text x="32" y="75" font-size="7" fill="#475569" transform="rotate(-90, 32, 75)" text-anchor="middle">TEBAL LEMARI (60 CM)</text>
+                                                    </g>
+                                                    <!-- Laci Tampak Samping -->
+                                                    <g v-else-if="ann.accessoryType === 'drawer'">
+                                                        <rect x="0" y="0" width="70" height="90" fill="#d4b483" stroke="#8c6d37" stroke-width="1.2" />
+                                                        <line x1="0" y1="30" x2="70" y2="30" stroke="#8c6d37" stroke-width="1" />
+                                                        <line x1="0" y1="60" x2="70" y2="60" stroke="#8c6d37" stroke-width="1" />
+                                                        <rect x="67" y="10" width="3" height="10" fill="#1c1917" />
+                                                        <rect x="67" y="40" width="3" height="10" fill="#1c1917" />
+                                                        <rect x="67" y="70" width="3" height="10" fill="#1c1917" />
+                                                    </g>
+                                                    <!-- Fallback Universal Tampak Samping -->
+                                                    <g v-else>
+                                                        <rect :x="0" :y="0" :width="getAccessoryBaseSize(ann.accessoryType, 'samping').w" :height="getAccessoryBaseSize(ann.accessoryType, 'samping').h" fill="#f8fafc" stroke="#475569" stroke-width="1.2" stroke-dasharray="4,2" rx="2" />
+                                                        <text :x="getAccessoryBaseSize(ann.accessoryType, 'samping').w / 2" :y="getAccessoryBaseSize(ann.accessoryType, 'samping').h / 2 + 3" font-size="7" font-weight="bold" fill="#334155" text-anchor="middle">
+                                                            {{ (ann.text || ann.accessoryType).toUpperCase() }} (SISI)
+                                                        </text>
+                                                    </g>
+                                                </g>
+
+                                                <!-- ============================================================== -->
+                                                <!-- 3. TAMPAK BAWAH (BOTTOM / PLAFON / KOLONG / CEILING)           -->
+                                                <!-- ============================================================== -->
+                                                <g v-else-if="ann.view === 'bawah'">
+                                                    <!-- Downlight (Tampak Bawah / Reflected Ceiling) -->
+                                                    <g v-if="ann.accessoryType === 'downlight'">
+                                                        <circle cx="12" cy="12" r="11" fill="#0f172a" stroke="#f59e0b" stroke-width="1.5" />
+                                                        <circle cx="12" cy="12" r="7" fill="#fbbf24" stroke="#d97706" stroke-width="1" />
+                                                        <circle cx="12" cy="12" r="2.5" fill="#ffffff" />
+                                                        <line x1="1" y1="12" x2="23" y2="12" stroke="#f59e0b" stroke-width="0.8" />
+                                                        <line x1="12" y1="1" x2="12" y2="23" stroke="#f59e0b" stroke-width="0.8" />
+                                                    </g>
+                                                    <!-- Pendant Light (Lampu Gantung Bawah) -->
+                                                    <g v-else-if="ann.accessoryType === 'pendant_light'">
+                                                        <circle cx="16" cy="16" r="15" fill="#18181b" stroke="#f59e0b" stroke-width="1.5" />
+                                                        <circle cx="16" cy="16" r="9" fill="#fef08a" stroke="#eab308" stroke-width="1" />
+                                                        <circle cx="16" cy="16" r="3.5" fill="#ffffff" />
+                                                    </g>
+                                                    <!-- LED Strip (Saluran Bawah Ambalan) -->
+                                                    <g v-else-if="ann.accessoryType === 'led_strip'">
+                                                        <rect x="0" y="0" width="140" height="14" fill="#1e293b" stroke="#475569" stroke-width="1" rx="1" />
+                                                        <!-- LED Diodes -->
+                                                        <circle v-for="d in 9" :key="d" :cx="14 * d" cy="7" r="2.5" fill="#fbbf24" stroke="#d97706" stroke-width="0.6" />
+                                                    </g>
+                                                    <!-- Sink Undermount Plumbing (Kolong Sink) -->
+                                                    <g v-else-if="ann.accessoryType === 'sink'">
+                                                        <rect x="0" y="0" width="110" height="70" fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" stroke-dasharray="3,2" rx="3" />
+                                                        <rect x="10" y="10" width="60" height="50" fill="#94a3b8" stroke="#475569" stroke-width="1" rx="2" />
+                                                        <!-- Drain Pipe & P-Trap -->
+                                                        <circle cx="40" cy="35" r="8" fill="#334155" />
+                                                        <path d="M40,35 L40,55 A8,8 0 0,0 56,55 L56,40" fill="none" stroke="#334155" stroke-width="3.5" />
+                                                        <text x="40" y="65" font-size="6.5" fill="#1e293b" font-weight="bold" text-anchor="middle">PIPA TRAP SINK</text>
+                                                    </g>
+                                                    <!-- Meja / Sofa / Kasur Kolong Frame -->
+                                                    <g v-else-if="ann.accessoryType === 'coffee_table' || ann.accessoryType === 'dining_table'">
+                                                        <rect x="0" y="0" :width="getAccessoryBaseSize(ann.accessoryType, 'bawah').w" :height="getAccessoryBaseSize(ann.accessoryType, 'bawah').h" fill="#fefce8" stroke="#78350f" stroke-width="1.5" />
+                                                        <rect x="8" y="8" :width="getAccessoryBaseSize(ann.accessoryType, 'bawah').w - 16" :height="getAccessoryBaseSize(ann.accessoryType, 'bawah').h - 16" fill="none" stroke="#b45309" stroke-width="2" />
+                                                        <!-- 4 Corner Leg Mounts -->
+                                                        <rect x="2" y="2" width="12" height="12" fill="#451a03" />
+                                                        <rect :x="getAccessoryBaseSize(ann.accessoryType, 'bawah').w - 14" y="2" width="12" height="12" fill="#451a03" />
+                                                        <rect x="2" :y="getAccessoryBaseSize(ann.accessoryType, 'bawah').h - 14" width="12" height="12" fill="#451a03" />
+                                                        <rect :x="getAccessoryBaseSize(ann.accessoryType, 'bawah').w - 14" :y="getAccessoryBaseSize(ann.accessoryType, 'bawah').h - 14" width="12" height="12" fill="#451a03" />
+                                                        <text :x="getAccessoryBaseSize(ann.accessoryType, 'bawah').w / 2" :y="getAccessoryBaseSize(ann.accessoryType, 'bawah').h / 2 + 3" font-size="7" fill="#78350f" text-anchor="middle">RANGKA KOLONG</text>
+                                                    </g>
+                                                    <!-- Dipan / Rangka Kolong Kasur -->
+                                                    <g v-else-if="ann.accessoryType === 'bed'">
+                                                        <rect x="0" y="0" width="160" height="180" fill="#fefce8" stroke="#451a03" stroke-width="1.5" />
+                                                        <line v-for="s in 11" :key="s" :x1="10" :y1="15 * s" :x2="150" :y2="15 * s" stroke="#b45309" stroke-width="2.5" />
+                                                        <rect x="76" y="5" width="8" height="170" fill="#78350f" />
+                                                        <circle cx="80" cy="90" r="6" fill="#451a03" />
+                                                        <text x="80" y="100" font-size="7" fill="#fff" text-anchor="middle">Rangka Kolong</text>
+                                                    </g>
+                                                    <!-- Fallback Universal Tampak Bawah -->
+                                                    <g v-else>
+                                                        <rect :x="0" :y="0" :width="getAccessoryBaseSize(ann.accessoryType, 'bawah').w" :height="getAccessoryBaseSize(ann.accessoryType, 'bawah').h" fill="#f8fafc" stroke="#475569" stroke-width="1.2" stroke-dasharray="4,2" rx="2" />
+                                                        <line :x1="0" :y1="getAccessoryBaseSize(ann.accessoryType, 'bawah').h / 2" :x2="getAccessoryBaseSize(ann.accessoryType, 'bawah').w" :y2="getAccessoryBaseSize(ann.accessoryType, 'bawah').h / 2" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="2,2" />
+                                                        <line :x1="getAccessoryBaseSize(ann.accessoryType, 'bawah').w / 2" :y1="0" :x2="getAccessoryBaseSize(ann.accessoryType, 'bawah').w / 2" :y2="getAccessoryBaseSize(ann.accessoryType, 'bawah').h" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="2,2" />
+                                                        <text :x="getAccessoryBaseSize(ann.accessoryType, 'bawah').w / 2" :y="getAccessoryBaseSize(ann.accessoryType, 'bawah').h / 2 + 3" font-size="7" font-weight="bold" fill="#334155" text-anchor="middle">
+                                                            {{ (ann.text || ann.accessoryType).toUpperCase() }} (BAWAH)
+                                                        </text>
+                                                    </g>
+                                                </g>
+
+                                                <!-- ============================================================== -->
+                                                <!-- 4. TAMPAK DEPAN (FRONT VIEW / ELEVASI - DEFAULT)               -->
+                                                <!-- ============================================================== -->
+                                                <g v-else>
+                                                    <!-- 1. TV 65 Inch -->
+                                                    <g v-if="ann.accessoryType === 'tv'">
                                                     <rect x="0" y="0" width="180" height="105" fill="#0f172a" stroke="#334155" stroke-width="2" rx="3" />
                                                     <rect x="3" y="3" width="174" height="99" fill="#1e293b" />
                                                     <line x1="3" y1="3" x2="80" y2="102" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
@@ -3395,7 +4887,403 @@ onUnmounted(() => {
                                                     <ellipse cx="25" cy="58" rx="12" ry="4" fill="none" stroke="#64748b" stroke-width="1.8" />
                                                     <ellipse cx="25" cy="80" rx="18" ry="6" fill="#94a3b8" stroke="#475569" stroke-width="1.5" />
                                                 </g>
+
+                                                <!-- 30. Sofa 3 Dudukan Minimalis -->
+                                                <g v-else-if="ann.accessoryType === 'sofa'">
+                                                    <!-- Backrest frame & 3 back cushions -->
+                                                    <rect x="4" y="6" width="172" height="42" rx="6" fill="#475569" stroke="#1e293b" stroke-width="1.2" />
+                                                    <rect x="18" y="8" width="46" height="36" rx="4" fill="#64748b" stroke="#334155" stroke-width="0.8" />
+                                                    <rect x="67" y="8" width="46" height="36" rx="4" fill="#64748b" stroke="#334155" stroke-width="0.8" />
+                                                    <rect x="116" y="8" width="46" height="36" rx="4" fill="#64748b" stroke="#334155" stroke-width="0.8" />
+                                                    <!-- 3 Seat Cushions -->
+                                                    <rect x="18" y="44" width="46" height="24" rx="3" fill="#cbd5e1" stroke="#475569" stroke-width="1" />
+                                                    <rect x="67" y="44" width="46" height="24" rx="3" fill="#cbd5e1" stroke="#475569" stroke-width="1" />
+                                                    <rect x="116" y="44" width="46" height="24" rx="3" fill="#cbd5e1" stroke="#475569" stroke-width="1" />
+                                                    <!-- Armrests Left & Right -->
+                                                    <rect x="0" y="24" width="18" height="44" rx="5" fill="#475569" stroke="#1e293b" stroke-width="1.2" />
+                                                    <rect x="162" y="24" width="18" height="44" rx="5" fill="#475569" stroke="#1e293b" stroke-width="1.2" />
+                                                    <!-- Accent Pillows -->
+                                                    <g transform="translate(18, 30) rotate(-12)">
+                                                        <rect x="0" y="0" width="18" height="18" rx="3" fill="#f59e0b" stroke="#b45309" stroke-width="0.8" />
+                                                    </g>
+                                                    <g transform="translate(144, 26) rotate(12)">
+                                                        <rect x="0" y="0" width="18" height="18" rx="3" fill="#0284c7" stroke="#0369a1" stroke-width="0.8" />
+                                                    </g>
+                                                    <!-- Wooden legs -->
+                                                    <line x1="14" y1="68" x2="8" y2="78" stroke="#78350f" stroke-width="2.5" stroke-linecap="round" />
+                                                    <line x1="166" y1="68" x2="172" y2="78" stroke="#78350f" stroke-width="2.5" stroke-linecap="round" />
+                                                    <line x1="90" y1="68" x2="90" y2="78" stroke="#78350f" stroke-width="2.5" stroke-linecap="round" />
+                                                    <text x="90" y="60" font-size="7" font-weight="bold" fill="#1e293b" text-anchor="middle">SOFA 3 DUDUKAN</text>
+                                                </g>
+
+                                                <!-- 31. Armchair / Kursi Santai -->
+                                                <g v-else-if="ann.accessoryType === 'armchair'">
+                                                    <!-- Backrest -->
+                                                    <path d="M10,8 Q40,2 70,8 Q74,38 70,54 L10,54 Q6,38 10,8 Z" fill="#334155" stroke="#0f172a" stroke-width="1.2" />
+                                                    <!-- Seat Cushion -->
+                                                    <rect x="12" y="50" width="56" height="20" rx="4" fill="#64748b" stroke="#1e293b" stroke-width="1" />
+                                                    <!-- Armrests Left & Right -->
+                                                    <rect x="2" y="30" width="12" height="38" rx="4" fill="#475569" stroke="#0f172a" stroke-width="1" />
+                                                    <rect x="66" y="30" width="12" height="38" rx="4" fill="#475569" stroke="#0f172a" stroke-width="1" />
+                                                    <!-- Lumbar Pillow -->
+                                                    <rect x="24" y="42" width="32" height="12" rx="3" fill="#f59e0b" stroke="#b45309" stroke-width="0.8" />
+                                                    <!-- Legs -->
+                                                    <line x1="12" y1="70" x2="6" y2="82" stroke="#78350f" stroke-width="2.2" stroke-linecap="round" />
+                                                    <line x1="68" y1="70" x2="74" y2="82" stroke="#78350f" stroke-width="2.2" stroke-linecap="round" />
+                                                    <text x="40" y="64" font-size="6.5" font-weight="bold" fill="#f8fafc" text-anchor="middle">ARMCHAIR</text>
+                                                </g>
+
+                                                <!-- 32. Meja Kopi Ruang Tamu -->
+                                                <g v-else-if="ann.accessoryType === 'coffee_table'">
+                                                    <!-- Tabletop -->
+                                                    <rect x="0" y="6" width="100" height="10" rx="3" fill="#f8fafc" stroke="#475569" stroke-width="1.2" />
+                                                    <line x1="2" y1="9" x2="98" y2="9" stroke="#cbd5e1" stroke-width="0.8" />
+                                                    <!-- Lower wire shelf -->
+                                                    <line x1="12" y1="28" x2="88" y2="28" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="3,2" />
+                                                    <!-- 4 Tapered legs -->
+                                                    <line x1="10" y1="16" x2="5" y2="42" stroke="#1e293b" stroke-width="2" stroke-linecap="round" />
+                                                    <line x1="90" y1="16" x2="95" y2="42" stroke="#1e293b" stroke-width="2" stroke-linecap="round" />
+                                                    <line x1="20" y1="16" x2="16" y2="42" stroke="#475569" stroke-width="1.5" stroke-linecap="round" />
+                                                    <line x1="80" y1="16" x2="84" y2="42" stroke="#475569" stroke-width="1.5" stroke-linecap="round" />
+                                                    <!-- Small coffee cup on table -->
+                                                    <rect x="68" y="0" width="8" height="6" rx="1" fill="#ffffff" stroke="#94a3b8" stroke-width="0.8" />
+                                                    <path d="M76,2 C78,2 78,4 76,4" fill="none" stroke="#94a3b8" stroke-width="0.8" />
+                                                    <text x="50" y="24" font-size="6.5" font-weight="bold" fill="#64748b" text-anchor="middle">COFFEE TABLE</text>
+                                                </g>
+
+                                                <!-- 33. Karpet Lantai Permadani -->
+                                                <g v-else-if="ann.accessoryType === 'rug'">
+                                                    <rect x="8" y="2" width="164" height="10" rx="2" fill="#d6d3d1" stroke="#78716c" stroke-width="1" />
+                                                    <line v-for="r in 14" :key="r" :x1="12 + r * 11" y1="3" :x2="12 + r * 11" y2="11" stroke="#a8a29e" stroke-width="0.8" />
+                                                    <!-- Tassels Left & Right -->
+                                                    <line x1="8" y1="4" x2="0" y2="4" stroke="#a8a29e" stroke-width="1" />
+                                                    <line x1="8" y1="7" x2="0" y2="7" stroke="#a8a29e" stroke-width="1" />
+                                                    <line x1="8" y1="10" x2="0" y2="10" stroke="#a8a29e" stroke-width="1" />
+                                                    <line x1="172" y1="4" x2="180" y2="4" stroke="#a8a29e" stroke-width="1" />
+                                                    <line x1="172" y1="7" x2="180" y2="7" stroke="#a8a29e" stroke-width="1" />
+                                                    <line x1="172" y1="10" x2="180" y2="10" stroke="#a8a29e" stroke-width="1" />
+                                                    <text x="90" y="10" font-size="6" font-weight="bold" fill="#44403c" text-anchor="middle">KARPET LANTAI</text>
+                                                </g>
+
+                                                <!-- 34. Tempat Tidur & Headboard -->
+                                                <g v-else-if="ann.accessoryType === 'bed'">
+                                                    <!-- Headboard padded wall panel -->
+                                                    <rect x="0" y="0" width="160" height="65" rx="3" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.2" />
+                                                    <line v-for="k in 5" :key="k" :x1="k * 26.6" y1="2" :x2="k * 26.6" y2="63" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="4,2" />
+                                                    <!-- Mattress base -->
+                                                    <rect x="4" y="45" width="152" height="48" rx="4" fill="#ffffff" stroke="#475569" stroke-width="1.5" />
+                                                    <!-- Pillows -->
+                                                    <rect x="12" y="28" width="60" height="22" rx="4" fill="#f8fafc" stroke="#94a3b8" stroke-width="1" />
+                                                    <line x1="16" y1="39" x2="68" y2="39" stroke="#e2e8f0" stroke-width="1" />
+                                                    <rect x="88" y="28" width="60" height="22" rx="4" fill="#f8fafc" stroke="#94a3b8" stroke-width="1" />
+                                                    <line x1="92" y1="39" x2="144" y2="39" stroke="#e2e8f0" stroke-width="1" />
+                                                    <!-- Duvet / Selimut lipat -->
+                                                    <path d="M4,62 Q80,70 156,62 L156,92 L4,92 Z" fill="#64748b" fill-opacity="0.9" stroke="#334155" stroke-width="1" />
+                                                    <path d="M4,62 Q80,70 156,62 L156,68 Q80,76 4,68 Z" fill="#94a3b8" />
+                                                    <!-- Bed Wooden Legs -->
+                                                    <rect x="12" y="93" width="8" height="6" fill="#78350f" rx="1" />
+                                                    <rect x="140" y="93" width="8" height="6" fill="#78350f" rx="1" />
+                                                    <text x="80" y="84" font-size="7.5" font-weight="bold" fill="#f8fafc" text-anchor="middle">TEMPAT TIDUR</text>
+                                                </g>
+
+                                                <!-- 35. Meja Nakas Samping Kasur -->
+                                                <g v-else-if="ann.accessoryType === 'bedside_table'">
+                                                    <!-- Table lamp on top -->
+                                                    <ellipse cx="25" cy="14" rx="8" ry="3" fill="#cbd5e1" stroke="#64748b" stroke-width="0.8" />
+                                                    <line x1="25" y1="6" x2="25" y2="14" stroke="#d97706" stroke-width="1.5" />
+                                                    <polygon points="17,6 33,6 30,-2 20,-2" fill="#fef08a" stroke="#ca8a04" stroke-width="0.8" />
+                                                    <!-- Cabinet Box -->
+                                                    <rect x="2" y="14" width="46" height="34" rx="2" fill="#d4b483" stroke="#8c6d37" stroke-width="1.2" />
+                                                    <!-- 2 Drawers -->
+                                                    <rect x="5" y="17" width="40" height="13" rx="1" fill="#f5ebe0" stroke="#8c6d37" stroke-width="0.7" />
+                                                    <rect x="21" y="22" width="8" height="2.5" rx="1" fill="#1c1917" />
+                                                    <rect x="5" y="32" width="40" height="13" rx="1" fill="#f5ebe0" stroke="#8c6d37" stroke-width="0.7" />
+                                                    <rect x="21" y="37" width="8" height="2.5" rx="1" fill="#1c1917" />
+                                                    <!-- Legs -->
+                                                    <line x1="6" y1="48" x2="3" y2="54" stroke="#8c6d37" stroke-width="2" stroke-linecap="round" />
+                                                    <line x1="44" y1="48" x2="47" y2="54" stroke="#8c6d37" stroke-width="2" stroke-linecap="round" />
+                                                </g>
+
+                                                <!-- 36. Meja Makan & Kursi Set -->
+                                                <g v-else-if="ann.accessoryType === 'dining_table'">
+                                                    <!-- 3 Chairs in background -->
+                                                    <g v-for="cIdx in 3" :key="cIdx" :transform="`translate(${24 + (cIdx - 1) * 44}, 0)`">
+                                                        <rect x="0" y="2" width="24" height="26" rx="3" fill="#cbd5e1" stroke="#475569" stroke-width="0.8" />
+                                                        <line x1="6" y1="8" x2="6" y2="24" stroke="#94a3b8" stroke-width="0.8" />
+                                                        <line x1="18" y1="8" x2="18" y2="24" stroke="#94a3b8" stroke-width="0.8" />
+                                                    </g>
+                                                    <!-- Tabletop -->
+                                                    <rect x="6" y="24" width="148" height="12" rx="2" fill="#78350f" stroke="#451a03" stroke-width="1.5" />
+                                                    <!-- Table legs -->
+                                                    <rect x="14" y="36" width="8" height="40" fill="#451a03" />
+                                                    <rect x="138" y="36" width="8" height="40" fill="#451a03" />
+                                                    <!-- Chair Legs in foreground -->
+                                                    <g v-for="cIdx in 3" :key="'leg-' + cIdx" :transform="`translate(${24 + (cIdx - 1) * 44}, 36)`">
+                                                        <line x1="4" y1="0" x2="2" y2="40" stroke="#64748b" stroke-width="1.5" />
+                                                        <line x1="20" y1="0" x2="22" y2="40" stroke="#64748b" stroke-width="1.5" />
+                                                    </g>
+                                                    <!-- Centerpiece bowl on table -->
+                                                    <ellipse cx="80" cy="22" rx="14" ry="4" fill="#ffffff" stroke="#94a3b8" stroke-width="0.8" />
+                                                    <circle cx="76" cy="19" r="2.5" fill="#ef4444" />
+                                                    <circle cx="82" cy="18" r="3" fill="#22c55e" />
+                                                    <circle cx="86" cy="20" r="2.5" fill="#f59e0b" />
+                                                    <text x="80" y="33" font-size="7" font-weight="bold" fill="#fef3c7" text-anchor="middle">MEJA MAKAN SET</text>
+                                                </g>
+
+                                                <!-- 37. Meja Kerja & Belajar -->
+                                                <g v-else-if="ann.accessoryType === 'study_desk'">
+                                                    <!-- Laptop on table -->
+                                                    <polygon points="20,12 36,12 39,2 23,2" fill="#334155" stroke="#1e293b" stroke-width="0.8" />
+                                                    <rect x="24" y="4" width="11" height="7" fill="#38bdf8" opacity="0.75" />
+                                                    <!-- Desk lamp -->
+                                                    <line x1="94" y1="12" x2="88" y2="2" stroke="#d97706" stroke-width="1.5" />
+                                                    <polygon points="82,4 92,-2 86,-5" fill="#fef08a" stroke="#ca8a04" stroke-width="0.8" />
+                                                    <!-- Tabletop -->
+                                                    <rect x="0" y="12" width="120" height="10" rx="2" fill="#d4b483" stroke="#8c6d37" stroke-width="1.2" />
+                                                    <!-- Left Leg -->
+                                                    <rect x="4" y="22" width="6" height="52" fill="#1e293b" rx="1" />
+                                                    <line x1="4" y1="64" x2="35" y2="64" stroke="#1e293b" stroke-width="2" />
+                                                    <!-- Right Drawer Pedestal (3 drawers) -->
+                                                    <rect x="84" y="22" width="34" height="52" fill="#f5ebe0" stroke="#8c6d37" stroke-width="1" />
+                                                    <rect x="86" y="24" width="30" height="14" rx="1" fill="#ffffff" stroke="#cbd5e1" stroke-width="0.6" />
+                                                    <rect x="97" y="30" width="8" height="2" fill="#1c1917" />
+                                                    <rect x="86" y="40" width="30" height="14" rx="1" fill="#ffffff" stroke="#cbd5e1" stroke-width="0.6" />
+                                                    <rect x="97" y="46" width="8" height="2" fill="#1c1917" />
+                                                    <rect x="86" y="56" width="30" height="16" rx="1" fill="#ffffff" stroke="#cbd5e1" stroke-width="0.6" />
+                                                    <rect x="97" y="63" width="8" height="2" fill="#1c1917" />
+                                                    <text x="50" y="20" font-size="6.5" font-weight="bold" fill="#5c3807" text-anchor="middle">MEJA KERJA</text>
+                                                </g>
+
+                                                <!-- 38. Kursi Kerja Ergonomis -->
+                                                <g v-else-if="ann.accessoryType === 'office_chair'">
+                                                    <!-- Headrest -->
+                                                    <rect x="20" y="0" width="20" height="10" rx="3" fill="#0f172a" stroke="#334155" stroke-width="1" />
+                                                    <line x1="30" y1="10" x2="30" y2="16" stroke="#475569" stroke-width="2" />
+                                                    <!-- Backrest with Lumbar Curve -->
+                                                    <path d="M14,16 Q30,12 46,16 L43,50 Q30,53 17,50 Z" fill="#1e293b" stroke="#334155" stroke-width="1.2" />
+                                                    <path d="M18,36 Q30,40 42,36" fill="none" stroke="#64748b" stroke-width="1.5" />
+                                                    <!-- Armrests Left & Right -->
+                                                    <path d="M6,34 L12,34 L12,48" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round" />
+                                                    <path d="M54,34 L48,34 L48,48" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round" />
+                                                    <!-- Seat Cushion -->
+                                                    <rect x="10" y="50" width="40" height="12" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1.2" />
+                                                    <!-- Hydraulic Cylinder -->
+                                                    <rect x="28" y="62" width="4" height="16" fill="#cbd5e1" stroke="#64748b" stroke-width="0.8" />
+                                                    <!-- 5-Star Swivel Base with Wheels -->
+                                                    <ellipse cx="30" cy="80" rx="22" ry="5" fill="#334155" />
+                                                    <circle cx="10" cy="88" r="3" fill="#0f172a" />
+                                                    <circle cx="20" cy="90" r="3" fill="#0f172a" />
+                                                    <circle cx="40" cy="90" r="3" fill="#0f172a" />
+                                                    <circle cx="50" cy="88" r="3" fill="#0f172a" />
+                                                    <text x="30" y="59" font-size="6" font-weight="bold" fill="#94a3b8" text-anchor="middle">ERGONOMIS</text>
+                                                </g>
+
+                                                <!-- 39. Meja Rias Vanity & Stool -->
+                                                <g v-else-if="ann.accessoryType === 'vanity_table'">
+                                                    <!-- Arch LED Backlit Mirror -->
+                                                    <path d="M25,52 L25,25 A25,25 0 0,1 75,25 L75,52 Z" fill="#f1f5f9" stroke="#d97706" stroke-width="2" />
+                                                    <path d="M30,50 L30,26 A20,20 0 0,1 70,26 L70,50 Z" fill="#ffffff" stroke="#cbd5e1" stroke-width="0.8" />
+                                                    <circle cx="50" cy="48" r="2.5" fill="#f59e0b" />
+                                                    <!-- Table Console & Drawers -->
+                                                    <rect x="0" y="52" width="100" height="22" rx="3" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2" />
+                                                    <rect x="4" y="55" width="44" height="16" rx="1" fill="#f8fafc" stroke="#cbd5e1" stroke-width="0.8" />
+                                                    <circle cx="26" cy="63" r="2" fill="#d97706" />
+                                                    <rect x="52" y="55" width="44" height="16" rx="1" fill="#f8fafc" stroke="#cbd5e1" stroke-width="0.8" />
+                                                    <circle cx="74" cy="63" r="2" fill="#d97706" />
+                                                    <!-- Gold / Black Slim Legs -->
+                                                    <line x1="6" y1="74" x2="6" y2="136" stroke="#1e293b" stroke-width="2" />
+                                                    <line x1="94" y1="74" x2="94" y2="136" stroke="#1e293b" stroke-width="2" />
+                                                    <!-- Vanity Stool underneath -->
+                                                    <ellipse cx="50" cy="110" rx="18" ry="6" fill="#e11d48" stroke="#9f1239" stroke-width="1" />
+                                                    <rect x="32" y="110" width="36" height="6" fill="#be123c" />
+                                                    <line x1="36" y1="116" x2="33" y2="136" stroke="#d97706" stroke-width="1.8" />
+                                                    <line x1="64" y1="116" x2="67" y2="136" stroke="#d97706" stroke-width="1.8" />
+                                                    <text x="50" y="66" font-size="7" font-weight="bold" fill="#0f172a" text-anchor="middle">MEJA RIAS</text>
+                                                </g>
+
+                                                <!-- 40. Kloset Duduk Sanitari -->
+                                                <g v-else-if="ann.accessoryType === 'toilet'">
+                                                    <!-- Water Tank -->
+                                                    <rect x="4" y="0" width="37" height="34" rx="3" fill="#ffffff" stroke="#64748b" stroke-width="1.5" />
+                                                    <!-- Dual Flush Chrome Button -->
+                                                    <ellipse cx="22.5" cy="5" rx="5" ry="2.5" fill="#cbd5e1" stroke="#475569" stroke-width="0.8" />
+                                                    <line x1="22.5" y1="2.5" x2="22.5" y2="7.5" stroke="#475569" stroke-width="0.8" />
+                                                    <!-- Tank Lid line -->
+                                                    <line x1="4" y1="8" x2="41" y2="8" stroke="#cbd5e1" stroke-width="1" />
+                                                    <!-- Bowl Body -->
+                                                    <path d="M8,34 Q8,74 22.5,78 Q37,74 37,34 Z" fill="#ffffff" stroke="#64748b" stroke-width="1.5" />
+                                                    <!-- Seat Cover Contour -->
+                                                    <path d="M6,34 Q22.5,38 39,34" fill="none" stroke="#475569" stroke-width="1.5" />
+                                                    <!-- Base footprint on floor -->
+                                                    <rect x="14" y="74" width="17" height="5" rx="1" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.8" />
+                                                    <text x="22.5" y="55" font-size="6" font-weight="bold" fill="#64748b" text-anchor="middle">KLOSET</text>
+                                                </g>
+
+                                                <!-- 41. Shower Tiang & Rain Shower -->
+                                                <g v-else-if="ann.accessoryType === 'shower'">
+                                                    <!-- Main Stainless Pipe -->
+                                                    <line x1="16" y1="16" x2="16" y2="114" stroke="#94a3b8" stroke-width="2.5" />
+                                                    <!-- Top Curve Arm to Rain Shower -->
+                                                    <path d="M16,16 Q16,4 28,4 L32,4" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" />
+                                                    <!-- Rain Shower Head Disc -->
+                                                    <ellipse cx="32" cy="7" rx="8" ry="3" fill="#cbd5e1" stroke="#475569" stroke-width="1" />
+                                                    <!-- Water Spray Droplets -->
+                                                    <line x1="26" y1="10" x2="24" y2="24" stroke="#38bdf8" stroke-width="0.8" stroke-dasharray="2,2" />
+                                                    <line x1="30" y1="10" x2="30" y2="28" stroke="#38bdf8" stroke-width="0.8" stroke-dasharray="2,2" />
+                                                    <line x1="34" y1="10" x2="34" y2="28" stroke="#38bdf8" stroke-width="0.8" stroke-dasharray="2,2" />
+                                                    <line x1="38" y1="10" x2="40" y2="24" stroke="#38bdf8" stroke-width="0.8" stroke-dasharray="2,2" />
+                                                    <!-- Hand Shower Wand & Holder -->
+                                                    <rect x="12" y="50" width="8" height="6" fill="#475569" rx="1" />
+                                                    <line x1="8" y1="42" x2="14" y2="60" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" />
+                                                    <ellipse cx="6" cy="40" rx="3" ry="2" fill="#94a3b8" />
+                                                    <!-- Mixer Valve Knob & Spout -->
+                                                    <rect x="10" y="96" width="12" height="12" rx="2" fill="#475569" stroke="#334155" stroke-width="1" />
+                                                    <circle cx="16" cy="102" r="3" fill="#cbd5e1" />
+                                                    <line x1="16" y1="108" x2="16" y2="116" stroke="#94a3b8" stroke-width="2" />
+                                                    <text x="24" y="80" font-size="6" font-weight="bold" fill="#64748b" text-anchor="middle">SHOWER</text>
+                                                </g>
+
+                                                <!-- 42. Wastafel Kabinet Kamar Mandi -->
+                                                <g v-else-if="ann.accessoryType === 'bathroom_vanity'">
+                                                    <!-- Upper Mirror Cabinet -->
+                                                    <rect x="10" y="0" width="50" height="38" rx="2" fill="#f8fafc" stroke="#38bdf8" stroke-width="1.2" />
+                                                    <line x1="15" y1="4" x2="32" y2="34" stroke="rgba(255,255,255,0.7)" stroke-width="1.5" />
+                                                    <!-- Faucet Gooseneck Tap -->
+                                                    <path d="M35,44 L35,34 A4,4 0 0,0 27,34 L27,38" fill="none" stroke="#334155" stroke-width="2" />
+                                                    <!-- Ceramic Wash Basin -->
+                                                    <rect x="2" y="44" width="66" height="12" rx="3" fill="#ffffff" stroke="#64748b" stroke-width="1.5" />
+                                                    <ellipse cx="35" cy="50" rx="18" ry="4" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.8" />
+                                                    <!-- Hanging Vanity Cabinet Underneath -->
+                                                    <rect x="6" y="56" width="58" height="26" rx="2" fill="#bfa07a" stroke="#7e5334" stroke-width="1.2" />
+                                                    <line x1="35" y1="56" x2="35" y2="82" stroke="#7e5334" stroke-width="1" />
+                                                    <rect x="28" y="66" width="3" height="8" rx="1" fill="#1c1917" />
+                                                    <rect x="39" y="66" width="3" height="8" rx="1" fill="#1c1917" />
+                                                    <text x="35" y="74" font-size="6" font-weight="bold" fill="#f8fafc" text-anchor="middle">WASTAFEL</text>
+                                                </g>
+
+                                                <!-- 43. Water Heater Dinding -->
+                                                <g v-else-if="ann.accessoryType === 'water_heater'">
+                                                    <!-- Main Body Casing -->
+                                                    <rect x="2" y="0" width="46" height="42" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="1.5" />
+                                                    <!-- Digital Display -->
+                                                    <rect x="14" y="12" width="22" height="14" rx="2" fill="#0f172a" />
+                                                    <text x="25" y="22" font-size="7" font-family="monospace" fill="#ef4444" font-weight="bold" text-anchor="middle">42°C</text>
+                                                    <!-- Rotary Knob -->
+                                                    <circle cx="25" cy="33" r="4" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.8" />
+                                                    <!-- Hot (Red) & Cold (Blue) Flex Pipes Below -->
+                                                    <line x1="16" y1="42" x2="16" y2="50" stroke="#ef4444" stroke-width="2.5" />
+                                                    <line x1="34" y1="42" x2="34" y2="50" stroke="#3b82f6" stroke-width="2.5" />
+                                                    <text x="25" y="8" font-size="5" font-weight="bold" fill="#64748b" text-anchor="middle">WATER HEATER</text>
+                                                </g>
+
+                                                <!-- 44. Gantungan Handuk & Rak Sanitari -->
+                                                <g v-else-if="ann.accessoryType === 'towel_rail'">
+                                                    <!-- Stainless Wall Mount Bar -->
+                                                    <rect x="0" y="4" width="6" height="8" fill="#475569" rx="1" />
+                                                    <rect x="64" y="4" width="6" height="8" fill="#475569" rx="1" />
+                                                    <line x1="4" y1="8" x2="66" y2="8" stroke="#94a3b8" stroke-width="2" />
+                                                    <!-- Towel 1 (Sage Green) -->
+                                                    <rect x="10" y="8" width="22" height="38" rx="2" fill="#6f7e66" stroke="#4a5544" stroke-width="1" />
+                                                    <line x1="12" y1="40" x2="30" y2="40" stroke="#4a5544" stroke-width="0.8" />
+                                                    <!-- Towel 2 (Cream Beige) -->
+                                                    <rect x="36" y="8" width="24" height="44" rx="2" fill="#e5d5c5" stroke="#b09b85" stroke-width="1" />
+                                                    <line x1="38" y1="46" x2="58" y2="46" stroke="#b09b85" stroke-width="0.8" />
+                                                    <text x="35" y="52" font-size="5.5" font-weight="bold" fill="#64748b" text-anchor="middle">RAK HANDUK</text>
+                                                </g>
+
+                                                <!-- 45. Mesin Cuci Front Loading -->
+                                                <g v-else-if="ann.accessoryType === 'washing_machine'">
+                                                    <!-- Body -->
+                                                    <rect x="0" y="0" width="65" height="90" rx="3" fill="#ffffff" stroke="#475569" stroke-width="1.5" />
+                                                    <!-- Top Control Panel -->
+                                                    <rect x="0" y="0" width="65" height="20" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1" rx="2" />
+                                                    <!-- Detergent drawer -->
+                                                    <rect x="4" y="4" width="16" height="12" rx="1" fill="#ffffff" stroke="#94a3b8" stroke-width="0.8" />
+                                                    <!-- Program dial -->
+                                                    <circle cx="32.5" cy="10" r="5" fill="#e2e8f0" stroke="#64748b" stroke-width="1" />
+                                                    <!-- LED status display -->
+                                                    <rect x="44" y="4" width="17" height="12" rx="1" fill="#0f172a" />
+                                                    <text x="52.5" y="12" font-size="5" font-family="monospace" fill="#38bdf8" text-anchor="middle">45'</text>
+                                                    <!-- Big Front Glass Door -->
+                                                    <circle cx="32.5" cy="54" r="24" fill="#0f172a" stroke="#64748b" stroke-width="2" />
+                                                    <circle cx="32.5" cy="54" r="18" fill="rgba(56, 189, 248, 0.25)" stroke="#38bdf8" stroke-width="1" />
+                                                    <ellipse cx="27" cy="48" rx="8" ry="4" fill="rgba(255, 255, 255, 0.35)" />
+                                                    <!-- Bottom filter door -->
+                                                    <rect x="48" y="81" width="12" height="6" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.6" rx="1" />
+                                                    <text x="32.5" y="86" font-size="6" font-weight="bold" fill="#64748b" text-anchor="middle">MESIN CUCI</text>
+                                                </g>
+
+                                                <!-- 46. Standing Floor Lamp -->
+                                                <g v-else-if="ann.accessoryType === 'floor_lamp'">
+                                                    <!-- Base Foot on Floor -->
+                                                    <ellipse cx="22.5" cy="146" rx="18" ry="4" fill="#1e293b" stroke="#0f172a" stroke-width="1" />
+                                                    <!-- Vertical Brass Pole -->
+                                                    <line x1="22.5" y1="36" x2="22.5" y2="146" stroke="#d97706" stroke-width="2" />
+                                                    <!-- Lampshade -->
+                                                    <polygon points="6,36 39,36 34,6 11,6" fill="#fef3c7" stroke="#b45309" stroke-width="1.2" />
+                                                    <!-- Warm Light Beam -->
+                                                    <polygon points="6,36 39,36 45,80 0,80" fill="rgba(251, 191, 36, 0.15)" stroke="none" />
+                                                    <circle cx="22.5" cy="36" r="4" fill="#f59e0b" />
+                                                </g>
+
+                                                <!-- 47. Gorden & Tirai Jendela Kain -->
+                                                <g v-else-if="ann.accessoryType === 'curtain'">
+                                                    <!-- Curtain Rod & Finials -->
+                                                    <line x1="0" y1="6" x2="130" y2="6" stroke="#1e293b" stroke-width="3" stroke-linecap="round" />
+                                                    <circle cx="2" cy="6" r="3.5" fill="#d97706" />
+                                                    <circle cx="128" cy="6" r="3.5" fill="#d97706" />
+                                                    <!-- Sheer Vitrase (Middle) -->
+                                                    <rect x="35" y="8" width="60" height="168" fill="rgba(255, 255, 255, 0.45)" stroke="#cbd5e1" stroke-width="0.8" stroke-dasharray="3,3" />
+                                                    <line v-for="v in 5" :key="'vit-'+v" :x1="40 + v * 8" y1="8" :x2="40 + v * 8" y2="176" stroke="#e2e8f0" stroke-width="0.8" />
+                                                    <!-- Left Drape with Pleated Folds -->
+                                                    <path d="M5,8 Q20,10 35,8 L30,95 Q18,92 10,95 L5,176 Q20,178 32,176 L35,8 Z" fill="#64748b" stroke="#334155" stroke-width="1" />
+                                                    <line x1="15" y1="8" x2="18" y2="176" stroke="#94a3b8" stroke-width="0.8" />
+                                                    <line x1="25" y1="8" x2="26" y2="176" stroke="#475569" stroke-width="0.8" />
+                                                    <rect x="8" y="92" width="22" height="5" rx="1.5" fill="#d97706" />
+                                                    <!-- Right Drape with Pleated Folds -->
+                                                    <path d="M95,8 Q110,10 125,8 L125,176 Q110,178 98,176 L100,95 Q112,92 120,95 L125,8 Z" fill="#64748b" stroke="#334155" stroke-width="1" />
+                                                    <line x1="105" y1="8" x2="104" y2="176" stroke="#475569" stroke-width="0.8" />
+                                                    <line x1="115" y1="8" x2="112" y2="176" stroke="#94a3b8" stroke-width="0.8" />
+                                                    <rect x="100" y="92" width="22" height="5" rx="1.5" fill="#d97706" />
+                                                    <text x="65" y="95" font-size="7" font-weight="bold" fill="#475569" text-anchor="middle">GORDEN JENDELA</text>
+                                                </g>
+
+                                                <!-- 48. Kipas Angin Gantung Plafon -->
+                                                <g v-else-if="ann.accessoryType === 'ceiling_fan'">
+                                                    <!-- Downrod from Ceiling -->
+                                                    <line x1="60" y1="0" x2="60" y2="18" stroke="#1e293b" stroke-width="3" />
+                                                    <rect x="56" y="0" width="8" height="3" fill="#475569" />
+                                                    <!-- Left Blade -->
+                                                    <polygon points="6,18 52,18 52,24 6,26" fill="#78350f" stroke="#451a03" stroke-width="1" />
+                                                    <!-- Right Blade -->
+                                                    <polygon points="114,18 68,18 68,24 114,26" fill="#78350f" stroke="#451a03" stroke-width="1" />
+                                                    <!-- Center Motor Housing & Light -->
+                                                    <ellipse cx="60" cy="20" rx="14" ry="7" fill="#334155" stroke="#0f172a" stroke-width="1.2" />
+                                                    <ellipse cx="60" cy="24" rx="8" ry="4" fill="#fef08a" stroke="#ca8a04" stroke-width="0.8" />
+                                                    <text x="60" y="36" font-size="6" font-weight="bold" fill="#64748b" text-anchor="middle">KIPAS PLAFON</text>
+                                                </g>
+
+                                                <!-- 49. Tempat Sampah Pedal -->
+                                                <g v-else-if="ann.accessoryType === 'trash_bin'">
+                                                    <!-- Stainless Bin Body -->
+                                                    <rect x="4" y="8" width="27" height="38" rx="2" fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" />
+                                                    <line x1="8" y1="12" x2="8" y2="42" stroke="rgba(255,255,255,0.8)" stroke-width="1.5" />
+                                                    <!-- Domed Lid -->
+                                                    <ellipse cx="17.5" cy="8" rx="13.5" ry="3.5" fill="#cbd5e1" stroke="#475569" stroke-width="1" />
+                                                    <!-- Pedal at Base -->
+                                                    <rect x="12" y="46" width="11" height="3" rx="1" fill="#1e293b" />
+                                                    <text x="17.5" y="28" font-size="5" font-weight="bold" fill="#64748b" text-anchor="middle">TRASH</text>
+                                                </g>
+
+                                                <!-- Fallback Generic Accessory -->
+                                                <g v-else>
+                                                    <rect x="0" y="0" :width="getAccessoryBaseSize(ann.accessoryType, 'depan').w" :height="getAccessoryBaseSize(ann.accessoryType, 'depan').h" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" rx="3" />
+                                                    <text :x="getAccessoryBaseSize(ann.accessoryType, 'depan').w / 2" :y="getAccessoryBaseSize(ann.accessoryType, 'depan').h / 2" font-size="9" fill="#64748b" text-anchor="middle">
+                                                        {{ ann.text || ann.accessoryType || 'Aksesoris' }}
+                                                    </text>
+                                                </g>
                                             </g>
+                                        </g>
                                         </g>
 
                                         <!-- 2. Bounding Box Highlight (Visible on hover or when selected) -->
@@ -3599,76 +5487,399 @@ onUnmounted(() => {
                                     <text :x="tallSvgX + Math.min(80, tallSvgWidth / 2)" y="303" font-size="9" font-weight="bold" fill="#854d0e" text-anchor="middle">⑫</text>
                                 </g>
 
-                                <!-- ── SUB-TITLE VIEW: 1 TAMPAK DEPAN SKALA 1 : 20 ─────────── -->
-                                <g id="view-title" :transform="`translate(${furnitureSvgX + Math.round(furnitureSvgWidth / 2) - 80}, 645)`">
-                                    <circle cx="15" cy="0" r="10" fill="none" stroke="#000" stroke-width="1" />
-                                    <text x="15" y="4" font-size="11" font-weight="bold" text-anchor="middle" fill="#000">1</text>
-                                    <text x="35" y="4" font-size="13" font-weight="bold" fill="#000" letter-spacing="1.5">TAMPAK DEPAN</text>
-                                    <line x1="35" y1="8" x2="165" y2="8" stroke="#000" stroke-width="0.8" />
-                                    <line x1="50" y1="12" x2="120" y2="12" stroke="#e11d48" stroke-width="2.5" stroke-linecap="round" />
-                                    <text x="100" y="24" font-size="9" font-family="monospace" text-anchor="middle" fill="#555">
-                                        SKALA {{ activeView === 'depan' ? cabinet.scaleSingle : '1 : 60' }}
+                                <!-- ── SUB-TITLE VIEW: 1 TAMPAK DEPAN SKALA 1 : 20 (INTERAKTIF & BISA DI-DOUBLE CLICK) ─────────── -->
+                                <g
+                                    v-if="cabinet.showViewTitle !== false"
+                                    id="view-title"
+                                    class="cursor-pointer select-none group"
+                                    :transform="`translate(${furnitureSvgX + Math.round(furnitureSvgWidth / 2) - 80 + (cabinet.viewTitleOffsetX || 0)}, ${645 + (cabinet.viewTitleOffsetY || 0)})`"
+                                    @click.stop="selectComponent(`Judul Gambar: ${cabinet.viewTitle || 'TAMPAK DEPAN'}`, 'view_title')"
+                                    @dblclick.stop="promptEditViewTitle"
+                                    @mousedown.stop="startObjectDrag($event, 'view_title', 'view_title', { x: cabinet.viewTitleOffsetX || 0, y: cabinet.viewTitleOffsetY || 0, name: `Judul Gambar: ${cabinet.viewTitle || 'TAMPAK DEPAN'}` })"
+                                    @touchstart.stop="startObjectDrag($event, 'view_title', 'view_title', { x: cabinet.viewTitleOffsetX || 0, y: cabinet.viewTitleOffsetY || 0, name: `Judul Gambar: ${cabinet.viewTitle || 'TAMPAK DEPAN'}` })"
+                                >
+                                    <!-- Selection / Hover Highlight Box -->
+                                    <rect
+                                        x="-6"
+                                        y="-16"
+                                        :width="Math.max(170, (cabinet.viewTitle || 'TAMPAK DEPAN').length * 11 + 60)"
+                                        height="48"
+                                        :fill="selectedObjectId === 'view_title' ? 'rgba(59, 130, 246, 0.08)' : 'transparent'"
+                                        :stroke="selectedObjectId === 'view_title' ? '#3b82f6' : 'transparent'"
+                                        :stroke-dasharray="selectedObjectId === 'view_title' ? '4,3' : 'none'"
+                                        stroke-width="1.2"
+                                        rx="4"
+                                    />
+
+                                    <!-- Quick Tooltip saat Terpilih -->
+                                    <g v-if="selectedObjectId === 'view_title'" transform="translate(0, -22)">
+                                        <rect x="0" y="0" width="135" height="16" rx="3" fill="#1e293b" stroke="#3b82f6" stroke-width="0.8" />
+                                        <text x="67" y="11" font-size="7.5" fill="#93c5fd" font-weight="bold" text-anchor="middle" font-family="sans-serif">
+                                            ✏️ Klik ganda untuk edit
+                                        </text>
+                                    </g>
+
+                                    <!-- View Number Badge (Klik Ganda untuk Ubah) -->
+                                    <g @dblclick.stop="promptEditViewNumber" title="Klik ganda untuk ubah nomor view">
+                                        <circle cx="15" cy="0" r="10" fill="#ffffff" stroke="#000" stroke-width="1.2" />
+                                        <text x="15" y="4" font-size="11" font-weight="bold" text-anchor="middle" fill="#000">
+                                            {{ cabinet.viewNumber || '1' }}
+                                        </text>
+                                    </g>
+
+                                    <!-- View Title (Klik Ganda untuk Ubah) -->
+                                    <text
+                                        x="35"
+                                        y="4"
+                                        font-size="13"
+                                        font-weight="bold"
+                                        fill="#000"
+                                        letter-spacing="1.5"
+                                        title="Klik ganda untuk edit teks judul"
+                                    >
+                                        {{ cabinet.viewTitle || 'TAMPAK DEPAN' }}
                                     </text>
+
+                                    <!-- Dynamic Underlines to Fit Title Length -->
+                                    <line
+                                        x1="35"
+                                        y1="8"
+                                        :x2="35 + Math.max(130, (cabinet.viewTitle || 'TAMPAK DEPAN').length * 10)"
+                                        y2="8"
+                                        stroke="#000"
+                                        stroke-width="0.8"
+                                    />
+                                    <line
+                                        x1="50"
+                                        y1="12"
+                                        :x2="50 + Math.min(100, Math.max(70, (cabinet.viewTitle || 'TAMPAK DEPAN').length * 7))"
+                                        y2="12"
+                                        stroke="#e11d48"
+                                        stroke-width="2.5"
+                                        stroke-linecap="round"
+                                    />
+
+                                    <!-- Scale Label (Klik Ganda untuk Ubah Skala) -->
+                                    <g @dblclick.stop="promptEditViewScale" title="Klik ganda untuk ubah skala">
+                                        <text
+                                            :x="35 + Math.max(65, (cabinet.viewTitle || 'TAMPAK DEPAN').length * 5)"
+                                            y="24"
+                                            font-size="9"
+                                            font-family="monospace"
+                                            text-anchor="middle"
+                                            fill="#555"
+                                        >
+                                            SKALA {{ activeView === 'depan' ? (cabinet.scaleSingle || '1 : 20') : '1 : 60' }}
+                                        </text>
+                                    </g>
                                 </g>
                             </g>
 
                             <!-- ============================================================== -->
-                            <!-- MODE AUTO: MULTI-VIEW PAS KERTAS (PERSIS SEPERTI GAMBAR 2)     -->
+                            <!-- MODE AUTO: MULTI-VIEW PAS KERTAS (1 LEMBAR GAMBAR KERJA)      -->
                             <!-- ============================================================== -->
-                            <g v-else id="multi-view-layout">
-                                <!-- 1. TAMPAK DEPAN (MINI) -->
-                                <g transform="translate(60, 80) scale(0.38)">
-                                    <rect x="0" y="0" width="780" height="390" fill="#f8fafc" stroke="#111" stroke-width="1.5" />
-                                    <rect x="0" y="0" width="140" height="90" fill="#738166" />
-                                    <rect x="2" y="120" width="134" height="270" fill="#18181b" />
-                                    <rect x="140" y="0" width="410" height="250" fill="#C5A47E" />
-                                    <rect x="140" y="230" width="410" height="22" fill="#EDEBE7" stroke="#333" />
-                                    <rect x="140" y="252" width="410" height="138" fill="#C2A27D" stroke="#5c4033" />
-                                    <rect x="550" y="0" width="230" height="390" fill="#6F7E66" stroke="#111" />
-                                    <text x="390" y="420" font-size="28" font-weight="bold" text-anchor="middle" fill="#000">1 TAMPAK DEPAN</text>
+                            <g v-else-if="layoutMode === 'auto'" id="multi-view-layout">
+                                <!-- 1. JIKA PRESET MODUL KABINET PARAMETRIK (CREDENZA / KITCHEN) -->
+                                <g v-if="cabinet.furnitureType !== 'blank'" id="cabinet-multi-view">
+                                    <!-- 1. TAMPAK DEPAN (MINI) -->
+                                    <g transform="translate(60, 80) scale(0.38)">
+                                        <rect x="0" y="0" width="780" height="390" fill="#f8fafc" stroke="#111" stroke-width="1.5" />
+                                        <!-- Credenza TV Mini -->
+                                        <g v-if="cabinet.furnitureType === 'credenza_tv'">
+                                            <rect x="0" y="0" width="507" height="297" fill="#f1f5f9" stroke="#334155" stroke-width="1.2" />
+                                            <rect x="507" y="0" width="273" height="297" :fill="cabinet.slatsColor || '#7E5334'" stroke="#333" stroke-width="1.2" />
+                                            <rect x="160" y="70" width="180" height="105" fill="#0f172a" stroke="#334155" stroke-width="2" rx="3" />
+                                            <rect x="0" y="297" width="780" height="93" :fill="cabinet.lowerCabinetColor || '#BFA07A'" stroke="#5c4033" stroke-width="1.5" />
+                                        </g>
+                                        <!-- Kitchen Set Mini -->
+                                        <g v-else>
+                                            <rect x="0" y="0" width="140" height="90" fill="#738166" />
+                                            <rect x="2" y="120" width="134" height="270" fill="#18181b" />
+                                            <rect x="140" y="0" width="410" height="250" fill="#C5A47E" />
+                                            <rect x="140" y="230" width="410" height="22" fill="#EDEBE7" stroke="#333" />
+                                            <rect x="140" y="252" width="410" height="138" fill="#C2A27D" stroke="#5c4033" />
+                                            <rect x="550" y="0" width="230" height="390" fill="#6F7E66" stroke="#111" />
+                                        </g>
+                                        <text x="390" y="420" font-size="28" font-weight="bold" text-anchor="middle" fill="#000">1 TAMPAK DEPAN</text>
+                                    </g>
+
+                                    <!-- 2. TAMPAK DEPAN TANPA PINTU (MINI) -->
+                                    <g transform="translate(390, 80) scale(0.38)">
+                                        <rect x="0" y="0" width="780" height="390" fill="#f8fafc" stroke="#111" stroke-width="1.5" />
+                                        <rect x="0" y="0" width="140" height="390" fill="#fef3c7" stroke="#b45309" />
+                                        <rect x="140" y="0" width="410" height="250" fill="#C5A47E" />
+                                        <rect x="140" y="252" width="410" height="138" fill="#fef3c7" stroke="#b45309" />
+                                        <rect x="550" y="0" width="230" height="390" fill="#fef3c7" stroke="#b45309" />
+                                        <text x="390" y="420" font-size="28" font-weight="bold" text-anchor="middle" fill="#000">2 TAMPAK DEPAN TANPA PINTU</text>
+                                    </g>
+
+                                    <!-- 3. TAMPAK SAMPING (MINI) -->
+                                    <g transform="translate(730, 80) scale(0.38)">
+                                        <rect x="0" y="0" width="140" height="390" fill="#6F7E66" stroke="#111" stroke-width="1.5" />
+                                        <line x1="0" y1="230" x2="140" y2="230" stroke="#333" stroke-width="2" />
+                                        <text x="70" y="420" font-size="28" font-weight="bold" text-anchor="middle" fill="#000">3 TAMPAK SAMPING</text>
+                                    </g>
+
+                                    <!-- 4. POTONGAN A-A (MINI) -->
+                                    <g transform="translate(180, 310) scale(0.38)">
+                                        <rect x="0" y="0" width="140" height="390" fill="#fff" stroke="#111" stroke-width="1.5" />
+                                        <line x1="20" y1="0" x2="20" y2="390" stroke="#b45309" stroke-width="3" />
+                                        <line x1="20" y1="230" x2="140" y2="230" stroke="#b45309" stroke-width="4" />
+                                        <text x="70" y="420" font-size="28" font-weight="bold" text-anchor="middle" fill="#000">4 POTONGAN A-A</text>
+                                    </g>
+
+                                    <!-- 5. TAMPAK ATAS (MINI) -->
+                                    <g transform="translate(290, 470) scale(0.38)">
+                                        <rect x="0" y="0" width="780" height="140" fill="#f8fafc" stroke="#111" stroke-width="1.5" />
+                                        <line x1="140" y1="0" x2="140" y2="140" stroke="#555" stroke-width="1" />
+                                        <line x1="550" y1="0" x2="550" y2="140" stroke="#555" stroke-width="1" />
+                                        <text x="390" y="180" font-size="28" font-weight="bold" text-anchor="middle" fill="#000">5 TAMPAK ATAS</text>
+                                    </g>
+
+                                    <!-- 6. ISOMETRI 3D (MINI AXONOMETRIC) -->
+                                    <g transform="translate(680, 310) scale(0.38)">
+                                        <polygon points="100,200 450,80 750,220 400,340" fill="#edebe7" stroke="#111" stroke-width="2" />
+                                        <polygon points="100,200 400,340 400,520 100,380" fill="#C2A27D" stroke="#111" stroke-width="2" />
+                                        <polygon points="400,340 750,220 750,400 400,520" fill="#6F7E66" stroke="#111" stroke-width="2" />
+                                        <polygon points="580,270 750,220 750,400 580,450" fill="#586750" stroke="#111" stroke-width="1.5" />
+                                        <polygon points="100,200 200,165 200,345 100,380" fill="#18181b" stroke="#111" stroke-width="1.5" />
+                                        <text x="425" y="560" font-size="28" font-weight="bold" text-anchor="middle" fill="#000">6 ISOMETRI</text>
+                                    </g>
                                 </g>
 
-                                <!-- 2. TAMPAK DEPAN TANPA PINTU (MINI) -->
-                                <g transform="translate(390, 80) scale(0.38)">
-                                    <rect x="0" y="0" width="780" height="390" fill="#f8fafc" stroke="#111" stroke-width="1.5" />
-                                    <rect x="0" y="0" width="140" height="390" fill="#fef3c7" stroke="#b45309" />
-                                    <rect x="140" y="0" width="410" height="250" fill="#C5A47E" />
-                                    <rect x="140" y="252" width="410" height="138" fill="#fef3c7" stroke="#b45309" />
-                                    <rect x="550" y="0" width="230" height="390" fill="#fef3c7" stroke="#b45309" />
-                                    <text x="390" y="420" font-size="28" font-weight="bold" text-anchor="middle" fill="#000">2 TAMPAK DEPAN TANPA PINTU</text>
-                                </g>
+                                <!-- 2. JIKA LEMBAR KERJA BEBAS / KUSTOM DENGAN AKSESORIS (4-KUADRAN GAMBAR TEKNIK) -->
+                                <g v-else id="blank-multi-view-grid">
+                                    <!-- KUADRAN 1: TAMPAK DEPAN -->
+                                    <g id="auto-f1-depan" class="cursor-pointer group" @click="selectView('depan')">
+                                        <rect :x="multiViewFrames.f1.x" :y="multiViewFrames.f1.y" :width="multiViewFrames.f1.w" :height="multiViewFrames.f1.h" fill="#fafafa" stroke="#334155" stroke-width="1.2" rx="4" />
+                                        <!-- Header bar -->
+                                        <rect :x="multiViewFrames.f1.x" :y="multiViewFrames.f1.y" :width="multiViewFrames.f1.w" height="28" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.8" rx="4" />
+                                        <circle :cx="multiViewFrames.f1.x + 16" :cy="multiViewFrames.f1.y + 14" r="9" fill="#0f172a" />
+                                        <text :x="multiViewFrames.f1.x + 16" :y="multiViewFrames.f1.y + 18" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle">1</text>
+                                        <text :x="multiViewFrames.f1.x + 32" :y="multiViewFrames.f1.y + 18" fill="#0f172a" font-size="11" font-weight="bold">TAMPAK DEPAN</text>
+                                        <text :x="multiViewFrames.f1.x + 140" :y="multiViewFrames.f1.y + 18" fill="#64748b" font-size="9" font-family="monospace">SKALA {{ cabinet.scaleAuto || '1 : 50' }}</text>
+                                        <g :transform="`translate(${multiViewFrames.f1.x + multiViewFrames.f1.w - 80}, ${multiViewFrames.f1.y + 5})`" class="group-hover:opacity-90">
+                                            <rect width="72" height="18" rx="9" fill="#2563eb" />
+                                            <text x="36" y="12" font-size="8.5" font-weight="bold" fill="#ffffff" text-anchor="middle">⛶ Fokus Depan</text>
+                                        </g>
+                                        <!-- Inner Viewport SVG for Tampak Depan -->
+                                        <svg :x="multiViewFrames.f1.x + 8" :y="multiViewFrames.f1.y + 32" :width="multiViewFrames.f1.w - 16" :height="multiViewFrames.f1.h - 40" viewBox="0 0 900 650" class="overflow-hidden">
+                                            <!-- Ground and Ceiling Reference Lines -->
+                                            <line x1="20" y1="580" x2="880" y2="580" stroke="#64748b" stroke-width="1.5" stroke-dasharray="6,4" />
+                                            <text x="880" y="598" font-size="11" font-family="monospace" fill="#94a3b8" text-anchor="end">± 0.00 FL</text>
+                                            <line x1="20" y1="120" x2="880" y2="120" stroke="#e2e8f0" stroke-width="1" />
+                                            <text x="880" y="112" font-size="10" font-family="monospace" fill="#cbd5e1" text-anchor="end">+ 2.80 CEILING</text>
 
-                                <!-- 3. TAMPAK SAMPING (MINI) -->
-                                <g transform="translate(730, 80) scale(0.38)">
-                                    <rect x="0" y="0" width="140" height="390" fill="#6F7E66" stroke="#111" stroke-width="1.5" />
-                                    <line x1="0" y1="230" x2="140" y2="230" stroke="#333" stroke-width="2" />
-                                    <text x="70" y="420" font-size="28" font-weight="bold" text-anchor="middle" fill="#000">3 TAMPAK SAMPING</text>
-                                </g>
+                                            <!-- Accessories in Front View -->
+                                            <g v-for="ann in annotations.filter(a => a.type === 'accessory')" :key="'f1-' + ann.id" :transform="`translate(${ann.x}, ${ann.y})`">
+                                                <!-- Kasur Front View -->
+                                                <g v-if="ann.accessoryType === 'bed'">
+                                                    <rect x="0" y="0" width="160" height="90" fill="#78350f" stroke="#451a03" stroke-width="1.2" rx="3" />
+                                                    <rect x="5" y="45" width="150" height="40" fill="#f8fafc" stroke="#64748b" stroke-width="1.2" rx="3" />
+                                                    <rect x="15" y="25" width="55" height="22" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="4" />
+                                                    <rect x="90" y="25" width="55" height="22" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="4" />
+                                                    <rect x="0" y="85" width="160" height="15" fill="#92400e" stroke="#451a03" stroke-width="1" />
+                                                    <rect x="5" y="100" width="15" height="12" fill="#451a03" rx="1" />
+                                                    <rect x="140" y="100" width="15" height="12" fill="#451a03" rx="1" />
+                                                </g>
+                                                <!-- Sofa Front View -->
+                                                <g v-else-if="ann.accessoryType === 'sofa'">
+                                                    <rect x="0" y="0" width="180" height="50" fill="#cbd5e1" stroke="#475569" stroke-width="1.2" rx="4" />
+                                                    <rect x="0" y="25" width="22" height="40" fill="#94a3b8" stroke="#475569" stroke-width="1" rx="3" />
+                                                    <rect x="158" y="25" width="22" height="40" fill="#94a3b8" stroke="#475569" stroke-width="1" rx="3" />
+                                                    <rect x="22" y="35" width="136" height="30" fill="#f8fafc" stroke="#475569" stroke-width="1" rx="3" />
+                                                    <line x1="68" y1="35" x2="68" y2="65" stroke="#cbd5e1" stroke-width="1.2" />
+                                                    <line x1="112" y1="35" x2="112" y2="65" stroke="#cbd5e1" stroke-width="1.2" />
+                                                    <rect x="0" y="65" width="180" height="12" fill="#475569" rx="1" />
+                                                    <rect x="10" y="77" width="12" height="14" fill="#334155" rx="1" />
+                                                    <rect x="158" y="77" width="12" height="14" fill="#334155" rx="1" />
+                                                </g>
+                                                <!-- Drawer Front View -->
+                                                <g v-else-if="ann.accessoryType === 'drawer'">
+                                                    <rect x="0" y="0" width="100" height="90" fill="#d4b483" stroke="#8c6d37" stroke-width="1.2" />
+                                                    <line x1="0" y1="30" x2="100" y2="30" stroke="#8c6d37" stroke-width="1" />
+                                                    <rect x="35" y="12" width="30" height="4" fill="#1c1917" rx="1" />
+                                                    <line x1="0" y1="60" x2="100" y2="60" stroke="#8c6d37" stroke-width="1" />
+                                                    <rect x="35" y="42" width="30" height="4" fill="#1c1917" rx="1" />
+                                                    <rect x="35" y="72" width="30" height="4" fill="#1c1917" rx="1" />
+                                                </g>
+                                                <!-- TV Front View -->
+                                                <g v-else-if="ann.accessoryType === 'tv'">
+                                                    <rect x="0" y="0" width="180" height="105" fill="#0f172a" stroke="#334155" stroke-width="2" rx="3" />
+                                                    <rect x="3" y="3" width="174" height="99" fill="#1e293b" />
+                                                    <line x1="3" y1="3" x2="80" y2="102" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+                                                    <rect x="75" y="105" width="30" height="6" fill="#475569" rx="1" />
+                                                </g>
+                                                <!-- Fallback General Accessory Front View -->
+                                                <g v-else>
+                                                    <rect x="0" y="0" :width="ann.width || 120" :height="ann.height || 80" fill="#f8fafc" stroke="#475569" stroke-width="1.2" rx="2" />
+                                                    <text :x="(ann.width || 120) / 2" :y="(ann.height || 80) / 2 + 4" font-size="9" fill="#334155" text-anchor="middle" font-weight="bold">{{ ann.text || ann.accessoryType }}</text>
+                                                </g>
+                                            </g>
 
-                                <!-- 4. POTONGAN A-A (MINI) -->
-                                <g transform="translate(180, 310) scale(0.38)">
-                                    <rect x="0" y="0" width="140" height="390" fill="#fff" stroke="#111" stroke-width="1.5" />
-                                    <line x1="20" y1="0" x2="20" y2="390" stroke="#b45309" stroke-width="3" />
-                                    <line x1="20" y1="230" x2="140" y2="230" stroke="#b45309" stroke-width="4" />
-                                    <text x="70" y="420" font-size="28" font-weight="bold" text-anchor="middle" fill="#000">4 POTONGAN A-A</text>
-                                </g>
+                                            <!-- Fallback empty prompt if no accessories placed -->
+                                            <g v-if="annotations.filter(a => a.type === 'accessory').length === 0">
+                                                <text x="450" y="320" font-size="16" fill="#94a3b8" font-weight="bold" text-anchor="middle">Area Gambar Tampak Depan</text>
+                                                <text x="450" y="348" font-size="11" fill="#cbd5e1" text-anchor="middle">Klik di sini untuk fokus dan menambahkan gambar atau aksesoris</text>
+                                            </g>
+                                        </svg>
+                                    </g>
 
-                                <!-- 5. TAMPAK ATAS (MINI) -->
-                                <g transform="translate(290, 470) scale(0.38)">
-                                    <rect x="0" y="0" width="780" height="140" fill="#f8fafc" stroke="#111" stroke-width="1.5" />
-                                    <line x1="140" y1="0" x2="140" y2="140" stroke="#555" stroke-width="1" />
-                                    <line x1="550" y1="0" x2="550" y2="140" stroke="#555" stroke-width="1" />
-                                    <text x="390" y="180" font-size="28" font-weight="bold" text-anchor="middle" fill="#000">5 TAMPAK ATAS</text>
-                                </g>
+                                    <!-- KUADRAN 2: TAMPAK ATAS (PLAN / DENAH) -->
+                                    <g id="auto-f2-atas" class="cursor-pointer group" @click="selectView('atas')">
+                                        <rect :x="multiViewFrames.f2.x" :y="multiViewFrames.f2.y" :width="multiViewFrames.f2.w" :height="multiViewFrames.f2.h" fill="#fafafa" stroke="#334155" stroke-width="1.2" rx="4" />
+                                        <!-- Header bar -->
+                                        <rect :x="multiViewFrames.f2.x" :y="multiViewFrames.f2.y" :width="multiViewFrames.f2.w" height="28" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.8" rx="4" />
+                                        <circle :cx="multiViewFrames.f2.x + 16" :cy="multiViewFrames.f2.y + 14" r="9" fill="#0f172a" />
+                                        <text :x="multiViewFrames.f2.x + 16" :y="multiViewFrames.f2.y + 18" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle">2</text>
+                                        <text :x="multiViewFrames.f2.x + 32" :y="multiViewFrames.f2.y + 18" fill="#0f172a" font-size="11" font-weight="bold">TAMPAK ATAS (PLAN / DENAH)</text>
+                                        <text :x="multiViewFrames.f2.x + 205" :y="multiViewFrames.f2.y + 18" fill="#64748b" font-size="9" font-family="monospace">SKALA {{ cabinet.scaleAuto || '1 : 50' }}</text>
+                                        <g :transform="`translate(${multiViewFrames.f2.x + multiViewFrames.f2.w - 75}, ${multiViewFrames.f2.y + 5})`" class="group-hover:opacity-90">
+                                            <rect width="68" height="18" rx="9" fill="#2563eb" />
+                                            <text x="34" y="12" font-size="8.5" font-weight="bold" fill="#ffffff" text-anchor="middle">⛶ Fokus Atas</text>
+                                        </g>
+                                        <!-- Inner Viewport SVG for Tampak Atas -->
+                                        <svg :x="multiViewFrames.f2.x + 8" :y="multiViewFrames.f2.y + 32" :width="multiViewFrames.f2.w - 16" :height="multiViewFrames.f2.h - 40" viewBox="0 0 900 650" class="overflow-hidden">
+                                            <!-- Architectural Grid / Floor Perimeter -->
+                                            <rect x="40" y="40" width="820" height="560" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="6,4" />
+                                            <line x1="40" y1="40" x2="860" y2="40" stroke="#1e293b" stroke-width="3" />
 
-                                <!-- 6. ISOMETRI 3D (MINI AXONOMETRIC) -->
-                                <g transform="translate(680, 310) scale(0.38)">
-                                    <polygon points="100,200 450,80 750,220 400,340" fill="#edebe7" stroke="#111" stroke-width="2" />
-                                    <polygon points="100,200 400,340 400,520 100,380" fill="#C2A27D" stroke="#111" stroke-width="2" />
-                                    <polygon points="400,340 750,220 750,400 400,520" fill="#6F7E66" stroke="#111" stroke-width="2" />
-                                    <polygon points="580,270 750,220 750,400 580,450" fill="#586750" stroke="#111" stroke-width="1.5" />
-                                    <polygon points="100,200 200,165 200,345 100,380" fill="#18181b" stroke="#111" stroke-width="1.5" />
-                                    <text x="425" y="560" font-size="28" font-weight="bold" text-anchor="middle" fill="#000">6 ISOMETRI</text>
+                                            <!-- Accessories in Top View -->
+                                            <g v-for="ann in annotations.filter(a => a.type === 'accessory')" :key="'f2-' + ann.id" :transform="`translate(${ann.x}, ${Math.max(60, ann.y * 0.7)})`">
+                                                <!-- Kasur Top View -->
+                                                <g v-if="ann.accessoryType === 'bed'">
+                                                    <rect x="0" y="0" width="160" height="20" fill="#78350f" stroke="#451a03" stroke-width="1.2" rx="2" />
+                                                    <rect x="5" y="20" width="150" height="155" fill="#f8fafc" stroke="#334155" stroke-width="1.2" rx="3" />
+                                                    <rect x="15" y="26" width="55" height="32" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="4" />
+                                                    <line x1="22" y1="42" x2="63" y2="42" stroke="#e2e8f0" stroke-width="0.8" />
+                                                    <rect x="90" y="26" width="55" height="32" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="4" />
+                                                    <line x1="97" y1="42" x2="138" y2="42" stroke="#e2e8f0" stroke-width="0.8" />
+                                                    <rect x="5" y="85" width="150" height="90" fill="#e2e8f0" stroke="#64748b" stroke-width="1" rx="2" />
+                                                </g>
+                                                <!-- Sofa Top View -->
+                                                <g v-else-if="ann.accessoryType === 'sofa'">
+                                                    <rect x="0" y="0" width="180" height="80" fill="#e2e8f0" stroke="#334155" stroke-width="1.5" rx="4" />
+                                                    <rect x="0" y="0" width="180" height="24" fill="#cbd5e1" stroke="#475569" stroke-width="1" rx="3" />
+                                                    <rect x="0" y="24" width="20" height="56" fill="#94a3b8" stroke="#475569" stroke-width="1" rx="3" />
+                                                    <rect x="160" y="24" width="20" height="56" fill="#94a3b8" stroke="#475569" stroke-width="1" rx="3" />
+                                                    <rect x="22" y="26" width="44" height="52" fill="#f8fafc" stroke="#64748b" stroke-width="0.8" rx="3" />
+                                                    <rect x="68" y="26" width="44" height="52" fill="#f8fafc" stroke="#64748b" stroke-width="0.8" rx="3" />
+                                                    <rect x="114" y="26" width="44" height="52" fill="#f8fafc" stroke="#64748b" stroke-width="0.8" rx="3" />
+                                                </g>
+                                                <!-- Table Top View -->
+                                                <g v-else-if="ann.accessoryType === 'coffee_table' || ann.accessoryType === 'dining_table'">
+                                                    <rect x="0" y="0" width="140" height="70" fill="#e2d9cc" stroke="#78350f" stroke-width="1.5" rx="3" />
+                                                    <rect x="4" y="4" width="132" height="62" fill="none" stroke="#b45309" stroke-width="0.8" stroke-dasharray="6,3" />
+                                                </g>
+                                                <!-- Fallback Top View -->
+                                                <g v-else>
+                                                    <rect x="0" y="0" :width="ann.width || 120" :height="Math.round((ann.height || 80) * 0.7)" fill="#f8fafc" stroke="#475569" stroke-width="1.2" rx="2" />
+                                                    <text :x="(ann.width || 120) / 2" :y="Math.round((ann.height || 80) * 0.35) + 4" font-size="8.5" fill="#334155" text-anchor="middle">{{ ann.text || ann.accessoryType }} (ATAS)</text>
+                                                </g>
+                                            </g>
+
+                                            <g v-if="annotations.filter(a => a.type === 'accessory').length === 0">
+                                                <text x="450" y="320" font-size="16" fill="#94a3b8" font-weight="bold" text-anchor="middle">Denah Layout Tampak Atas</text>
+                                                <text x="450" y="348" font-size="11" fill="#cbd5e1" text-anchor="middle">Menampilkan proyeksi denah furnitur dari sudut atas</text>
+                                            </g>
+                                        </svg>
+                                    </g>
+
+                                    <!-- KUADRAN 3: TAMPAK SAMPING (SECTION / ELEVASI SAMPING) -->
+                                    <g id="auto-f3-samping" class="cursor-pointer group" @click="selectView('samping')">
+                                        <rect :x="multiViewFrames.f3.x" :y="multiViewFrames.f3.y" :width="multiViewFrames.f3.w" :height="multiViewFrames.f3.h" fill="#fafafa" stroke="#334155" stroke-width="1.2" rx="4" />
+                                        <!-- Header bar -->
+                                        <rect :x="multiViewFrames.f3.x" :y="multiViewFrames.f3.y" :width="multiViewFrames.f3.w" height="28" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.8" rx="4" />
+                                        <circle :cx="multiViewFrames.f3.x + 16" :cy="multiViewFrames.f3.y + 14" r="9" fill="#0f172a" />
+                                        <text :x="multiViewFrames.f3.x + 16" :y="multiViewFrames.f3.y + 18" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle">3</text>
+                                        <text :x="multiViewFrames.f3.x + 32" :y="multiViewFrames.f3.y + 18" fill="#0f172a" font-size="11" font-weight="bold">TAMPAK SAMPING</text>
+                                        <text :x="multiViewFrames.f3.x + 150" :y="multiViewFrames.f3.y + 18" fill="#64748b" font-size="9" font-family="monospace">SKALA {{ cabinet.scaleAuto || '1 : 50' }}</text>
+                                        <g :transform="`translate(${multiViewFrames.f3.x + multiViewFrames.f3.w - 85}, ${multiViewFrames.f3.y + 5})`" class="group-hover:opacity-90">
+                                            <rect width="78" height="18" rx="9" fill="#2563eb" />
+                                            <text x="39" y="12" font-size="8.5" font-weight="bold" fill="#ffffff" text-anchor="middle">⛶ Fokus Samping</text>
+                                        </g>
+                                        <!-- Inner Viewport SVG for Tampak Samping -->
+                                        <svg :x="multiViewFrames.f3.x + 8" :y="multiViewFrames.f3.y + 32" :width="multiViewFrames.f3.w - 16" :height="multiViewFrames.f3.h - 40" viewBox="0 0 900 650" class="overflow-hidden">
+                                            <!-- Wall Section and Floor Line -->
+                                            <line x1="40" y1="580" x2="860" y2="580" stroke="#64748b" stroke-width="1.5" stroke-dasharray="6,4" />
+                                            <rect x="40" y="60" width="30" height="520" fill="#e2e8f0" stroke="#334155" stroke-width="1.5" />
+                                            <line x1="40" y1="60" x2="70" y2="90" stroke="#cbd5e1" stroke-width="1" />
+                                            <line x1="40" y1="120" x2="70" y2="150" stroke="#cbd5e1" stroke-width="1" />
+                                            <line x1="40" y1="180" x2="70" y2="210" stroke="#cbd5e1" stroke-width="1" />
+                                            <line x1="40" y1="240" x2="70" y2="270" stroke="#cbd5e1" stroke-width="1" />
+
+                                            <!-- Accessories in Side View -->
+                                            <g transform="translate(100, 360)">
+                                                <!-- Bed Side View -->
+                                                <g v-if="annotations.some(a => a.accessoryType === 'bed')">
+                                                    <rect x="0" y="-80" width="16" height="120" fill="#78350f" stroke="#451a03" stroke-width="1.2" rx="2" />
+                                                    <rect x="16" y="-10" width="170" height="28" fill="#f8fafc" stroke="#475569" stroke-width="1.2" rx="3" />
+                                                    <rect x="16" y="18" width="170" height="22" fill="#92400e" stroke="#451a03" stroke-width="1" />
+                                                    <rect x="175" y="40" width="10" height="15" fill="#451a03" rx="1" />
+                                                    <text x="95" y="8" font-size="8" fill="#475569" font-weight="bold" text-anchor="middle">KASUR (SAMPING)</text>
+                                                </g>
+                                                <!-- Sofa Side View -->
+                                                <g v-if="annotations.some(a => a.accessoryType === 'sofa')" transform="translate(240, 0)">
+                                                    <path d="M0,40 L12,-40 L35,-40 L28,40 Z" fill="#94a3b8" stroke="#475569" stroke-width="1.2" />
+                                                    <rect x="25" y="0" width="55" height="25" fill="#f8fafc" stroke="#475569" stroke-width="1.2" rx="3" />
+                                                    <rect x="10" y="25" width="70" height="15" fill="#475569" rx="1" />
+                                                    <rect x="18" y="40" width="8" height="15" fill="#334155" rx="1" />
+                                                    <rect x="68" y="40" width="8" height="15" fill="#334155" rx="1" />
+                                                    <text x="45" y="16" font-size="8" fill="#475569" font-weight="bold" text-anchor="middle">SOFA (SAMPING)</text>
+                                                </g>
+                                            </g>
+
+                                            <g v-if="annotations.filter(a => a.type === 'accessory').length === 0">
+                                                <text x="450" y="320" font-size="16" fill="#94a3b8" font-weight="bold" text-anchor="middle">Potongan &amp; Tampak Samping</text>
+                                                <text x="450" y="348" font-size="11" fill="#cbd5e1" text-anchor="middle">Menampilkan profil samping dan potongan kedalaman kabinet</text>
+                                            </g>
+                                        </svg>
+                                    </g>
+
+                                    <!-- KUADRAN 4: DETAIL & ISOMETRI 3D -->
+                                    <g id="auto-f4-iso" class="cursor-pointer group" @click="selectView('iso')">
+                                        <rect :x="multiViewFrames.f4.x" :y="multiViewFrames.f4.y" :width="multiViewFrames.f4.w" :height="multiViewFrames.f4.h" fill="#fafafa" stroke="#334155" stroke-width="1.2" rx="4" />
+                                        <!-- Header bar -->
+                                        <rect :x="multiViewFrames.f4.x" :y="multiViewFrames.f4.y" :width="multiViewFrames.f4.w" height="28" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.8" rx="4" />
+                                        <circle :cx="multiViewFrames.f4.x + 16" :cy="multiViewFrames.f4.y + 14" r="9" fill="#0f172a" />
+                                        <text :x="multiViewFrames.f4.x + 16" :y="multiViewFrames.f4.y + 18" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle">4</text>
+                                        <text :x="multiViewFrames.f4.x + 32" :y="multiViewFrames.f4.y + 18" fill="#0f172a" font-size="11" font-weight="bold">DETAIL &amp; ISOMETRI 3D</text>
+                                        <text :x="multiViewFrames.f4.x + 175" :y="multiViewFrames.f4.y + 18" fill="#64748b" font-size="9" font-family="monospace">SKALA NTS</text>
+                                        <g :transform="`translate(${multiViewFrames.f4.x + multiViewFrames.f4.w - 75}, ${multiViewFrames.f4.y + 5})`" class="group-hover:opacity-90">
+                                            <rect width="68" height="18" rx="9" fill="#2563eb" />
+                                            <text x="34" y="12" font-size="8.5" font-weight="bold" fill="#ffffff" text-anchor="middle">⛶ Fokus 3D</text>
+                                        </g>
+                                        <!-- Inner Viewport SVG for Isometri 3D -->
+                                        <svg :x="multiViewFrames.f4.x + 8" :y="multiViewFrames.f4.y + 32" :width="multiViewFrames.f4.w - 16" :height="multiViewFrames.f4.h - 40" viewBox="0 0 900 650" class="overflow-hidden">
+                                            <!-- Isometric Axonometric Pedestal -->
+                                            <polygon points="450,140 780,290 450,440 120,290" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" />
+                                            <polygon points="120,290 450,440 450,540 120,390" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.5" />
+                                            <polygon points="450,440 780,290 780,390 450,540" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.5" />
+
+                                            <!-- 3D Isometric Bed Block -->
+                                            <g v-if="annotations.some(a => a.accessoryType === 'bed')" transform="translate(0, -20)">
+                                                <!-- Headboard 3D -->
+                                                <polygon points="340,240 370,225 370,305 340,320" fill="#78350f" stroke="#451a03" stroke-width="1.2" />
+                                                <polygon points="340,240 430,285 430,365 340,320" fill="#92400e" stroke="#451a03" stroke-width="1.2" />
+                                                <polygon points="340,240 370,225 460,270 430,285" fill="#b45309" stroke="#451a03" stroke-width="1.2" />
+                                                <!-- Mattress 3D -->
+                                                <polygon points="370,270 510,340 450,370 310,300" fill="#f8fafc" stroke="#334155" stroke-width="1.2" />
+                                                <polygon points="310,300 450,370 450,410 310,340" fill="#e2e8f0" stroke="#334155" stroke-width="1.2" />
+                                                <polygon points="450,370 510,340 510,380 450,410" fill="#cbd5e1" stroke="#334155" stroke-width="1.2" />
+                                                <text x="410" y="340" font-size="11" font-weight="bold" fill="#334155" text-anchor="middle">KASUR 3D</text>
+                                            </g>
+
+                                            <!-- 3D Isometric Sofa Block -->
+                                            <g v-if="annotations.some(a => a.accessoryType === 'sofa')" transform="translate(140, 70)">
+                                                <polygon points="360,250 480,310 440,330 320,270" fill="#cbd5e1" stroke="#475569" stroke-width="1.2" />
+                                                <polygon points="320,270 440,330 440,365 320,305" fill="#94a3b8" stroke="#475569" stroke-width="1.2" />
+                                                <polygon points="440,330 480,310 480,345 440,365" fill="#64748b" stroke="#475569" stroke-width="1.2" />
+                                                <text x="400" y="305" font-size="10" font-weight="bold" fill="#334155" text-anchor="middle">SOFA 3D</text>
+                                            </g>
+
+                                            <text x="450" y="590" font-size="12" font-weight="bold" fill="#64748b" letter-spacing="1" text-anchor="middle">PROYEKSI AKSONOMETRI ISOMETRI</text>
+                                        </svg>
+                                    </g>
                                 </g>
                             </g>
 
@@ -3888,6 +6099,7 @@ onUnmounted(() => {
                     <!-- TAB 02: LEMBAR DAFTAR POTONG (CUTTING LIST SHEET) -->
                     <div
                         v-show="activeSheetTab === '02'"
+                        id="cutting-list-sheet"
                         class="bg-white text-slate-900 border border-slate-300 rounded shadow-2xl relative p-8 flex flex-col justify-between"
                         style="width: 1200px; height: 840px; box-sizing: border-box;"
                     >
@@ -3947,6 +6159,26 @@ onUnmounted(() => {
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-slate-200 text-slate-700">
+                                        <tr v-if="cutListItems.length === 0">
+                                            <td colspan="9" class="py-10 text-center text-slate-500">
+                                                <div class="flex flex-col items-center justify-center gap-2 max-w-md mx-auto">
+                                                    <div class="p-3 rounded-full bg-amber-50 border border-amber-200 text-amber-600 mb-1">
+                                                        <Scissors class="w-6 h-6" />
+                                                    </div>
+                                                    <div class="font-bold text-slate-800 text-sm">Belum Ada Komponen Terhitung</div>
+                                                    <div class="text-xs text-slate-500 leading-relaxed">
+                                                        Daftar potong dihitung otomatis dari aksesoris/mebel yang Anda letakkan pada kanvas (seperti Kasur, Sofa, Meja, Lemari, Laci) atau dari model preset kabinet interior.
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        @click="activeSheetTab = '01'; showAccessoryMenu = true"
+                                                        class="mt-2 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow cursor-pointer transition-colors"
+                                                    >
+                                                        + Tambah Aksesoris ke Kanvas
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
                                         <tr
                                             v-for="(item, idx) in cutListItems"
                                             :key="item.id"
@@ -4030,7 +6262,7 @@ onUnmounted(() => {
                         <div class="w-px h-5 bg-white/10 shrink-0 mx-0.5"></div>
                         <button
                             type="button"
-                            @click="activeView = 'depan'; layoutMode = 'single'"
+                            @click="selectView('depan')"
                             :class="activeView === 'depan' && layoutMode === 'single' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'"
                             class="px-2 py-1 rounded-lg text-xs shrink-0"
                         >
@@ -4383,6 +6615,91 @@ onUnmounted(() => {
                                     </button>
                                 </div>
 
+                                <!-- Sudut Pandang Aksesoris (Depan, Atas, Samping, Bawah) -->
+                                <div class="space-y-1.5 pb-2 border-b border-white/10">
+                                    <div class="flex items-center justify-between text-[11px]">
+                                        <span class="font-semibold text-amber-300">Sudut Pandang (View):</span>
+                                        <span class="font-mono text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold uppercase">
+                                            {{ selectedAnnotation.view || 'depan' }}
+                                        </span>
+                                    </div>
+                                    <div class="grid grid-cols-4 gap-1">
+                                        <button
+                                            type="button"
+                                            @click="setAccessoryView(selectedAnnotation, 'depan')"
+                                            :class="(selectedAnnotation.view || 'depan') === 'depan' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'bg-white/5 text-slate-300 hover:bg-white/10'"
+                                            class="py-1 px-1 rounded-lg text-[10px] text-center transition cursor-pointer flex flex-col items-center gap-0.5"
+                                            title="Tampak Depan (Elevasi)"
+                                        >
+                                            <span>👁️</span>
+                                            <span>Depan</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="setAccessoryView(selectedAnnotation, 'atas')"
+                                            :class="selectedAnnotation.view === 'atas' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'bg-white/5 text-slate-300 hover:bg-white/10'"
+                                            class="py-1 px-1 rounded-lg text-[10px] text-center transition cursor-pointer flex flex-col items-center gap-0.5"
+                                            title="Tampak Atas (Plan / Denah)"
+                                        >
+                                            <span>⬆️</span>
+                                            <span>Atas</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="setAccessoryView(selectedAnnotation, 'samping')"
+                                            :class="selectedAnnotation.view === 'samping' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'bg-white/5 text-slate-300 hover:bg-white/10'"
+                                            class="py-1 px-1 rounded-lg text-[10px] text-center transition cursor-pointer flex flex-col items-center gap-0.5"
+                                            title="Tampak Samping (Potongan)"
+                                        >
+                                            <span>➡️</span>
+                                            <span>Samping</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="setAccessoryView(selectedAnnotation, 'bawah')"
+                                            :class="selectedAnnotation.view === 'bawah' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'bg-white/5 text-slate-300 hover:bg-white/10'"
+                                            class="py-1 px-1 rounded-lg text-[10px] text-center transition cursor-pointer flex flex-col items-center gap-0.5"
+                                            title="Tampak Bawah (Plafon / Kolong)"
+                                        >
+                                            <span>⬇️</span>
+                                            <span>Bawah</span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Rotasi & Balik (Flip) -->
+                                    <div class="grid grid-cols-3 gap-1 pt-1">
+                                        <button
+                                            type="button"
+                                            @click="rotateAccessory(selectedAnnotation)"
+                                            class="py-1 px-1.5 rounded-lg text-[10px] bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white transition flex items-center justify-center gap-1 cursor-pointer"
+                                            title="Putar 90°"
+                                        >
+                                            <RotateCw class="w-3 h-3 text-amber-400" />
+                                            <span>Putar 90°</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="flipAccessoryH(selectedAnnotation)"
+                                            :class="selectedAnnotation.flipH ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-white/5 text-slate-300 hover:bg-white/10'"
+                                            class="py-1 px-1.5 rounded-lg text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
+                                            title="Balik Kiri-Kanan"
+                                        >
+                                            <span>⇄</span>
+                                            <span>Balik H</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="flipAccessoryV(selectedAnnotation)"
+                                            :class="selectedAnnotation.flipV ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-white/5 text-slate-300 hover:bg-white/10'"
+                                            class="py-1 px-1.5 rounded-lg text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
+                                            title="Balik Atas-Bawah"
+                                        >
+                                            <span>⇅</span>
+                                            <span>Balik V</span>
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <!-- Lebar (mm) -->
                                 <div class="space-y-1">
                                     <div class="flex items-center justify-between text-[11px] text-slate-300">
@@ -4524,6 +6841,48 @@ onUnmounted(() => {
                                         <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 900, 900)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">90 cm</button>
                                         <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 1200, 900)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">120 cm</button>
                                     </div>
+                                    <!-- Sofa Presets -->
+                                    <div v-else-if="selectedAnnotation.accessoryType === 'sofa'" class="grid grid-cols-4 gap-1 text-[10px]">
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 900, 850)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">1 Seat</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 1500, 850)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">2 Seat</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 2000, 850)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">3 Seat</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 2400, 850)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">4 Seat</button>
+                                    </div>
+                                    <!-- Tempat Tidur / Kasur Presets -->
+                                    <div v-else-if="selectedAnnotation.accessoryType === 'bed'" class="grid grid-cols-4 gap-1 text-[10px]">
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 1000, 1000)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">Single</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 1600, 1000)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">Queen</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 1800, 1000)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">King</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 2000, 1000)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">Super</button>
+                                    </div>
+                                    <!-- Meja Makan Presets -->
+                                    <div v-else-if="selectedAnnotation.accessoryType === 'dining_table'" class="grid grid-cols-3 gap-1 text-[10px]">
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 1200, 780)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">4 Kursi</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 1600, 780)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">6 Kursi</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 2000, 780)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">8 Kursi</button>
+                                    </div>
+                                    <!-- Meja Kerja Presets -->
+                                    <div v-else-if="selectedAnnotation.accessoryType === 'study_desk'" class="grid grid-cols-3 gap-1 text-[10px]">
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 1000, 750)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">100 cm</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 1200, 750)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">120 cm</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 1500, 750)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">150 cm</button>
+                                    </div>
+                                    <!-- Gorden Presets -->
+                                    <div v-else-if="selectedAnnotation.accessoryType === 'curtain'" class="grid grid-cols-3 gap-1 text-[10px]">
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 1200, 2200)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">1.2 m</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 1500, 2200)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">1.5 m</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 2000, 2200)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">2.0 m</button>
+                                    </div>
+                                    <!-- Toilet Presets -->
+                                    <div v-else-if="selectedAnnotation.accessoryType === 'toilet'" class="grid grid-cols-2 gap-1 text-[10px]">
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 400, 750)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">Standar Monoblok</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 380, 500)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">Wall-hung Gantung</button>
+                                    </div>
+                                    <!-- Mesin Cuci Presets -->
+                                    <div v-else-if="selectedAnnotation.accessoryType === 'washing_machine'" class="grid grid-cols-2 gap-1 text-[10px]">
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 600, 850)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">7 - 9 kg (Standar)</button>
+                                        <button type="button" @click="applyAccessoryPreset(selectedAnnotation, 600, 1600)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">Stack Washer+Dryer</button>
+                                    </div>
                                     <!-- General Scale Presets -->
                                     <div v-else class="grid grid-cols-4 gap-1 text-[10px]">
                                         <button type="button" @click="selectedAnnotation.width = Math.round(getAccessoryBaseSize(selectedAnnotation.accessoryType).w * 0.75); selectedAnnotation.height = Math.round(getAccessoryBaseSize(selectedAnnotation.accessoryType).h * 0.75)" class="py-1 bg-white/10 hover:bg-white/20 rounded text-slate-200">0.75x</button>
@@ -4566,6 +6925,28 @@ onUnmounted(() => {
                                 </div>
                             </div>
 
+                            <!-- Tombol Salin & Duplikasi -->
+                            <div class="grid grid-cols-2 gap-2 pt-1">
+                                <button
+                                    type="button"
+                                    @click="copySelectedObject"
+                                    class="py-1.5 px-2 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/15 text-slate-200 border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                    title="Salin Objek (Ctrl+C)"
+                                >
+                                    <Copy class="w-3.5 h-3.5 text-amber-400" />
+                                    <span>Salin (Ctrl+C)</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="duplicateSelectedObject"
+                                    class="py-1.5 px-2 rounded-lg text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                    title="Duplikat Objek (Ctrl+D atau Ctrl+Geser)"
+                                >
+                                    <Sparkles class="w-3.5 h-3.5" />
+                                    <span>Duplikat (Ctrl+D)</span>
+                                </button>
+                            </div>
+
                             <!-- Tombol Hapus Objek Ini -->
                             <button
                                 type="button"
@@ -4574,6 +6955,111 @@ onUnmounted(() => {
                             >
                                 <Trash2 class="w-3.5 h-3.5" />
                                 <span>Hapus Objek Ini (atau Tekan Delete)</span>
+                            </button>
+                        </div>
+
+                        <!-- If View Title (TAMPAK DEPAN) -->
+                        <div v-else-if="selectedObjectId === 'view_title'" class="space-y-3 pt-1 border-t border-amber-500/20">
+                            <div class="bg-blue-950/40 border border-blue-500/30 rounded-xl p-2.5">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-blue-300">Pengaturan Judul Gambar</span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300">
+                                        Sub-Title View
+                                    </span>
+                                </div>
+                                <p class="text-[10px] text-slate-300 leading-snug">
+                                    💡 <strong>Tips Cepat:</strong> Anda bisa langsung <strong>klik ganda (double-click)</strong> tulisan ini di kanvas untuk mengganti teksnya seketika.
+                                </p>
+                            </div>
+
+                            <!-- Input Teks Judul Gambar -->
+                            <div>
+                                <label class="text-[10px] font-semibold text-slate-300 block mb-1">Teks Judul Gambar</label>
+                                <input
+                                    v-model="cabinet.viewTitle"
+                                    type="text"
+                                    placeholder="Contoh: TAMPAK DEPAN"
+                                    class="w-full bg-slate-950 border border-white/20 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400 font-bold tracking-wide"
+                                    @input="captureSnapshot"
+                                />
+                            </div>
+
+                            <!-- Preset Judul Cepat -->
+                            <div>
+                                <label class="text-[10px] font-semibold text-slate-400 block mb-1">Pilihan Cepat Judul Gambar</label>
+                                <div class="grid grid-cols-2 gap-1.5">
+                                    <button
+                                        v-for="preset in ['TAMPAK DEPAN', 'TAMPAK SAMPING', 'TAMPAK ATAS', 'POTONGAN A-A', 'POTONGAN B-B', 'DETAIL ISOMETRI 3D']"
+                                        :key="preset"
+                                        type="button"
+                                        @click="cabinet.viewTitle = preset; captureSnapshot(); toast.success(`Judul diubah ke: ${preset}`)"
+                                        class="py-1 px-2 rounded-lg text-[10px] font-semibold text-left transition-all border cursor-pointer truncate"
+                                        :class="cabinet.viewTitle === preset ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-white/5 text-slate-300 hover:bg-white/10 border-white/10'"
+                                    >
+                                        {{ preset }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Nomor View & Skala -->
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="text-[10px] font-semibold text-slate-400 block mb-1">Nomor View</label>
+                                    <input
+                                        v-model="cabinet.viewNumber"
+                                        type="text"
+                                        placeholder="1"
+                                        class="w-full bg-slate-950 border border-white/20 rounded-lg px-2.5 py-1 text-xs text-center text-white focus:outline-none focus:border-amber-400 font-bold"
+                                        @input="captureSnapshot"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="text-[10px] font-semibold text-slate-400 block mb-1">Skala Gambar</label>
+                                    <input
+                                        v-model="cabinet.scaleSingle"
+                                        type="text"
+                                        placeholder="1 : 20"
+                                        class="w-full bg-slate-950 border border-white/20 rounded-lg px-2.5 py-1 text-xs text-center text-white focus:outline-none focus:border-amber-400 font-mono"
+                                        @input="captureSnapshot"
+                                    />
+                                </div>
+                            </div>
+
+                            <!-- Posisi Geser Judul -->
+                            <div class="pt-1 border-t border-white/10">
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <span class="text-[10px] font-semibold text-slate-400">Posisi Geser Judul</span>
+                                    <button
+                                        type="button"
+                                        @click="cabinet.viewTitleOffsetX = 0; cabinet.viewTitleOffsetY = 0; captureSnapshot()"
+                                        class="text-[9px] text-amber-400 hover:underline cursor-pointer"
+                                    >
+                                        Reset Posisi
+                                    </button>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="flex items-center bg-black/50 border border-white/20 rounded-lg p-0.5">
+                                        <button type="button" @click="cabinet.viewTitleOffsetX = (cabinet.viewTitleOffsetX || 0) - 10; captureSnapshot()" class="px-2 py-0.5 text-xs text-slate-400 hover:text-white">-</button>
+                                        <span class="w-full text-center text-xs text-white">X: {{ cabinet.viewTitleOffsetX || 0 }}</span>
+                                        <button type="button" @click="cabinet.viewTitleOffsetX = (cabinet.viewTitleOffsetX || 0) + 10; captureSnapshot()" class="px-2 py-0.5 text-xs text-slate-400 hover:text-white">+</button>
+                                    </div>
+                                    <div class="flex items-center bg-black/50 border border-white/20 rounded-lg p-0.5">
+                                        <button type="button" @click="cabinet.viewTitleOffsetY = (cabinet.viewTitleOffsetY || 0) - 10; captureSnapshot()" class="px-2 py-0.5 text-xs text-slate-400 hover:text-white">-</button>
+                                        <span class="w-full text-center text-xs text-white">Y: {{ cabinet.viewTitleOffsetY || 0 }}</span>
+                                        <button type="button" @click="cabinet.viewTitleOffsetY = (cabinet.viewTitleOffsetY || 0) + 10; captureSnapshot()" class="px-2 py-0.5 text-xs text-slate-400 hover:text-white">+</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tombol Hapus Judul View Ini -->
+                            <button
+                                type="button"
+                                @click="deleteSelectedObject"
+                                class="w-full py-1.5 rounded-lg text-xs font-semibold bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/30 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                                title="Hapus Judul View ini dari kanvas (atau tekan tombol Delete / Backspace)"
+                            >
+                                <Trash2 class="w-3.5 h-3.5" />
+                                <span>Hapus Judul View Ini (Delete)</span>
                             </button>
                         </div>
 
@@ -4711,7 +7197,7 @@ onUnmounted(() => {
                         <div class="grid grid-cols-3 gap-1.5 mb-2.5">
                             <button
                                 type="button"
-                                @click="activeView = 'depan'; layoutMode = 'single'; activeSheetTab = '01'"
+                                @click="selectView('depan')"
                                 :class="activeView === 'depan' && layoutMode === 'single' && activeSheetTab === '01' ? 'bg-white text-slate-950 font-bold shadow-md' : 'bg-white/5 text-slate-300 hover:bg-white/10'"
                                 class="py-2 px-1 rounded-xl text-xs text-center transition-all cursor-pointer"
                             >
@@ -4719,7 +7205,7 @@ onUnmounted(() => {
                             </button>
                             <button
                                 type="button"
-                                @click="activeView = 'tanpa_pintu'; layoutMode = 'single'; activeSheetTab = '01'"
+                                @click="selectView('tanpa_pintu')"
                                 :class="activeView === 'tanpa_pintu' && layoutMode === 'single' && activeSheetTab === '01' ? 'bg-white text-slate-950 font-bold shadow-md' : 'bg-white/5 text-slate-300 hover:bg-white/10'"
                                 class="py-2 px-1 rounded-xl text-xs text-center transition-all cursor-pointer leading-tight"
                             >
@@ -4727,7 +7213,7 @@ onUnmounted(() => {
                             </button>
                             <button
                                 type="button"
-                                @click="activeView = 'samping'; layoutMode = 'single'; activeSheetTab = '01'"
+                                @click="selectView('samping')"
                                 :class="activeView === 'samping' && layoutMode === 'single' && activeSheetTab === '01' ? 'bg-white text-slate-950 font-bold shadow-md' : 'bg-white/5 text-slate-300 hover:bg-white/10'"
                                 class="py-2 px-1 rounded-xl text-xs text-center transition-all cursor-pointer"
                             >
@@ -4735,7 +7221,7 @@ onUnmounted(() => {
                             </button>
                             <button
                                 type="button"
-                                @click="activeView = 'potongan'; layoutMode = 'single'; activeSheetTab = '01'"
+                                @click="selectView('potongan')"
                                 :class="activeView === 'potongan' && layoutMode === 'single' && activeSheetTab === '01' ? 'bg-white text-slate-950 font-bold shadow-md' : 'bg-white/5 text-slate-300 hover:bg-white/10'"
                                 class="py-2 px-1 rounded-xl text-xs text-center transition-all cursor-pointer"
                             >
@@ -4743,7 +7229,7 @@ onUnmounted(() => {
                             </button>
                             <button
                                 type="button"
-                                @click="activeView = 'atas'; layoutMode = 'single'; activeSheetTab = '01'"
+                                @click="selectView('atas')"
                                 :class="activeView === 'atas' && layoutMode === 'single' && activeSheetTab === '01' ? 'bg-white text-slate-950 font-bold shadow-md' : 'bg-white/5 text-slate-300 hover:bg-white/10'"
                                 class="py-2 px-1 rounded-xl text-xs text-center transition-all cursor-pointer"
                             >
@@ -4751,7 +7237,7 @@ onUnmounted(() => {
                             </button>
                             <button
                                 type="button"
-                                @click="activeView = 'iso'; layoutMode = 'single'; activeSheetTab = '01'"
+                                @click="selectView('iso')"
                                 :class="activeView === 'iso' && layoutMode === 'single' && activeSheetTab === '01' ? 'bg-white text-slate-950 font-bold shadow-md' : 'bg-white/5 text-slate-300 hover:bg-white/10'"
                                 class="py-2 px-1 rounded-xl text-xs text-center transition-all cursor-pointer"
                             >
@@ -4788,6 +7274,24 @@ onUnmounted(() => {
                                 <option value="single">Layout: Per tampak (fokus)</option>
                             </select>
                             <ChevronDown class="w-3.5 h-3.5 text-slate-400 absolute right-3 top-3 pointer-events-none" />
+                        </div>
+
+                        <!-- Toggle / Kontrol Judul View (Bisa dihapus / dimunculkan kembali) -->
+                        <div class="mt-2.5 p-2 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <Tag class="w-3.5 h-3.5 text-amber-400" />
+                                <span class="text-xs text-slate-200 font-medium">Judul View</span>
+                            </div>
+                            <button
+                                type="button"
+                                @click="toggleViewTitle"
+                                :class="cabinet.showViewTitle !== false ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30 font-bold shadow-sm'"
+                                class="px-2.5 py-1 rounded-lg text-xs border transition-colors cursor-pointer flex items-center gap-1"
+                                :title="cabinet.showViewTitle !== false ? 'Sembunyikan / Hapus Judul View' : 'Tampilkan / Tambahkan kembali Judul View'"
+                            >
+                                <Plus v-if="cabinet.showViewTitle === false" class="w-3 h-3" />
+                                <span>{{ cabinet.showViewTitle !== false ? 'Tampil' : '+ Tambah' }}</span>
+                            </button>
                         </div>
 
                         <!-- Tombol Buka Konfigurasi Desain Lemari -->
@@ -4945,7 +7449,15 @@ onUnmounted(() => {
                     <!-- Quick Presets -->
                     <div>
                         <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Preset Desain Cepat</label>
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                            <button
+                                type="button"
+                                @click="applyPreset('blank')"
+                                class="p-2.5 rounded-xl border border-dashed border-white/20 bg-white/5 hover:bg-white/10 text-left transition-all cursor-pointer"
+                            >
+                                <div class="text-xs font-bold text-white">Lembar Kosong</div>
+                                <div class="text-[10px] text-slate-400">Draft baru / bersihkan</div>
+                            </button>
                             <button
                                 type="button"
                                 @click="applyPreset('kitchen_bar')"
@@ -5106,11 +7618,18 @@ onUnmounted(() => {
         >
             <div class="bg-slate-900 border border-white/20 rounded-2xl p-5 max-w-md w-full shadow-2xl">
                 <h3 class="text-sm font-bold text-white mb-2">
-                    Ubah {{ editingField.toUpperCase() }}
+                    {{
+                        editingField === 'viewTitle' ? 'Ubah Judul Gambar (Sub-Title View)' :
+                        editingField === 'viewNumber' ? 'Ubah Nomor Gambar' :
+                        editingField === 'scaleSingle' ? 'Ubah Skala Gambar' :
+                        editingField === 'name' ? 'Ubah Nama Desain Lemari' :
+                        `Ubah ${editingField.toUpperCase()}`
+                    }}
                 </h3>
                 <input
                     v-model="editValue"
                     type="text"
+                    autofocus
                     class="w-full bg-slate-950 border border-white/20 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-400 mb-4"
                     @keyup.enter="saveFieldEdit"
                 />
@@ -5357,6 +7876,55 @@ onUnmounted(() => {
                         </button>
                     </div>
 
+                    <!-- Pilihan Sudut Pandang (View Selector: Depan, Atas, Samping, Bawah) -->
+                    <div class="px-3 py-1.5 bg-black/60 border-b border-white/10 flex items-center justify-between gap-1.5 shrink-0">
+                        <span class="text-[10px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1">
+                            <span>Sudut Tampak:</span>
+                        </span>
+                        <div class="flex items-center gap-1 bg-white/5 p-0.5 rounded-lg border border-white/10">
+                            <button
+                                type="button"
+                                @click="accessoryActiveView = 'depan'"
+                                :class="accessoryActiveView === 'depan' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'text-slate-300 hover:text-white hover:bg-white/5'"
+                                class="px-2 py-0.5 rounded text-[10px] transition cursor-pointer flex items-center gap-1"
+                                title="Tampak Depan (Elevasi Depan)"
+                            >
+                                <span>👁️</span>
+                                <span>Depan</span>
+                            </button>
+                            <button
+                                type="button"
+                                @click="accessoryActiveView = 'atas'"
+                                :class="accessoryActiveView === 'atas' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'text-slate-300 hover:text-white hover:bg-white/5'"
+                                class="px-2 py-0.5 rounded text-[10px] transition cursor-pointer flex items-center gap-1"
+                                title="Tampak Atas (Plan / Denah Horizontal)"
+                            >
+                                <span>⬆️</span>
+                                <span>Atas</span>
+                            </button>
+                            <button
+                                type="button"
+                                @click="accessoryActiveView = 'samping'"
+                                :class="accessoryActiveView === 'samping' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'text-slate-300 hover:text-white hover:bg-white/5'"
+                                class="px-2 py-0.5 rounded text-[10px] transition cursor-pointer flex items-center gap-1"
+                                title="Tampak Samping (Potongan / Sisi)"
+                            >
+                                <span>➡️</span>
+                                <span>Samping</span>
+                            </button>
+                            <button
+                                type="button"
+                                @click="accessoryActiveView = 'bawah'"
+                                :class="accessoryActiveView === 'bawah' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'text-slate-300 hover:text-white hover:bg-white/5'"
+                                class="px-2 py-0.5 rounded text-[10px] transition cursor-pointer flex items-center gap-1"
+                                title="Tampak Bawah (Plafon / Kolong)"
+                            >
+                                <span>⬇️</span>
+                                <span>Bawah</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Search Input (Select2 Live Search) & Category Filter Pills -->
                     <div class="p-2.5 pb-2 border-b border-white/10 bg-black/40 shrink-0">
                         <div class="relative flex items-center">
@@ -5416,7 +7984,7 @@ onUnmounted(() => {
                             v-for="item in filteredAccessories"
                             :key="item.id"
                             type="button"
-                            @click="stampAccessory(item.id)"
+                            @click="stampAccessory(item.id, accessoryActiveView)"
                             class="w-full text-left p-2 rounded-xl hover:bg-amber-500/15 hover:border-amber-500/30 border border-transparent flex items-center gap-3 transition cursor-pointer group"
                         >
                             <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xl shrink-0 group-hover:scale-110 group-hover:bg-amber-500/20 transition">
@@ -5425,9 +7993,16 @@ onUnmounted(() => {
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center justify-between gap-1">
                                     <span class="font-bold text-white group-hover:text-amber-300 truncate text-xs">{{ item.name }}</span>
-                                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-slate-300 font-mono shrink-0">{{ item.defaultWmm }}×{{ item.defaultHmm }} mm</span>
+                                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-slate-300 font-mono shrink-0">
+                                        {{ getAccessoryBaseSize(item.id, accessoryActiveView).w * 10 }}×{{ getAccessoryBaseSize(item.id, accessoryActiveView).h * 10 }} mm
+                                    </span>
                                 </div>
-                                <div class="text-[10px] text-slate-400 truncate mt-0.5">{{ item.desc }}</div>
+                                <div class="text-[10px] text-slate-400 truncate mt-0.5 flex items-center gap-1.5">
+                                    <span class="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold uppercase font-mono">
+                                        {{ accessoryActiveView }}
+                                    </span>
+                                    <span class="truncate">{{ item.desc }}</span>
+                                </div>
                             </div>
                         </button>
                     </div>
@@ -5819,5 +8394,15 @@ onUnmounted(() => {
 svg {
     shape-rendering: geometricPrecision;
     text-rendering: geometricPrecision;
+}
+
+@media print {
+    nav,
+    header,
+    aside,
+    button,
+    .no-print {
+        display: none !important;
+    }
 }
 </style>

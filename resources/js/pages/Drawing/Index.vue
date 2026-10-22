@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { toast } from 'vue-sonner';
 import UnifiedLayout from '@/layouts/UnifiedLayout.vue';
 import KeyPlanCanvas from '@/components/drawing/KeyPlanCanvas.vue';
 import {
@@ -275,10 +276,13 @@ const submitCreate = () => {
         return;
     }
 
+    const createdTitle = form.title;
     form.post('/drawings', {
+        preserveScroll: true,
         onSuccess: () => {
             showCreateModal.value = false;
             form.reset();
+            toast.success(`Lembar kerja 2D "${createdTitle || 'Baru'}" berhasil dibuat!`);
         },
     });
 };
@@ -498,7 +502,7 @@ const getTypeColor = (type: string) => {
                     </div>
 
                     <!-- Grid Lembar Kerja di Bawah Proyek Ini -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 sm:gap-6">
                         <div
                             v-for="sheet in grp.sheets"
                             :key="sheet.id"
@@ -506,10 +510,12 @@ const getTypeColor = (type: string) => {
                         >
                             <!-- Mini KeyPlan Canvas Preview -->
                             <div class="h-44 bg-slate-100 dark:bg-[#0a0b10] border-b border-slate-200 dark:border-white/5 p-2 flex flex-col justify-between relative overflow-hidden">
+                                <div class="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/50 via-black/20 to-transparent pointer-events-none z-10"></div>
                                 <div class="w-full h-full relative flex items-center justify-center">
                                     <KeyPlanCanvas
                                         v-if="sheet.elements && sheet.elements.length > 0"
                                         :elements="sheet.elements"
+                                        :show-footer="false"
                                         width="100%"
                                         height="100%"
                                         className="w-full h-full border-none shadow-none bg-transparent"
@@ -519,20 +525,20 @@ const getTypeColor = (type: string) => {
                                         <span>Belum ada gambar</span>
                                     </div>
                                 </div>
-                                <div class="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none z-10">
-                                    <span :class="['px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-sm shadow-sm', getTypeColor(sheet.type)]">
+                                <div class="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-20">
+                                    <span :class="['px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-md shadow-sm', getTypeColor(sheet.type)]">
                                         {{ getTypeLabel(sheet.type) }}
                                     </span>
-                                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900/80 text-white backdrop-blur-sm shadow-sm">
+                                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900/90 text-white border border-white/10 backdrop-blur-md shadow-sm">
                                         {{ sheet.scale }} • {{ sheet.paper_size }}
                                     </span>
                                 </div>
                             </div>
 
                             <!-- Card Body -->
-                            <div class="p-5 flex-1 flex flex-col justify-between space-y-3">
+                            <div class="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-3">
                                 <div>
-                                    <h3 class="font-bold text-slate-900 dark:text-white text-base group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+                                    <h3 class="font-bold text-slate-900 dark:text-white text-sm sm:text-base line-clamp-2 min-h-[2.5rem] group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors leading-snug" :title="sheet.title">
                                         {{ sheet.title }}
                                     </h3>
                                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
@@ -557,107 +563,109 @@ const getTypeColor = (type: string) => {
 
                                 <!-- Connected 3D Visual Thumbnails & Action -->
                                 <div class="pt-2">
-                                    <div class="flex items-center justify-between text-xs mb-1.5">
-                                        <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                            <Camera class="w-3.5 h-3.5 text-amber-500" />
-                                            <span>Visual 3D Terhubung</span>
-                                            <span class="font-mono text-[10px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold">
-                                                {{ (sheet.captures || []).length }}
+                                    <template v-if="sheet.captures && sheet.captures.length > 0">
+                                        <div class="flex items-center justify-between text-xs mb-1.5">
+                                            <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                                <Camera class="w-3.5 h-3.5 text-amber-500" />
+                                                <span>Visual 3D</span>
+                                                <span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold">
+                                                    {{ sheet.captures.length }}
+                                                </span>
                                             </span>
-                                        </span>
-                                        <button
-                                            type="button"
-                                            @click="openLinkCapturesModal(sheet)"
-                                            class="text-[10px] text-violet-600 dark:text-violet-400 hover:underline font-semibold cursor-pointer"
-                                        >
-                                            + Hubungkan 3D
-                                        </button>
-                                    </div>
-
-                                    <!-- Thumbnail bar -->
-                                    <div v-if="sheet.captures && sheet.captures.length > 0" class="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
-                                        <div
-                                            v-for="cap in sheet.captures.slice(0, 4)"
-                                            :key="cap.id"
-                                            class="relative group/thumb shrink-0 rounded-lg overflow-hidden border border-amber-500/30 bg-black/40 w-14 h-10 cursor-pointer"
-                                            :title="`${cap.code ? '[' + cap.code + '] ' : ''}${cap.room_name}`"
-                                            @click="openLinkCapturesModal(sheet)"
-                                        >
-                                            <img
-                                                :src="cap.ai_rendered_url || cap.url"
-                                                :alt="cap.room_name"
-                                                class="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
-                                            />
-                                            <span v-if="cap.code" class="absolute bottom-0 left-0 right-0 bg-black/75 text-[8px] font-mono font-bold text-amber-300 text-center truncate px-0.5">
-                                                {{ cap.code }}
-                                            </span>
+                                            <button
+                                                type="button"
+                                                @click="openLinkCapturesModal(sheet)"
+                                                class="text-[10px] text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 font-semibold cursor-pointer"
+                                            >
+                                                + Kelola
+                                            </button>
                                         </div>
+
+                                        <!-- Thumbnail bar -->
+                                        <div class="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
+                                            <div
+                                                v-for="cap in sheet.captures.slice(0, 4)"
+                                                :key="cap.id"
+                                                class="relative group/thumb shrink-0 rounded-lg overflow-hidden border border-amber-500/30 bg-black/40 w-14 h-10 cursor-pointer"
+                                                :title="`${cap.code ? '[' + cap.code + '] ' : ''}${cap.room_name}`"
+                                                @click="openLinkCapturesModal(sheet)"
+                                            >
+                                                <img
+                                                    :src="cap.ai_rendered_url || cap.url"
+                                                    :alt="cap.room_name"
+                                                    class="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
+                                                />
+                                                <span v-if="cap.code" class="absolute bottom-0 left-0 right-0 bg-black/75 text-[8px] font-mono font-bold text-amber-300 text-center truncate px-0.5">
+                                                    {{ cap.code }}
+                                                </span>
+                                            </div>
+                                            <button
+                                                v-if="sheet.captures.length > 4"
+                                                type="button"
+                                                @click="openLinkCapturesModal(sheet)"
+                                                class="w-8 h-10 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center text-[10px] font-bold text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                                            >
+                                                +{{ sheet.captures.length - 4 }}
+                                            </button>
+                                        </div>
+                                    </template>
+                                    <template v-else>
                                         <button
-                                            v-if="sheet.captures.length > 4"
                                             type="button"
                                             @click="openLinkCapturesModal(sheet)"
-                                            class="w-8 h-10 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center text-[10px] font-bold text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                                            class="w-full py-2 px-3 rounded-xl border border-dashed border-slate-200 dark:border-white/10 hover:border-violet-500/40 bg-slate-50/50 dark:bg-white/[0.02] hover:bg-violet-500/5 text-slate-500 dark:text-slate-400 text-xs flex items-center justify-center gap-1.5 transition-all group/btn cursor-pointer"
                                         >
-                                            +{{ sheet.captures.length - 4 }}
+                                            <Camera class="w-3.5 h-3.5 text-slate-400 group-hover/btn:text-violet-500 transition-colors" />
+                                            <span class="text-[11px] font-medium">+ Tautkan Visual 3D</span>
                                         </button>
-                                    </div>
-                                    <div v-else class="text-[11px] text-slate-400 italic py-1 flex items-center justify-between">
-                                        <span>Belum ada visual 3D yang ditautkan</span>
-                                        <button
-                                            type="button"
-                                            @click="openLinkCapturesModal(sheet)"
-                                            class="text-[10px] px-2 py-0.5 rounded bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-300 border border-violet-500/20 font-medium cursor-pointer"
-                                        >
-                                            + Pilih Gambar
-                                        </button>
-                                    </div>
+                                    </template>
                                 </div>
 
                                 <!-- Action Bar -->
-                                <div class="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-2">
+                                <div class="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-1.5 flex-wrap">
                                     <Link
                                         :href="`/drawings/${sheet.id}`"
-                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors whitespace-nowrap shrink-0"
                                     >
-                                        <Sparkles class="w-3.5 h-3.5 text-amber-500" />
+                                        <Sparkles class="w-3.5 h-3.5 text-amber-500 shrink-0" />
                                         <span>Gambar Kerja</span>
                                     </Link>
 
-                                    <div class="flex items-center gap-1">
-                                        <button
-                                            type="button"
-                                            @click="openEditSheetModal(sheet)"
-                                            title="Pengaturan Lembar Kerja (Judul, Kategori, Unit, Skala)"
-                                            class="p-2 rounded-xl text-slate-400 hover:text-violet-600 dark:hover:text-violet-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                                        >
-                                            <Settings class="w-4 h-4" />
-                                        </button>
+                                    <div class="flex items-center gap-1 shrink-0">
                                         <Link
                                             :href="`/projects/${sheet.project_id}/booklet?sheet_id=${sheet.id}`"
                                             title="Lihat Lembar Kerja & Booklet PDF"
-                                            class="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-colors flex items-center gap-1"
+                                            class="w-8 h-8 rounded-xl text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-colors flex items-center justify-center cursor-pointer"
                                         >
                                             <BookOpen class="w-3.5 h-3.5" />
-                                            <span>Booklet</span>
                                         </Link>
                                         <Link
                                             :href="`/projects/${sheet.project_id}/viewer?sheet_id=${sheet.id}`"
-                                            title="Buka Model 3D di Viewer (Fokus ke Lembar Ini)"
-                                            class="p-2 rounded-xl text-slate-500 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                                            title="Buka Model 3D di Viewer"
+                                            class="w-8 h-8 rounded-xl text-slate-500 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors flex items-center justify-center"
                                         >
                                             <Box class="w-4 h-4" />
                                         </Link>
                                         <a
                                             :href="`/drawings/${sheet.id}/export-dxf`"
                                             title="Unduh AutoCAD DXF"
-                                            class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                                            class="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors flex items-center justify-center"
                                         >
                                             <Download class="w-4 h-4" />
                                         </a>
                                         <button
+                                            type="button"
+                                            @click="openEditSheetModal(sheet)"
+                                            title="Pengaturan Lembar Kerja"
+                                            class="w-8 h-8 rounded-xl text-slate-400 hover:text-violet-600 dark:hover:text-violet-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors flex items-center justify-center cursor-pointer"
+                                        >
+                                            <Settings class="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            type="button"
                                             @click="deleteSheet(sheet)"
                                             title="Hapus Lembar Kerja"
-                                            class="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
+                                            class="w-8 h-8 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex items-center justify-center cursor-pointer"
                                         >
                                             <Trash2 class="w-4 h-4" />
                                         </button>
@@ -670,36 +678,38 @@ const getTypeColor = (type: string) => {
             </div>
 
             <!-- TAMPILAN 2: GRID REGULER (DENGAN BANNER PROYEK JELAS) -->
-            <div v-else-if="filteredSheets.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div v-else-if="filteredSheets.length > 0" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 sm:gap-6">
                 <div
                     v-for="sheet in filteredSheets"
                     :key="sheet.id"
                     class="group relative bg-white dark:bg-[#12131a] rounded-2xl border border-slate-200 dark:border-white/5 overflow-hidden shadow-sm hover:border-violet-500/40 hover:shadow-lg transition-all flex flex-col justify-between"
                 >
-                    <!-- Header Banner: Nama Proyek & Klien (Teks Penuh, Tidak Dipotong/Truncate) -->
+                    <!-- Header Banner: Nama Proyek & Klien -->
                     <div class="px-3.5 py-2.5 bg-slate-900 border-b border-slate-800 text-white flex flex-col gap-1 text-xs">
-                        <div class="flex items-start justify-between gap-2">
+                        <div class="flex items-center justify-between gap-2">
                             <div class="flex items-center gap-2 min-w-0 flex-1">
-                                <span class="w-2 h-2 rounded-full bg-orange-500 shrink-0 mt-0.5"></span>
-                                <span class="font-bold text-slate-100 break-words leading-tight" :title="sheet.project?.title">
+                                <span class="w-2 h-2 rounded-full bg-orange-500 shrink-0"></span>
+                                <span class="font-bold text-slate-100 truncate text-xs leading-tight" :title="sheet.project?.title">
                                     {{ sheet.project?.title || 'Proyek Tanpa Judul' }}
                                 </span>
                             </div>
-                            <span v-if="sheet.project?.client_name" class="text-[10px] text-orange-400 font-mono font-medium shrink-0 ml-auto flex items-center gap-1 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20" :title="sheet.project.client_name">
-                                👤 <span class="break-words">{{ sheet.project.client_name }}</span>
+                            <span v-if="sheet.project?.client_name" class="text-[10px] text-orange-400 font-mono font-medium shrink-0 ml-auto flex items-center gap-1 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20 max-w-[130px] truncate" :title="sheet.project.client_name">
+                                👤 <span class="truncate">{{ sheet.project.client_name }}</span>
                             </span>
                         </div>
-                        <p v-if="sheet.project?.client_address" class="text-[10px] text-slate-400 pl-4 break-words">
+                        <p v-if="sheet.project?.client_address" class="text-[10px] text-slate-400 pl-4 truncate">
                             📍 {{ sheet.project.client_address }}
                         </p>
                     </div>
 
                     <!-- Preview Canvas Area (Live KeyPlan Canvas) -->
                     <div class="h-44 bg-slate-100 dark:bg-[#0a0b10] border-b border-slate-200 dark:border-white/5 p-2 flex flex-col justify-between relative overflow-hidden">
+                        <div class="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/50 via-black/20 to-transparent pointer-events-none z-10"></div>
                         <div class="w-full h-full relative flex items-center justify-center">
                             <KeyPlanCanvas
                                 v-if="sheet.elements && sheet.elements.length > 0"
                                 :elements="sheet.elements"
+                                :show-footer="false"
                                 width="100%"
                                 height="100%"
                                 className="w-full h-full border-none shadow-none bg-transparent"
@@ -711,20 +721,20 @@ const getTypeColor = (type: string) => {
                         </div>
 
                         <!-- Floating Top Badges -->
-                        <div class="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none z-10">
-                            <span :class="['px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-sm shadow-sm', getTypeColor(sheet.type)]">
+                        <div class="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-20">
+                            <span :class="['px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-md shadow-sm', getTypeColor(sheet.type)]">
                                 {{ getTypeLabel(sheet.type) }}
                             </span>
-                            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900/80 text-white backdrop-blur-sm shadow-sm">
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900/90 text-white border border-white/10 backdrop-blur-md shadow-sm">
                                 {{ sheet.scale }} • {{ sheet.paper_size }}
                             </span>
                         </div>
                     </div>
 
                     <!-- Card Body -->
-                    <div class="p-5 flex-1 flex flex-col justify-between space-y-3">
+                    <div class="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-3">
                         <div>
-                            <h3 class="font-bold text-slate-900 dark:text-white text-base group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+                            <h3 class="font-bold text-slate-900 dark:text-white text-sm sm:text-base line-clamp-2 min-h-[2.5rem] group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors leading-snug" :title="sheet.title">
                                 {{ sheet.title }}
                             </h3>
                             <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
@@ -749,108 +759,111 @@ const getTypeColor = (type: string) => {
 
                         <!-- Connected 3D Visual Thumbnails & Action -->
                         <div class="pt-2">
-                            <div class="flex items-center justify-between text-xs mb-1.5">
-                                <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                    <Camera class="w-3.5 h-3.5 text-amber-500" />
-                                    <span>Visual 3D Terhubung</span>
-                                    <span class="font-mono text-[10px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold">
-                                        {{ (sheet.captures || []).length }}
+                            <template v-if="sheet.captures && sheet.captures.length > 0">
+                                <div class="flex items-center justify-between text-xs mb-1.5">
+                                    <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                        <Camera class="w-3.5 h-3.5 text-amber-500" />
+                                        <span>Visual 3D</span>
+                                        <span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold">
+                                            {{ sheet.captures.length }}
+                                        </span>
                                     </span>
-                                </span>
-                                <button
-                                    type="button"
-                                    @click="openLinkCapturesModal(sheet)"
-                                    class="text-[10px] text-violet-600 dark:text-violet-400 hover:underline font-semibold cursor-pointer"
-                                >
-                                    + Hubungkan 3D
-                                </button>
-                            </div>
-
-                            <!-- Thumbnail bar -->
-                            <div v-if="sheet.captures && sheet.captures.length > 0" class="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
-                                <div
-                                    v-for="cap in sheet.captures.slice(0, 4)"
-                                    :key="cap.id"
-                                    class="relative group/thumb shrink-0 rounded-lg overflow-hidden border border-amber-500/30 bg-black/40 w-14 h-10 cursor-pointer"
-                                    :title="`${cap.code ? '[' + cap.code + '] ' : ''}${cap.room_name}`"
-                                    @click="openLinkCapturesModal(sheet)"
-                                >
-                                    <img
-                                        :src="cap.ai_rendered_url || cap.url"
-                                        :alt="cap.room_name"
-                                        class="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
-                                    />
-                                    <span v-if="cap.code" class="absolute bottom-0 left-0 right-0 bg-black/75 text-[8px] font-mono font-bold text-amber-300 text-center truncate px-0.5">
-                                        {{ cap.code }}
-                                    </span>
+                                    <button
+                                        type="button"
+                                        @click="openLinkCapturesModal(sheet)"
+                                        class="text-[10px] text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 font-semibold cursor-pointer"
+                                    >
+                                        + Kelola
+                                    </button>
                                 </div>
+
+                                <!-- Thumbnail bar -->
+                                <div class="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
+                                    <div
+                                        v-for="cap in sheet.captures.slice(0, 4)"
+                                        :key="cap.id"
+                                        class="relative group/thumb shrink-0 rounded-lg overflow-hidden border border-amber-500/30 bg-black/40 w-14 h-10 cursor-pointer"
+                                        :title="`${cap.code ? '[' + cap.code + '] ' : ''}${cap.room_name}`"
+                                        @click="openLinkCapturesModal(sheet)"
+                                    >
+                                        <img
+                                            :src="cap.ai_rendered_url || cap.url"
+                                            :alt="cap.room_name"
+                                            class="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
+                                        />
+                                        <span v-if="cap.code" class="absolute bottom-0 left-0 right-0 bg-black/75 text-[8px] font-mono font-bold text-amber-300 text-center truncate px-0.5">
+                                            {{ cap.code }}
+                                        </span>
+                                    </div>
+                                    <button
+                                        v-if="sheet.captures.length > 4"
+                                        type="button"
+                                        @click="openLinkCapturesModal(sheet)"
+                                        class="w-8 h-10 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center text-[10px] font-bold text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                                    >
+                                        +{{ sheet.captures.length - 4 }}
+                                    </button>
+                                </div>
+                            </template>
+                            <template v-else>
                                 <button
-                                    v-if="sheet.captures.length > 4"
                                     type="button"
                                     @click="openLinkCapturesModal(sheet)"
-                                    class="w-8 h-10 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center text-[10px] font-bold text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                                    class="w-full py-2 px-3 rounded-xl border border-dashed border-slate-200 dark:border-white/10 hover:border-violet-500/40 bg-slate-50/50 dark:bg-white/[0.02] hover:bg-violet-500/5 text-slate-500 dark:text-slate-400 text-xs flex items-center justify-center gap-1.5 transition-all group/btn cursor-pointer"
                                 >
-                                    +{{ sheet.captures.length - 4 }}
+                                    <Camera class="w-3.5 h-3.5 text-slate-400 group-hover/btn:text-violet-500 transition-colors" />
+                                    <span class="text-[11px] font-medium">+ Tautkan Visual 3D</span>
                                 </button>
-                            </div>
-                            <div v-else class="text-[11px] text-slate-400 italic py-1 flex items-center justify-between">
-                                <span>Belum ada visual 3D yang ditautkan</span>
-                                <button
-                                    type="button"
-                                    @click="openLinkCapturesModal(sheet)"
-                                    class="text-[10px] px-2 py-0.5 rounded bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-300 border border-violet-500/20 font-medium cursor-pointer"
-                                >
-                                    + Pilih Gambar
-                                </button>
-                            </div>
+                            </template>
                         </div>
 
                         <!-- Action Bar -->
-                        <div class="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-2">
+                        <div class="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-1.5 flex-wrap">
                             <Link
                                 :href="`/drawings/${sheet.id}`"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors whitespace-nowrap shrink-0"
                             >
-                                <Sparkles class="w-3.5 h-3.5 text-amber-500" />
+                                <Sparkles class="w-3.5 h-3.5 text-amber-500 shrink-0" />
                                 <span>Gambar Kerja</span>
                             </Link>
 
-                            <div class="flex items-center gap-1">
-                                <button
-                                    type="button"
-                                    @click="openEditSheetModal(sheet)"
-                                    title="Pengaturan Lembar Kerja (Judul, Kategori, Unit, Skala)"
-                                    class="p-2 rounded-xl text-slate-400 hover:text-violet-600 dark:hover:text-violet-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                                >
-                                    <Settings class="w-4 h-4" />
-                                </button>
+                            <div class="flex items-center gap-1 shrink-0">
                                 <Link
                                     :href="`/projects/${sheet.project_id}/booklet?sheet_id=${sheet.id}`"
                                     title="Lihat Lembar Kerja & Booklet PDF"
-                                    class="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-colors flex items-center gap-1"
+                                    class="w-8 h-8 rounded-xl text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-colors flex items-center justify-center cursor-pointer"
                                 >
                                     <BookOpen class="w-3.5 h-3.5" />
-                                    <span>Booklet</span>
                                 </Link>
                                 <Link
                                     :href="`/projects/${sheet.project_id}/viewer?sheet_id=${sheet.id}`"
-                                    title="Buka Model 3D di Viewer (Fokus ke Lembar Ini)"
-                                    class="p-2 rounded-xl text-slate-500 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                                    title="Buka Model 3D di Viewer"
+                                    class="w-8 h-8 rounded-xl text-slate-500 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors flex items-center justify-center"
                                 >
                                     <Box class="w-4 h-4" />
                                 </Link>
                                 <a
                                     :href="`/drawings/${sheet.id}/export-dxf`"
                                     title="Unduh AutoCAD DXF"
-                                    class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                                    class="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors flex items-center justify-center"
                                 >
                                     <Download class="w-4 h-4" />
                                 </a>
                                 <button
+                                    type="button"
+                                    @click="openEditSheetModal(sheet)"
+                                    title="Pengaturan Lembar Kerja"
+                                    class="w-8 h-8 rounded-xl text-slate-400 hover:text-violet-600 dark:hover:text-violet-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors flex items-center justify-center cursor-pointer"
+                                >
+                                    <Settings class="w-4 h-4" />
+                                </button>
+                                <button
+                                    type="button"
                                     @click="deleteSheet(sheet)"
                                     title="Hapus Lembar Kerja"
-                                    class="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
+                                    class="w-8 h-8 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex items-center justify-center cursor-pointer"
                                 >
+                                    <Trash2 class="w-4 h-4" />
                                 </button>
                             </div>
                         </div>

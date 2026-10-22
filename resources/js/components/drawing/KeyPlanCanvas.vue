@@ -37,6 +37,7 @@ const props = withDefaults(
         width?: number | string;
         height?: number | string;
         className?: string;
+        showFooter?: boolean;
     }>(),
     {
         elements: () => [],
@@ -46,6 +47,7 @@ const props = withDefaults(
         width: 320,
         height: 220,
         className: '',
+        showFooter: true,
     }
 );
 
@@ -689,7 +691,7 @@ function getRoomSubtitle(text: string): string {
         </div>
 
         <!-- Footer Coordinates / Scale -->
-        <div class="px-2 py-0.5 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-[9px] text-slate-500 font-mono">
+        <div v-if="showFooter" class="px-2 py-0.5 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-[9px] text-slate-500 font-mono">
             <span>N ↑ UTARA</span>
             <span>SKALA 1:100 • SATUAN METER (m)</span>
         </div>
