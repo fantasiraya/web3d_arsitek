@@ -20,11 +20,15 @@ class DrawingSheet extends Model
     public const TYPE_PLAN = 'plan';
     public const TYPE_ELEVATION = 'elevation';
     public const TYPE_SECTION = 'section';
+    public const TYPE_SHOP_DRAWING = 'shop_drawing';
+    public const TYPE_FURNITURE = 'furniture';
 
     public const TYPES = [
         self::TYPE_PLAN,
         self::TYPE_ELEVATION,
         self::TYPE_SECTION,
+        self::TYPE_SHOP_DRAWING,
+        self::TYPE_FURNITURE,
     ];
 
     protected $table = 'drawing_sheets';

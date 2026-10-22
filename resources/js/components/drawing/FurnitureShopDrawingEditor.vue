@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { Link } from '@inertiajs/vue3';
 import {
     MousePointer,
     Type,
@@ -96,6 +97,17 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'switchMode', mode: 'cad' | 'shop_drawing'): void;
 }>();
+
+const isShopDrawingUrl = typeof window !== 'undefined' && window.location.pathname.startsWith('/shop-drawings');
+const isShopDrawingSheet = computed(() => {
+    return isShopDrawingUrl ||
+           props.sheet?.type === 'shop_drawing' ||
+           props.sheet?.type === 'furniture' ||
+           props.sheet?.id === '01a16100-3421-70f5-ac75-f9db46e8c46f' ||
+           props.sheet?.id === '01a16271-478e-7125-be23-9f8a9ceb8f69';
+});
+const backUrl = computed(() => isShopDrawingSheet.value ? '/shop-drawings' : '/drawings');
+const backTitle = computed(() => isShopDrawingSheet.value ? 'Kembali ke Gambar Kerja' : 'Kembali ke Denah CAD');
 
 // ── SHEET TABS & NAVIGATION ──────────────────────────────────────────────────
 // 01 = Lemari (Shop Drawing) | 02 = Lemari · daftar potong (Cut List)
@@ -216,7 +228,9 @@ const cabinet = ref({
     category: isDemoSheet ? 'Living Room & Interior TV Console' : 'Gambar Kerja',
     furnitureType: (isDemoSheet || hasSavedData) ? ('credenza_tv' as 'credenza_tv' | 'kitchen_bar' | 'wardrobe_3door' | 'blank') : ('blank' as 'credenza_tv' | 'kitchen_bar' | 'wardrobe_3door' | 'blank'),
     titleBlockPosition: 'side' as 'side' | 'top' | 'bottom',
-    projectName: props.project?.title || 'Renovasi & Interior SEMANGKOKae',
+    projectName: props.project?.title || (isDemoSheet ? 'Renovasi & Interior SEMANGKOKae' : (props.sheet?.title || 'Proyek Desain 3D')),
+    clientName: props.project?.client_name || '',
+    clientAddress: props.project?.client_address || '',
     viewTitle: 'TAMPAK DEPAN',
     viewNumber: '1',
     viewTitleOffsetX: 0,
@@ -2695,6 +2709,7 @@ async function saveToDatabase() {
 
         if (res.ok) {
             toast.success('Desain Gambar Kerja & Daftar Potong berhasil disimpan ke server!');
+            captureShopDrawingThumbnail();
         } else {
             toast.success('Perubahan disimpan secara lokal.');
         }
@@ -2703,6 +2718,48 @@ async function saveToDatabase() {
     } finally {
         isSaving.value = false;
     }
+}
+
+function captureShopDrawingThumbnail() {
+    try {
+        const svgEl = document.getElementById('shop-drawing-svg') as SVGSVGElement | null;
+        if (!svgEl) return;
+
+        let svgXml = new XMLSerializer().serializeToString(svgEl);
+        if (!svgXml.includes('xmlns="http://www.w3.org/2000/svg"')) {
+            svgXml = svgXml.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+        }
+        const svgBlob = new Blob([svgXml], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        const img = new Image();
+        img.onload = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                const w = 800;
+                const h = Math.round(800 * ((paperH.value || 841) / (paperW.value || 1189))) || 560;
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    const uploadUrl = isShopDrawingUrl ? `/shop-drawings/${props.sheet.id}/image` : `/drawings/${props.sheet.id}/image`;
+                    fetch(uploadUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+                        },
+                        body: JSON.stringify({ image: dataUrl }),
+                    }).catch(() => {});
+                }
+                URL.revokeObjectURL(url);
+            } catch {}
+        };
+        img.src = url;
+    } catch {}
 }
 
 async function exportPdf() {
@@ -2925,6 +2982,10 @@ onMounted(() => {
         checkToolsScroll();
         checkHeaderScroll();
     }, 250);
+    // Auto-capture snapshot di latar belakang
+    setTimeout(() => {
+        captureShopDrawingThumbnail();
+    }, 1200);
 });
 
 onUnmounted(() => {
@@ -2974,14 +3035,13 @@ onUnmounted(() => {
                 >
                     <!-- Left: Logo & Project Title -->
                     <div class="flex items-center gap-2 min-w-0 shrink-0">
-                        <button
-                            type="button"
-                            @click="emit('switchMode', 'cad')"
+                        <Link
+                            :href="backUrl"
                             class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
-                            title="Beralih ke CAD Denah Tradisional"
+                            :title="backTitle"
                         >
                             <ArrowLeft class="w-4 h-4" />
-                        </button>
+                        </Link>
 
                         <div class="flex items-center gap-1.5 min-w-0">
                             <span class="text-sm sm:text-base font-bold text-white tracking-wide truncate">
@@ -3020,15 +3080,7 @@ onUnmounted(() => {
                             <span>Panduan Cara Pakai</span>
                         </button>
 
-                        <!-- Switcher CAD -->
-                        <button
-                            type="button"
-                            @click="emit('switchMode', 'cad')"
-                            class="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
-                        >
-                            <Box class="w-3.5 h-3.5" />
-                            <span>CAD Denah</span>
-                        </button>
+
                     </div>
 
                     <!-- Right Actions: Simpan, PDF, PNG, Toggle Panel -->
@@ -5908,11 +5960,12 @@ onUnmounted(() => {
                                 <line x1="940" y1="135" x2="1175" y2="135" stroke="#000" stroke-width="0.8" />
 
                                 <!-- 3. Proyek & Arsitek -->
-                                <g transform="translate(950, 150)">
+                                <g transform="translate(950, 148)">
                                     <text x="0" y="0" font-size="7" font-weight="bold" fill="#666">PROYEK :</text>
-                                    <text x="0" y="14" font-size="9.5" font-weight="bold" fill="#000" class="truncate max-w-[215px]">{{ cabinet.projectName }}</text>
-                                    <text x="0" y="28" font-size="7" fill="#666">STATUS :</text>
-                                    <text x="45" y="28" font-size="7.5" font-weight="bold" fill="#16a34a">DISETUJUI PRODUKSI</text>
+                                    <text x="0" y="13" font-size="9" font-weight="bold" fill="#000" class="truncate max-w-[215px]">{{ cabinet.projectName }}</text>
+                                    <text v-if="cabinet.clientName" x="0" y="24" font-size="7" fill="#444" class="truncate max-w-[215px]">KLIEN : {{ cabinet.clientName }}</text>
+                                    <text :x="0" :y="cabinet.clientName ? 35 : 26" font-size="6.5" fill="#666">STATUS :</text>
+                                    <text :x="42" :y="cabinet.clientName ? 35 : 26" font-size="7" font-weight="bold" fill="#16a34a">DISETUJUI PRODUKSI</text>
                                 </g>
                                 <line x1="940" y1="190" x2="1175" y2="190" stroke="#000" stroke-width="0.8" />
 

@@ -58,12 +58,14 @@ interface DrawingSheetItem {
     project_id: string;
     user_id: string;
     title: string;
-    type: 'plan' | 'elevation' | 'section';
+    type: string;
     scale: string;
     paper_size: string;
     orientation: string;
     grid_spacing: number;
     unit: string;
+    image_path?: string | null;
+    image_url?: string | null;
     sort_order: number;
     captures_count?: number;
     captures?: ProjectCaptureItem[];
@@ -91,6 +93,40 @@ const props = defineProps<{
     selectedProjectId?: string | null;
     hasAccess: boolean;
 }>();
+
+// Mode tampilan preview per kartu (apakah mode 'vector' atau 'snapshot')
+const cardViewModes = ref<Record<string, 'snapshot' | 'vector'>>({});
+
+function toggleCardViewMode(sheetId: string) {
+    if (cardViewModes.value[sheetId] === 'vector') {
+        cardViewModes.value[sheetId] = 'snapshot';
+    } else {
+        cardViewModes.value[sheetId] = 'vector';
+    }
+}
+
+function isVectorMode(sheetId: string): boolean {
+    return cardViewModes.value[sheetId] === 'vector';
+}
+
+function getSheetSnapshot(sheet: DrawingSheetItem): string | null {
+    // Hanya tampilkan snapshot kanvas lembar kerja 2D yang tersimpan (bukan visual 3D project)
+    if (sheet.image_url && sheet.image_url.trim()) {
+        return sheet.image_url;
+    }
+    if (sheet.image_path && sheet.image_path.trim()) {
+        const p = sheet.image_path.trim();
+        return p.startsWith('http') ? p : `/storage/${p.replace(/^\//, '')}`;
+    }
+    return null;
+}
+
+function getSnapshotBadge(sheet: DrawingSheetItem): { label: string; icon: any; color: string } | null {
+    if (sheet.image_url || sheet.image_path) {
+        return { label: 'Snapshot CAD 2D', icon: Camera, color: 'bg-violet-600/90 text-white shadow-violet-600/30' };
+    }
+    return null;
+}
 
 // Modal Buat Lembar Kerja Baru
 const showCreateModal = ref(false);
@@ -320,7 +356,7 @@ const getTypeColor = (type: string) => {
 </script>
 
 <template>
-    <Head title="Lembar Kerja 2D (Drawing CAD)" />
+    <Head title="Denah CAD 2D — Lembar Kerja Arsitektur" />
 
     <div class="min-h-screen bg-slate-50 dark:bg-[#090a0f] text-slate-800 dark:text-slate-100 py-8 px-4 sm:px-6 lg:px-8">
         <div class="max-w-7xl mx-auto space-y-8">
@@ -333,13 +369,13 @@ const getTypeColor = (type: string) => {
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
-                                <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Lembar Kerja 2D</h1>
+                                <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Denah CAD 2D</h1>
                                 <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-violet-100 dark:bg-violet-400/15 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-400/30">
                                     ENTERPRISE CAD
                                 </span>
                             </div>
                             <p class="text-sm text-slate-500 dark:text-slate-400">
-                                Gambar teknik denah, tampak, dan potongan 2D terintegrasi dengan ekspor AutoCAD (.DXF) & vektor (.SVG).
+                                Gambar teknik denah arsitektur, tampak, dan potongan 2D terintegrasi dengan ekspor AutoCAD (.DXF) &amp; vektor (.SVG).
                             </p>
                         </div>
                     </div>
@@ -508,23 +544,81 @@ const getTypeColor = (type: string) => {
                             :key="sheet.id"
                             class="group relative bg-white dark:bg-[#12131a] rounded-2xl border border-slate-200 dark:border-white/5 overflow-hidden shadow-sm hover:border-violet-500/40 hover:shadow-lg transition-all flex flex-col justify-between"
                         >
-                            <!-- Mini KeyPlan Canvas Preview -->
-                            <div class="h-44 bg-slate-100 dark:bg-[#0a0b10] border-b border-slate-200 dark:border-white/5 p-2 flex flex-col justify-between relative overflow-hidden">
-                                <div class="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/50 via-black/20 to-transparent pointer-events-none z-10"></div>
-                                <div class="w-full h-full relative flex items-center justify-center">
-                                    <KeyPlanCanvas
-                                        v-if="sheet.elements && sheet.elements.length > 0"
-                                        :elements="sheet.elements"
-                                        :show-footer="false"
-                                        width="100%"
-                                        height="100%"
-                                        className="w-full h-full border-none shadow-none bg-transparent"
-                                    />
-                                    <div v-else class="w-32 h-20 rounded border border-dashed border-violet-400/40 flex flex-col items-center justify-center bg-violet-500/5 text-slate-400 text-xs">
-                                        <DraftingCompass class="w-6 h-6 text-violet-400/60 mb-1" />
-                                        <span>Belum ada gambar</span>
+                            <!-- Mini KeyPlan Canvas Preview / Snapshot Thumbnail -->
+                            <div class="h-48 bg-slate-100 dark:bg-[#0a0b10] border-b border-slate-200 dark:border-white/5 flex flex-col justify-between relative overflow-hidden group/thumb">
+                                <!-- Background Image Snapshot jika tersedia dan bukan vector mode -->
+                                <template v-if="getSheetSnapshot(sheet) && !isVectorMode(sheet.id)">
+                                    <div class="w-full h-full relative overflow-hidden bg-slate-950">
+                                        <img
+                                            :src="getSheetSnapshot(sheet)!"
+                                            :alt="sheet.title"
+                                            class="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform duration-500 ease-out"
+                                            loading="lazy"
+                                        />
+                                        <!-- Gradient overlay -->
+                                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/40 pointer-events-none"></div>
+
+                                        <!-- Badge Sumber Snapshot -->
+                                        <div v-if="getSnapshotBadge(sheet)" class="absolute bottom-2.5 left-2.5 z-20">
+                                            <span :class="['px-2 py-0.5 rounded-md text-[10px] font-semibold backdrop-blur-md shadow-md flex items-center gap-1', getSnapshotBadge(sheet)!.color]">
+                                                <component :is="getSnapshotBadge(sheet)!.icon" class="w-3 h-3" />
+                                                <span>{{ getSnapshotBadge(sheet)!.label }}</span>
+                                            </span>
+                                        </div>
+
+                                        <!-- Toggle to Vector if sheet has elements -->
+                                        <div v-if="sheet.elements && sheet.elements.length > 0" class="absolute bottom-2.5 right-2.5 z-20">
+                                            <button
+                                                type="button"
+                                                @click.stop.prevent="toggleCardViewMode(sheet.id)"
+                                                class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-900/85 hover:bg-slate-900 text-slate-200 border border-white/20 backdrop-blur-md shadow transition-all cursor-pointer flex items-center gap-1"
+                                                title="Lihat Gambar Denah Vektor"
+                                            >
+                                                <DraftingCompass class="w-3 h-3 text-violet-400" />
+                                                <span>Denah 2D</span>
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
+                                </template>
+
+                                <!-- Vector KeyPlan Canvas jika mode vector atau tidak ada snapshot -->
+                                <template v-else-if="sheet.elements && sheet.elements.length > 0">
+                                    <div class="w-full h-full relative flex items-center justify-center p-2">
+                                        <KeyPlanCanvas
+                                            :elements="sheet.elements"
+                                            :show-footer="false"
+                                            width="100%"
+                                            height="100%"
+                                            className="w-full h-full border-none shadow-none bg-transparent"
+                                        />
+
+                                        <!-- Toggle back to snapshot if snapshot available -->
+                                        <div v-if="getSheetSnapshot(sheet)" class="absolute bottom-2.5 right-2.5 z-20">
+                                            <button
+                                                type="button"
+                                                @click.stop.prevent="toggleCardViewMode(sheet.id)"
+                                                class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-900/85 hover:bg-slate-900 text-slate-200 border border-white/20 backdrop-blur-md shadow transition-all cursor-pointer flex items-center gap-1"
+                                                title="Lihat Snapshot Gambar"
+                                            >
+                                                <Camera class="w-3 h-3 text-amber-400" />
+                                                <span>Snapshot</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Fallback jika belum ada gambar & belum ada snapshot -->
+                                <template v-else>
+                                    <div class="w-full h-full flex flex-col items-center justify-center bg-slate-900/40 p-4 text-center">
+                                        <div class="w-10 h-10 rounded-xl bg-violet-500/10 border border-dashed border-violet-400/40 flex items-center justify-center text-violet-400 mb-1.5">
+                                            <DraftingCompass class="w-5 h-5" />
+                                        </div>
+                                        <span class="text-xs font-medium text-slate-400">Belum ada snapshot</span>
+                                        <span class="text-[10px] text-slate-500">Buka editor untuk mulai menggambar</span>
+                                    </div>
+                                </template>
+
+                                <!-- Floating Top Badges -->
                                 <div class="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-20">
                                     <span :class="['px-2.5 py-0.5 rounded-full text-[10px] font-semibold border backdrop-blur-md shadow-sm', getTypeColor(sheet.type)]">
                                         {{ getTypeLabel(sheet.type) }}
@@ -625,10 +719,10 @@ const getTypeColor = (type: string) => {
                                 <div class="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-1.5 flex-wrap">
                                     <Link
                                         :href="`/drawings/${sheet.id}`"
-                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors whitespace-nowrap shrink-0"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white transition-colors whitespace-nowrap shrink-0 shadow-sm"
                                     >
-                                        <Sparkles class="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                                        <span>Gambar Kerja</span>
+                                        <DraftingCompass class="w-3.5 h-3.5 shrink-0" />
+                                        <span>Buka Denah CAD</span>
                                     </Link>
 
                                     <div class="flex items-center gap-1 shrink-0">
@@ -702,23 +796,79 @@ const getTypeColor = (type: string) => {
                         </p>
                     </div>
 
-                    <!-- Preview Canvas Area (Live KeyPlan Canvas) -->
-                    <div class="h-44 bg-slate-100 dark:bg-[#0a0b10] border-b border-slate-200 dark:border-white/5 p-2 flex flex-col justify-between relative overflow-hidden">
-                        <div class="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/50 via-black/20 to-transparent pointer-events-none z-10"></div>
-                        <div class="w-full h-full relative flex items-center justify-center">
-                            <KeyPlanCanvas
-                                v-if="sheet.elements && sheet.elements.length > 0"
-                                :elements="sheet.elements"
-                                :show-footer="false"
-                                width="100%"
-                                height="100%"
-                                className="w-full h-full border-none shadow-none bg-transparent"
-                            />
-                            <div v-else class="w-32 h-20 rounded border border-dashed border-violet-400/40 flex flex-col items-center justify-center bg-violet-500/5 text-slate-400 text-xs">
-                                <DraftingCompass class="w-6 h-6 text-violet-400/60 mb-1" />
-                                <span>Belum ada gambar</span>
+                    <!-- Preview Canvas Area (Live KeyPlan Canvas & Snapshot Thumbnail) -->
+                    <div class="h-48 bg-slate-100 dark:bg-[#0a0b10] border-b border-slate-200 dark:border-white/5 flex flex-col justify-between relative overflow-hidden group/thumb">
+                        <!-- Background Image Snapshot jika tersedia dan bukan vector mode -->
+                        <template v-if="getSheetSnapshot(sheet) && !isVectorMode(sheet.id)">
+                            <div class="w-full h-full relative overflow-hidden bg-slate-950">
+                                <img
+                                    :src="getSheetSnapshot(sheet)!"
+                                    :alt="sheet.title"
+                                    class="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform duration-500 ease-out"
+                                    loading="lazy"
+                                />
+                                <!-- Gradient overlay -->
+                                <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/40 pointer-events-none"></div>
+
+                                <!-- Badge Sumber Snapshot -->
+                                <div v-if="getSnapshotBadge(sheet)" class="absolute bottom-2.5 left-2.5 z-20">
+                                    <span :class="['px-2 py-0.5 rounded-md text-[10px] font-semibold backdrop-blur-md shadow-md flex items-center gap-1', getSnapshotBadge(sheet)!.color]">
+                                        <component :is="getSnapshotBadge(sheet)!.icon" class="w-3 h-3" />
+                                        <span>{{ getSnapshotBadge(sheet)!.label }}</span>
+                                    </span>
+                                </div>
+
+                                <!-- Toggle to Vector if sheet has elements -->
+                                <div v-if="sheet.elements && sheet.elements.length > 0" class="absolute bottom-2.5 right-2.5 z-20">
+                                    <button
+                                        type="button"
+                                        @click.stop.prevent="toggleCardViewMode(sheet.id)"
+                                        class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-900/85 hover:bg-slate-900 text-slate-200 border border-white/20 backdrop-blur-md shadow transition-all cursor-pointer flex items-center gap-1"
+                                        title="Lihat Gambar Denah Vektor"
+                                    >
+                                        <DraftingCompass class="w-3 h-3 text-violet-400" />
+                                        <span>Denah 2D</span>
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+                        </template>
+
+                        <!-- Vector KeyPlan Canvas jika mode vector atau tidak ada snapshot -->
+                        <template v-else-if="sheet.elements && sheet.elements.length > 0">
+                            <div class="w-full h-full relative flex items-center justify-center p-2">
+                                <KeyPlanCanvas
+                                    :elements="sheet.elements"
+                                    :show-footer="false"
+                                    width="100%"
+                                    height="100%"
+                                    className="w-full h-full border-none shadow-none bg-transparent"
+                                />
+
+                                <!-- Toggle back to snapshot if snapshot available -->
+                                <div v-if="getSheetSnapshot(sheet)" class="absolute bottom-2.5 right-2.5 z-20">
+                                    <button
+                                        type="button"
+                                        @click.stop.prevent="toggleCardViewMode(sheet.id)"
+                                        class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-900/85 hover:bg-slate-900 text-slate-200 border border-white/20 backdrop-blur-md shadow transition-all cursor-pointer flex items-center gap-1"
+                                        title="Lihat Snapshot Gambar"
+                                    >
+                                        <Camera class="w-3 h-3 text-amber-400" />
+                                        <span>Snapshot</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Fallback jika belum ada gambar & belum ada snapshot -->
+                        <template v-else>
+                            <div class="w-full h-full flex flex-col items-center justify-center bg-slate-900/40 p-4 text-center">
+                                <div class="w-10 h-10 rounded-xl bg-violet-500/10 border border-dashed border-violet-400/40 flex items-center justify-center text-violet-400 mb-1.5">
+                                    <DraftingCompass class="w-5 h-5" />
+                                </div>
+                                <span class="text-xs font-medium text-slate-400">Belum ada snapshot</span>
+                                <span class="text-[10px] text-slate-500">Buka editor untuk mulai menggambar</span>
+                            </div>
+                        </template>
 
                         <!-- Floating Top Badges -->
                         <div class="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-20">
@@ -821,10 +971,10 @@ const getTypeColor = (type: string) => {
                         <div class="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-1.5 flex-wrap">
                             <Link
                                 :href="`/drawings/${sheet.id}`"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors whitespace-nowrap shrink-0"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white transition-colors whitespace-nowrap shrink-0 shadow-sm"
                             >
-                                <Sparkles class="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                                <span>Gambar Kerja</span>
+                                <DraftingCompass class="w-3.5 h-3.5 shrink-0" />
+                                <span>Buka Denah CAD</span>
                             </Link>
 
                             <div class="flex items-center gap-1 shrink-0">

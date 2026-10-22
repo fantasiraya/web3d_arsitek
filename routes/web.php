@@ -188,6 +188,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/drawings/{sheet}/export-dxf', [DrawingSheetController::class, 'exportDxf'])->name('drawings.export-dxf');
     Route::match(['get', 'post'], '/drawings/{sheet}/export-svg', [DrawingSheetController::class, 'exportSvg'])->name('drawings.export-svg');
     Route::get('/projects/{project}/booklet', [\App\Domains\Drawing\Controllers\BookletController::class, 'show'])->name('projects.booklet');
+
+    // ── Gambar Kerja & Potong (Shop Drawing & Cutting List) ──
+    Route::get('/shop-drawings', [DrawingSheetController::class, 'shopIndex'])->name('shop-drawings.index');
+    Route::post('/shop-drawings', [DrawingSheetController::class, 'storeShopDrawing'])->name('shop-drawings.store');
+    Route::get('/shop-drawings/{sheet}', [DrawingSheetController::class, 'shopEditor'])->name('shop-drawings.editor');
+    Route::delete('/shop-drawings/{sheet}', [DrawingSheetController::class, 'destroy'])->name('shop-drawings.destroy');
+    Route::post('/shop-drawings/{sheet}/image', [DrawingSheetController::class, 'uploadImage'])->name('shop-drawings.image.upload');
+    Route::delete('/shop-drawings/{sheet}/image', [DrawingSheetController::class, 'deleteImage'])->name('shop-drawings.image.delete');
 });
 
 // ── Chat realtime routes ──

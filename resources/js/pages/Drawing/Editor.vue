@@ -65,7 +65,7 @@ interface SheetData {
     id: string;
     project_id: string;
     title: string;
-    type: 'plan' | 'elevation' | 'section';
+    type: string;
     scale: string;
     paper_size: string;
     orientation: string;
@@ -79,6 +79,8 @@ interface ProjectData {
     id: string;
     title: string;
     user_id: string;
+    client_name?: string | null;
+    client_address?: string | null;
 }
 
 interface ElementData {
@@ -126,22 +128,27 @@ const props = defineProps<{
     projectCaptures?: ProjectCaptureProp[] | null;
     canEdit: boolean;
     architect?: ArchitectProfile | null;
+    initialMode?: 'shop_drawing' | 'cad' | null;
 }>();
 
 // Mode Editor: Gambar Kerja (Shop Drawing) vs CAD Denah Arsitektural
 const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
 const requestedMode = urlParams?.get('mode');
+const isShopDrawingRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/shop-drawings');
 
 const activeEditorMode = ref<'shop_drawing' | 'cad'>(
-    requestedMode === 'shop_drawing'
+    isShopDrawingRoute
         ? 'shop_drawing'
-        : requestedMode === 'cad'
-            ? 'cad'
-            : (props.sheet.id === '01a16100-3421-70f5-ac75-f9db46e8c46f' ||
-               props.sheet.type === 'furniture' ||
-               props.sheet.type === 'shop_drawing')
-                ? 'shop_drawing'
-                : 'cad'
+        : requestedMode === 'shop_drawing'
+            ? 'shop_drawing'
+            : requestedMode === 'cad'
+                ? 'cad'
+                : (props.initialMode === 'shop_drawing' ||
+                   props.sheet.id === '01a16100-3421-70f5-ac75-f9db46e8c46f' ||
+                   props.sheet.type === 'furniture' ||
+                   props.sheet.type === 'shop_drawing')
+                    ? 'shop_drawing'
+                    : 'cad'
 );
 
 function switchEditorMode(mode: 'shop_drawing' | 'cad') {
@@ -3918,11 +3925,63 @@ async function saveElements(isAuto = false) {
             setTimeout(() => {
                 saveSuccess.value = false;
             }, 3000);
+
+            // Auto-update thumbnail snapshot ke server di latar belakang
+            captureThumbnailSnapshot();
         }
     } catch (err) {
         console.error('Error saving drawing elements:', err);
     } finally {
         isSaving.value = false;
+    }
+}
+
+function captureThumbnailSnapshot() {
+    if (!stage) return;
+    try {
+        const frames = getPaperFrames();
+        const targetFrame = frames[0];
+        let dataURL = '';
+        if (targetFrame && targetFrame.width > 0 && targetFrame.height > 0) {
+            const origX = stage.x();
+            const origY = stage.y();
+            const origScaleX = stage.scaleX();
+            const origScaleY = stage.scaleY();
+
+            stage.position({ x: -targetFrame.x, y: -targetFrame.y });
+            stage.scale({ x: 1, y: 1 });
+            if (gridLayer) gridLayer.visible(false);
+            tempLayer?.batchDraw();
+            stage.batchDraw();
+
+            dataURL = stage.toDataURL({
+                x: 0,
+                y: 0,
+                width: targetFrame.width,
+                height: targetFrame.height,
+                pixelRatio: 0.75,
+            });
+
+            stage.position({ x: origX, y: origY });
+            stage.scale({ x: origScaleX, y: origScaleY });
+            if (gridLayer) gridLayer.visible(true);
+            stage.batchDraw();
+        } else {
+            dataURL = stage.toDataURL({ pixelRatio: 0.5 });
+        }
+
+        if (dataURL && dataURL.length > 100) {
+            fetch(`/drawings/${props.sheet.id}/image`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+                },
+                body: JSON.stringify({ image: dataURL }),
+            }).catch(() => {});
+        }
+    } catch (e) {
+        // silent fail
     }
 }
 
@@ -4540,17 +4599,6 @@ onUnmounted(() => {
 
                     <div class="flex items-center gap-2 min-w-0">
                         <h2 class="text-xs sm:text-sm font-bold text-white tracking-tight truncate max-w-[150px] sm:max-w-xs">{{ currentSheet.title }}</h2>
-
-                        <!-- Tombol Beralih ke Gambar Kerja -->
-                        <button
-                            type="button"
-                            @click="switchEditorMode('shop_drawing')"
-                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-colors cursor-pointer shadow-sm shrink-0"
-                            title="Buka Tampilan Gambar Kerja & Daftar Potong Interior"
-                        >
-                            <Sparkles class="w-3.5 h-3.5 text-amber-400" />
-                            <span>Gambar Kerja</span>
-                        </button>
 
                         <button
                             v-if="canEdit"
