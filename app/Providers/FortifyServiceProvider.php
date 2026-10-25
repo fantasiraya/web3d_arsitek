@@ -89,28 +89,60 @@ class FortifyServiceProvider extends ServiceProvider
      */
     private function configureViews(): void
     {
-        Fortify::loginView(fn (Request $request) => Inertia::render('auth/Login', [
-            'canResetPassword' => Features::enabled(Features::resetPasswords()),
-            'status' => $request->session()->get('status'),
-        ]));
+        $redirectIfAuth = function (Request $request) {
+            $user = $request->user();
+            if ($user) {
+                return redirect($user->hasRole('super_admin', 'web') ? '/admin/dashboard' : '/dashboard');
+            }
+            return null;
+        };
 
-        Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/ResetPassword', [
-            'email' => $request->email,
-            'token' => $request->route('token'),
-            'passwordRules' => Password::defaults()->toPasswordRulesString(),
-        ]));
+        Fortify::loginView(function (Request $request) use ($redirectIfAuth) {
+            if ($redir = $redirectIfAuth($request)) {
+                return $redir;
+            }
 
-        Fortify::requestPasswordResetLinkView(fn (Request $request) => Inertia::render('auth/ForgotPassword', [
-            'status' => $request->session()->get('status'),
-        ]));
+            return Inertia::render('auth/Login', [
+                'canResetPassword' => Features::enabled(Features::resetPasswords()),
+                'status' => $request->session()->get('status'),
+            ]);
+        });
+
+        Fortify::resetPasswordView(function (Request $request) use ($redirectIfAuth) {
+            if ($redir = $redirectIfAuth($request)) {
+                return $redir;
+            }
+
+            return Inertia::render('auth/ResetPassword', [
+                'email' => $request->email,
+                'token' => $request->route('token'),
+                'passwordRules' => Password::defaults()->toPasswordRulesString(),
+            ]);
+        });
+
+        Fortify::requestPasswordResetLinkView(function (Request $request) use ($redirectIfAuth) {
+            if ($redir = $redirectIfAuth($request)) {
+                return $redir;
+            }
+
+            return Inertia::render('auth/ForgotPassword', [
+                'status' => $request->session()->get('status'),
+            ]);
+        });
 
         Fortify::verifyEmailView(fn (Request $request) => Inertia::render('auth/VerifyEmail', [
             'status' => $request->session()->get('status'),
         ]));
 
-        Fortify::registerView(fn () => Inertia::render('auth/Register', [
-            'passwordRules' => Password::defaults()->toPasswordRulesString(),
-        ]));
+        Fortify::registerView(function (Request $request) use ($redirectIfAuth) {
+            if ($redir = $redirectIfAuth($request)) {
+                return $redir;
+            }
+
+            return Inertia::render('auth/Register', [
+                'passwordRules' => Password::defaults()->toPasswordRulesString(),
+            ]);
+        });
 
         Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/TwoFactorChallenge'));
 

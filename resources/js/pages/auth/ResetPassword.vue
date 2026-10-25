@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
+import { Form, Head, router, usePage } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
@@ -8,6 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { update } from '@/routes/password';
+
+// Jika sudah terotentikasi, tidak boleh masuk halaman reset password
+const page = usePage();
+if (page.props.auth?.user) {
+    const target = (page.props.auth.user as any)?.is_admin ? '/admin/dashboard' : '/dashboard';
+    router.visit(target);
+}
 
 defineOptions({
     layout: {

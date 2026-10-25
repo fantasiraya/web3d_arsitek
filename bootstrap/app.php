@@ -29,6 +29,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        $middleware->redirectTo(
+            guests: '/login',
+            users: fn (Request $request) => $request->user()?->hasRole('super_admin', 'web') ? '/admin/dashboard' : '/dashboard',
+        );
+
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,

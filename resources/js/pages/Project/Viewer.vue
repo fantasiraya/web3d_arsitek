@@ -485,8 +485,9 @@
                         <Download class="h-3 w-3" />
                         <span>Unduh .skp</span>
                     </a>
+                    <!-- Tombol resolusi penuh gambar 2D hanya muncul jika mode 3D belum aktif / fallback -->
                     <button
-                        v-if="effectiveSkpImageUrl"
+                        v-if="effectiveSkpImageUrl && !hasConvertedGlb"
                         type="button"
                         @click="is2DPreviewModalOpen = true"
                         class="flex items-center gap-1 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/30 px-2.5 py-1 text-[11px] font-medium text-indigo-200 transition"
@@ -526,17 +527,6 @@
                 >
                     <Focus class="h-3.5 w-3.5 text-rose-400" />
                     <span>Pusatkan</span>
-                </button>
-
-                <!-- Fullscreen -->
-                <button
-                    type="button"
-                    @click="toggleFullscreen"
-                    class="flex items-center gap-1.5 rounded-full px-3 py-1.5 sm:py-2 text-xs font-medium text-neutral-300 hover:bg-white/10 hover:text-white transition-all"
-                >
-                    <Minimize2 v-if="isFullscreen" class="h-3.5 w-3.5 text-rose-400" />
-                    <Maximize2 v-else class="h-3.5 w-3.5 text-neutral-300" />
-                    <span class="hidden md:inline">{{ isFullscreen ? 'Keluar Penuh' : 'Layar Penuh' }}</span>
                 </button>
 
                 <div class="h-4 w-px bg-white/20 mx-0.5 hidden sm:block"></div>
@@ -3340,7 +3330,7 @@ function submitGlbUpload() {
     router.post(
         `/projects/${project.value.id}`,
         {
-            _method: 'PUT',
+            _method: 'PATCH',
             file: glbUploadFile.value,
         },
         {

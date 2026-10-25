@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 import {
     AlertTriangle,
     Box,
     ClipboardList,
+    Lock,
     Pencil,
     Trash2,
     UserCheck,
@@ -14,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import Project3DPreview from '@/components/Project3DPreview.vue';
 import { enqueueAutoCapture, releaseAutoCapture, removeFromCaptureQueue } from '@/lib/snapshotQueue';
+import { useUpgradeModal } from '@/composables/useUpgradeModal';
 
 export interface ProjectClientItem {
     id: string;
@@ -57,6 +59,15 @@ let captureTimeout: ReturnType<typeof setTimeout> | null = null;
 const localThumbnail = ref<string | null>(null);
 
 const isSkp = computed(() => !!props.project.file_path?.toLowerCase().endsWith('.skp'));
+
+const page = usePage();
+const { openUpgradeModal } = useUpgradeModal();
+const hasRabAccess = computed(() => {
+    const user = (page.props as any).auth?.user;
+    if (user?.is_admin) return true;
+    if (user?.subscription_status && user.subscription_status.toLowerCase() !== 'free') return true;
+    return false;
+});
 
 const isPlaceholderThumb = computed(() => {
     const url = props.project.thumbnail_url;
@@ -385,9 +396,26 @@ function formatBytes(bytes: number): string {
             </Link>
 
             <!-- Baris 2: aksi sekunder -->
-            <div class="grid grid-cols-[1fr_auto_auto] gap-2">
+            <div class="grid grid-cols-[1fr_auto] gap-2">
                 <!-- Menuju daftar dokumen RAB project ini -->
-                <Link :href="`/projects/${project.id}/rab`" class="block">
+                <button
+                    v-if="!hasRabAccess"
+                    type="button"
+                    title="Fitur RAB (Eksklusif Pro & Enterprise)"
+                    class="block w-full text-left"
+                    @click="openUpgradeModal({ feature: 'rab' })"
+                >
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="w-full whitespace-nowrap border-slate-200 bg-slate-50 text-xs text-slate-500 hover:border-amber-300 hover:bg-amber-50/60 hover:text-amber-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-neutral-400 dark:hover:border-amber-400/30 dark:hover:bg-amber-400/10 dark:hover:text-amber-300 transition-all duration-200"
+                    >
+                        <ClipboardList class="mr-1.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                        RAB
+                        <Lock class="ml-1 h-3 w-3 text-amber-500/80" />
+                    </Button>
+                </button>
+                <Link v-else :href="`/projects/${project.id}/rab`" class="block">
                     <Button
                         variant="outline"
                         size="sm"
@@ -398,16 +426,6 @@ function formatBytes(bytes: number): string {
                         RAB
                     </Button>
                 </Link>
-
-                <Button
-                    variant="outline"
-                    size="sm"
-                    title="Edit Data Proyek"
-                    :class="iconButtonClass"
-                    @click="emit('edit', project)"
-                >
-                    <Pencil class="h-3.5 w-3.5" />
-                </Button>
 
                 <Button
                     variant="outline"

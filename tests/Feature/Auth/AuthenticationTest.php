@@ -75,3 +75,21 @@ test('users are rate limited', function () {
 
     $response->assertTooManyRequests();
 });
+
+test('authenticated users are redirected from auth screens', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->get(route('login'))->assertRedirect('/dashboard');
+    $this->actingAs($user)->get(route('register'))->assertRedirect('/dashboard');
+    $this->actingAs($user)->get(route('password.request'))->assertRedirect('/dashboard');
+    $this->actingAs($user)->get(route('password.reset', ['token' => 'dummy']))->assertRedirect('/dashboard');
+});
+
+test('authenticated super admin is redirected to admin dashboard', function () {
+    \Spatie\Permission\Models\Role::findOrCreate('super_admin', 'web');
+    $admin = User::factory()->create();
+    $admin->assignRole('super_admin');
+
+    $this->actingAs($admin)->get(route('login'))->assertRedirect('/admin/dashboard');
+    $this->actingAs($admin)->get(route('register'))->assertRedirect('/admin/dashboard');
+});

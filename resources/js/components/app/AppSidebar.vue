@@ -18,9 +18,12 @@ import {
     Layers,
 } from '@lucide/vue'
 import { useSidebar } from '@/composables/useSidebar'
+import UpgradeModal from '@/components/UpgradeModal.vue'
+import { useUpgradeModal } from '@/composables/useUpgradeModal'
 
 const page = usePage()
 const { isSidebarOpen, isMobile, setMobile, closeSidebar } = useSidebar()
+const { openUpgradeModal } = useUpgradeModal()
 
 // Get user from page props
 const user = computed(() => page.props.auth?.user)
@@ -71,20 +74,15 @@ const hasDrawingAccess = computed(() => {
 const handleDrawingClick = (event: Event) => {
     if (!hasDrawingAccess.value) {
         event.preventDefault();
-        if (confirm('Fitur Lembar Kerja 2D (Drawing CAD) eksklusif untuk pengguna paket Enterprise.\n\nApakah Anda ingin melihat paket berlangganan kami?')) {
-            router.visit('/plans');
-        }
+        openUpgradeModal({ feature: 'drawing' });
     }
 };
 
 // Handle RAB feature click
-const handleRabClick = (event: Event, route: string) => {
+const handleRabClick = (event: Event, route?: string) => {
     if (!hasRabAccess.value) {
         event.preventDefault();
-        // Show native confirmation before redirect
-        if (confirm('Fitur RAB & Lembar Kerja hanya tersedia untuk pengguna Pro dan Enterprise.\n\nApakah Anda ingin melihat paket berlangganan kami?')) {
-            router.visit('/plans');
-        }
+        openUpgradeModal({ feature: 'rab' });
     }
 };
 
@@ -92,9 +90,7 @@ const handleRabClick = (event: Event, route: string) => {
 const handleVisionClick = (event: Event) => {
     if (!hasVisionAccess.value) {
         event.preventDefault();
-        if (confirm('Fitur AI Vision Studio hanya tersedia untuk pengguna paket Pro dan Enterprise.\n\nApakah Anda ingin melihat paket berlangganan kami?')) {
-            router.visit('/plans');
-        }
+        openUpgradeModal({ feature: 'vision' });
     }
 };
 
@@ -908,6 +904,9 @@ onUnmounted(() => {
             </div>
         </div>
     </aside>
+
+    <!-- Global Upgrade Modal for Gated Features -->
+    <UpgradeModal />
 </template>
 
 <style scoped>

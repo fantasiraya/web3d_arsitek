@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Form, Head, Link } from '@inertiajs/vue3';
+import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,13 @@ import { Spinner } from '@/components/ui/spinner';
 import LandingLayout from '@/layouts/LandingLayout.vue';
 import { login } from '@/routes';
 import { store } from '@/routes/register';
+
+// Jika sudah terotentikasi, tidak boleh masuk halaman register
+const page = usePage();
+if (page.props.auth?.user) {
+    const target = (page.props.auth.user as any)?.is_admin ? '/admin/dashboard' : '/dashboard';
+    router.visit(target);
+}
 
 // Pakai LandingLayout — navbar + footer + ambient glow otomatis
 defineOptions({ layout: LandingLayout });

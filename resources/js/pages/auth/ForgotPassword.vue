@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import { Form, Head, Link } from '@inertiajs/vue3';
+import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
 import InputError from '@/components/InputError.vue';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import LandingLayout from '@/layouts/LandingLayout.vue';
 import { login } from '@/routes';
 import { email } from '@/routes/password';
+
+// Jika sudah terotentikasi, tidak boleh masuk halaman lupa password
+const page = usePage();
+if (page.props.auth?.user) {
+    const target = (page.props.auth.user as any)?.is_admin ? '/admin/dashboard' : '/dashboard';
+    router.visit(target);
+}
 
 defineOptions({ layout: LandingLayout });
 
