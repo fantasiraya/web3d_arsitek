@@ -56,11 +56,11 @@ test('authenticated users can visit the dashboard with dual-capacity props', fun
 
     $response->assertInertia(fn (Assert $page) => $page
         ->component('Dashboard')
-        ->has('ownedProjects', 1)
-        ->where('ownedProjects.0.title', 'Villa Canggu 3D')
-        ->has('clientProjects', 1)
-        ->where('clientProjects.0.title', 'Modern Office Jakarta')
-        ->where('clientProjects.0.invitation_status', 'pending')
+        ->has('ownedProjects.data', 1)
+        ->where('ownedProjects.data.0.title', 'Villa Canggu 3D')
+        ->has('clientProjects.data', 1)
+        ->where('clientProjects.data.0.title', 'Modern Office Jakarta')
+        ->where('clientProjects.data.0.invitation_status', 'pending')
         ->has('stats')
         ->where('stats.owned_count', 1)
         ->where('stats.client_count', 1)

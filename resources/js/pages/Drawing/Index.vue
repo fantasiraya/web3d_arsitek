@@ -232,6 +232,10 @@ function toggleCaptureSelection(capId: string) {
     }
 }
 
+function getCaptureById(id: string) {
+    return (props.allProjectCaptures || []).find(c => c.id === id);
+}
+
 async function saveLinkedCaptures() {
     if (!selectedSheetForLinking.value || isSavingLinkedCaptures.value) return;
     isSavingLinkedCaptures.value = true;
@@ -1428,8 +1432,18 @@ const getTypeColor = (type: string) => {
                     </button>
                 </div>
 
-                <div class="py-3 text-xs text-slate-500 dark:text-slate-400 shrink-0">
-                    Pilih gambar hasil ambil 3D yang mewakili atau berkaitan dengan lembar kerja ini. Gambar yang dipilih akan otomatis terkoneksi ke denah dan booklet PDF.
+                <div class="py-3 text-xs text-slate-500 dark:text-slate-400 shrink-0 flex items-center justify-between">
+                    <p>
+                        Klik gambar untuk menentukan <strong>urutan nomor tampilan</strong> di booklet PDF (1, 2, 3, dst.). Gambar bernomor 1 akan tampil pertama setelah denah.
+                    </p>
+                    <button
+                        v-if="selectedCaptureIds.length > 0"
+                        type="button"
+                        @click="selectedCaptureIds = []"
+                        class="text-[11px] text-rose-500 hover:text-rose-400 font-semibold cursor-pointer shrink-0 ml-2 transition-colors"
+                    >
+                        Reset Urutan
+                    </button>
                 </div>
 
                 <!-- Daftar Galeri Gambar 3D Proyek -->
@@ -1461,9 +1475,10 @@ const getTypeColor = (type: string) => {
                                 />
                                 <span
                                     v-if="selectedCaptureIds.includes(cap.id)"
-                                    class="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-amber-500 text-black flex items-center justify-center font-bold text-xs shadow-md"
+                                    class="absolute top-1.5 right-1.5 min-w-[22px] h-[22px] px-1 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xs shadow-lg ring-2 ring-black/50"
+                                    title="Nomor urutan tampil di booklet"
                                 >
-                                    ✓
+                                    {{ selectedCaptureIds.indexOf(cap.id) + 1 }}
                                 </span>
                                 <span v-if="cap.code" class="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/80 font-mono text-[9px] font-bold text-amber-300">
                                     {{ cap.code }}
@@ -1473,6 +1488,9 @@ const getTypeColor = (type: string) => {
                             <div>
                                 <div class="font-semibold text-xs text-slate-800 dark:text-white truncate" :title="cap.room_name">
                                     {{ cap.room_name }}
+                                </div>
+                                <div v-if="selectedCaptureIds.includes(cap.id)" class="text-[10px] font-bold text-amber-500 dark:text-amber-400 mt-0.5">
+                                    Urutan Booklet #{{ selectedCaptureIds.indexOf(cap.id) + 1 }}
                                 </div>
                                 <div class="text-[10px] text-slate-400 font-mono mt-0.5 flex items-center justify-between">
                                     <span>{{ cap.captured_hour || '12:00' }}</span>
@@ -1485,10 +1503,39 @@ const getTypeColor = (type: string) => {
                     </div>
                 </div>
 
+                <!-- Pratinjau Urutan Tampil di Booklet -->
+                <div v-if="selectedCaptureIds.length > 0" class="pt-2.5 pb-1 border-t border-slate-200 dark:border-white/10 shrink-0">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+                        Urutan Tampil di Booklet:
+                    </span>
+                    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                        <div
+                            v-for="(capId, idx) in selectedCaptureIds"
+                            :key="capId"
+                            class="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-medium shrink-0"
+                        >
+                            <span class="w-4 h-4 rounded-full bg-amber-500 text-slate-950 font-black text-[10px] flex items-center justify-center">
+                                {{ idx + 1 }}
+                            </span>
+                            <span class="truncate max-w-[120px] text-slate-800 dark:text-white">
+                                {{ getCaptureById(capId)?.room_name || 'Visual 3D' }}
+                            </span>
+                            <button
+                                type="button"
+                                @click.stop="toggleCaptureSelection(capId)"
+                                class="text-amber-400/60 hover:text-rose-400 ml-0.5 cursor-pointer text-sm leading-none"
+                                title="Hapus dari urutan"
+                            >
+                                ×
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Footer Modal -->
                 <div class="pt-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-between shrink-0">
-                    <span class="text-xs text-slate-500 dark:text-slate-400">
-                        {{ selectedCaptureIds.length }} gambar 3D dipilih
+                    <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        <strong class="text-amber-500 font-bold">{{ selectedCaptureIds.length }}</strong> gambar 3D dipilih (sesuai nomor urut)
                     </span>
                     <div class="flex items-center gap-2">
                         <button

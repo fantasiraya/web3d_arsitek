@@ -169,11 +169,16 @@ class DrawingSheetController extends Controller
             ->whereNotIn('id', $captureIds)
             ->update(['drawing_sheet_id' => null, 'room_element_id' => null]);
 
-        // Hubungkan captures yang dipilih ke sheet ini
+        // Hubungkan captures yang dipilih ke sheet ini sesuai urutan seleksi (sort_order)
         if (! empty($captureIds)) {
-            \App\Domains\Project\Models\ProjectCapture::whereIn('id', $captureIds)
-                ->where('project_id', $sheet->project_id)
-                ->update(['drawing_sheet_id' => $sheet->id]);
+            foreach ($captureIds as $order => $capId) {
+                \App\Domains\Project\Models\ProjectCapture::where('id', $capId)
+                    ->where('project_id', $sheet->project_id)
+                    ->update([
+                        'drawing_sheet_id' => $sheet->id,
+                        'sort_order'       => $order + 1,
+                    ]);
+            }
         }
 
         return response()->json([
@@ -192,7 +197,7 @@ class DrawingSheetController extends Controller
 
         $sheet = $action->execute($user, $project, $request->validated());
 
-        if ($request->boolean('open_editor')) {
+        if ($request->boolean('open_editor', true)) {
             return redirect()->route('drawings.editor', $sheet->id)
                 ->with('success', "Lembar kerja 2D '{$sheet->title}' berhasil dibuat.");
         }

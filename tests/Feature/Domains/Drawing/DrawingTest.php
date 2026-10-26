@@ -261,4 +261,50 @@ test('enterprise user can dynamically resize and sync sheet dimensions like figm
     expect($sheet->paper_size)->toBe('Custom');
 });
 
+test('user can link captures to drawing sheet with sequential sort order', function () {
+    $user = User::factory()->create(['subscription_status' => 'enterprise']);
+    $project = Project::factory()->create(['user_id' => $user->id]);
+    $sheet = DrawingSheet::create([
+        'project_id'   => $project->id,
+        'user_id'      => $user->id,
+        'title'        => 'Denah Lantai 1',
+        'type'         => 'plan',
+        'paper_size'   => 'A3',
+        'orientation'  => 'landscape',
+    ]);
+
+    $capA = \App\Domains\Project\Models\ProjectCapture::create([
+        'id'         => (string) \Illuminate\Support\Str::uuid(),
+        'project_id' => $project->id,
+        'user_id'    => $user->id,
+        'room_name'  => 'Ruang A',
+        'file_path'  => 'test_a.png',
+        'sort_order' => 0,
+    ]);
+
+    $capB = \App\Domains\Project\Models\ProjectCapture::create([
+        'id'         => (string) \Illuminate\Support\Str::uuid(),
+        'project_id' => $project->id,
+        'user_id'    => $user->id,
+        'room_name'  => 'Ruang B',
+        'file_path'  => 'test_b.png',
+        'sort_order' => 0,
+    ]);
+
+    // Link in sequence: capB then capA
+    $response = $this->actingAs($user)->postJson(route('drawings.sync-captures', $sheet->id), [
+        'capture_ids' => [$capB->id, $capA->id],
+    ]);
+
+    $response->assertOk();
+    $capB->refresh();
+    $capA->refresh();
+
+    expect($capB->drawing_sheet_id)->toBe($sheet->id);
+    expect($capB->sort_order)->toBe(1);
+    expect($capA->drawing_sheet_id)->toBe($sheet->id);
+    expect($capA->sort_order)->toBe(2);
+});
+
+
 

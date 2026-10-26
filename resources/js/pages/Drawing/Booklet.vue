@@ -248,6 +248,13 @@ const interiorCaptures = computed(() => {
     });
 });
 
+function isExteriorCapture(capture: ProjectCapture): boolean {
+    const code = (capture.code || '').toUpperCase();
+    if (code.startsWith('EXT')) return true;
+    const name = (capture.room_name || '').toUpperCase();
+    return name.includes('TAMPAK') || name.includes('DEPAN') || name.includes('FASAD') || name.includes('EKSTERIOR');
+}
+
 // Capture yang dipilih untuk Cover
 const selectedCoverCapture = computed(() => {
     if (selectedCoverCaptureId.value !== 'auto') {
@@ -1933,9 +1940,10 @@ onUnmounted(() => {
             </section>
 
             <!-- ======================================================== -->
-            <!-- HALAMAN 3+: TAMPAK DEPAN / EKSTERIOR (Jika Ada)           -->
+            <!-- HALAMAN 3+: VISUAL 3D / RUANGAN SESUAI URUTAN NOMOR       -->
             <!-- ======================================================== -->
-            <template v-for="(ext, idx) in exteriorCaptures" :key="'ext-' + ext.id">
+            <template v-for="(capture, cIdx) in activeCaptures" :key="'cap-' + capture.id">
+                <template v-if="isExteriorCapture(capture)">
                 <section
                     class="booklet-sheet bg-white text-slate-900 shadow-2xl overflow-hidden flex border border-slate-300 print:border-none"
                     :class="paperSize === 'A3' ? 'sheet-a3' : 'sheet-a4'"
@@ -1945,14 +1953,14 @@ onUnmounted(() => {
                         <!-- Gambar 3D / AI -->
                         <div class="flex-1 min-h-0 w-full relative rounded overflow-hidden bg-black flex items-center justify-center">
                             <img
-                                :src="getCaptureDisplayUrl(ext)"
-                                :alt="ext.room_name"
+                                :src="getCaptureDisplayUrl(capture)"
+                                :alt="capture.room_name"
                                 class="w-full h-full object-cover"
                             />
 
                             <!-- Loading Overlay saat sedang di-generate -->
                             <div
-                                v-if="isGeneratingAiRender === ext.id"
+                                v-if="isGeneratingAiRender === capture.id"
                                 class="no-print absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center gap-2.5 text-white p-4 text-center z-20"
                             >
                                 <Sparkles class="w-8 h-8 text-orange-400 animate-spin" />
@@ -1965,7 +1973,7 @@ onUnmounted(() => {
                             <!-- Badge Sumber Gambar & Controls (Hidden saat print) -->
                             <div class="no-print absolute top-3 right-3 flex items-center gap-1.5 z-10">
                                 <span
-                                    v-if="ext.ai_rendered_url"
+                                    v-if="capture.ai_rendered_url"
                                     class="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-600 text-white shadow"
                                 >
                                     RENDER AI
@@ -1980,30 +1988,30 @@ onUnmounted(() => {
                                 <!-- Tombol Ganti / Update Gambar 3D Snapshot -->
                                 <button
                                     v-if="isOwner"
-                                    @click="triggerUpdateCapture(ext.id)"
-                                    :disabled="isUploadingCapture === ext.id"
+                                    @click="triggerUpdateCapture(capture.id)"
+                                    :disabled="isUploadingCapture === capture.id"
                                     class="px-2.5 py-1 rounded text-[10px] font-bold bg-slate-900/90 text-white hover:bg-slate-800 transition flex items-center gap-1 shadow backdrop-blur border border-white/20 disabled:opacity-50"
                                     title="Ganti gambar foto/snapshot 3D ini dengan file baru"
                                 >
-                                    <RefreshCw class="w-3 h-3 text-amber-400" :class="isUploadingCapture === ext.id ? 'animate-spin' : ''" />
+                                    <RefreshCw class="w-3 h-3 text-amber-400" :class="isUploadingCapture === capture.id ? 'animate-spin' : ''" />
                                     <span>Update Gambar</span>
                                 </button>
 
                                 <!-- Tombol 1-Click Generate AI (Gemini) -->
                                 <button
                                     v-if="isOwner"
-                                    @click="openAiGenerateModal(ext)"
-                                    :disabled="isGeneratingAiRender === ext.id"
+                                    @click="openAiGenerateModal(capture)"
+                                    :disabled="isGeneratingAiRender === capture.id"
                                     class="px-2.5 py-1 rounded text-[10px] font-bold bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white transition flex items-center gap-1 shadow backdrop-blur disabled:opacity-50"
                                     title="Generate Render AI fotorealistik menggunakan Gemini"
                                 >
-                                    <Sparkles class="w-3 h-3" :class="isGeneratingAiRender === ext.id ? 'animate-spin' : ''" />
-                                    <span>{{ ext.ai_rendered_url ? 'Regenerate AI' : '✨ Generate AI' }}</span>
+                                    <Sparkles class="w-3 h-3" :class="isGeneratingAiRender === capture.id ? 'animate-spin' : ''" />
+                                    <span>{{ capture.ai_rendered_url ? 'Regenerate AI' : '✨ Generate AI' }}</span>
                                 </button>
 
                                 <button
                                     v-if="isOwner"
-                                    @click="triggerUploadAi(ext.id)"
+                                    @click="triggerUploadAi(capture.id)"
                                     class="px-2 py-1 rounded text-[10px] font-bold bg-slate-800 text-white hover:bg-slate-700 transition flex items-center gap-1 shadow"
                                     title="Unggah file gambar render AI manual"
                                 >
@@ -2012,8 +2020,8 @@ onUnmounted(() => {
                                 </button>
 
                                 <button
-                                    v-if="isOwner && ext.ai_rendered_url"
-                                    @click="removeAiRender(ext.id)"
+                                    v-if="isOwner && capture.ai_rendered_url"
+                                    @click="removeAiRender(capture.id)"
                                     class="p-1 rounded bg-red-600/80 text-white hover:bg-red-500 transition shadow"
                                     title="Hapus render AI dan gunakan 3D asli"
                                 >
@@ -2025,15 +2033,15 @@ onUnmounted(() => {
                         <!-- Judul Bawah -->
                         <div class="pt-4 shrink-0">
                             <div class="flex items-center gap-2">
-                                <span v-if="ext.code" class="px-2 py-0.5 rounded bg-orange-600 text-white font-mono text-xs font-bold shadow-sm">
-                                    {{ ext.code }}
+                                <span v-if="capture.code" class="px-2 py-0.5 rounded bg-orange-600 text-white font-mono text-xs font-bold shadow-sm">
+                                    {{ capture.code }}
                                 </span>
                                 <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight uppercase">
-                                    {{ ext.room_name || 'TAMPAK DEPAN' }}
+                                    {{ capture.room_name || 'TAMPAK DEPAN' }}
                                 </h2>
                             </div>
                             <p class="text-xs text-slate-500 font-mono mt-0.5">
-                                PERSPEKTIF EKSTERIOR • JAM {{ ext.captured_hour }}
+                                PERSPEKTIF EKSTERIOR • JAM {{ capture.captured_hour }}
                             </p>
                         </div>
                     </div>
@@ -2075,12 +2083,10 @@ onUnmounted(() => {
                         </div>
                     </div>
                 </section>
-            </template>
+                </template>
 
-            <!-- ======================================================== -->
-            <!-- HALAMAN 4 dst.: INTERIOR PER RUANGAN + KEY PLAN LOCATOR   -->
-            <!-- ======================================================== -->
-            <template v-for="(room, rIdx) in interiorCaptures" :key="'room-' + room.id">
+                <!-- ── FORMAT INTERIOR / RUANGAN ── -->
+                <template v-else>
                 <section
                     class="booklet-sheet bg-white text-slate-900 shadow-2xl overflow-hidden flex border border-slate-300 print:border-none"
                     :class="paperSize === 'A3' ? 'sheet-a3' : 'sheet-a4'"
@@ -2091,14 +2097,14 @@ onUnmounted(() => {
                         <!-- Kiri Atas (~68% Tinggi): Visual 3D / Render AI Ruangan -->
                         <div class="h-[68%] w-full relative rounded overflow-hidden bg-black flex items-center justify-center">
                             <img
-                                :src="getCaptureDisplayUrl(room)"
-                                :alt="room.room_name"
+                                :src="getCaptureDisplayUrl(capture)"
+                                :alt="capture.room_name"
                                 class="w-full h-full object-cover"
                             />
 
                             <!-- Loading Overlay saat sedang di-generate -->
                             <div
-                                v-if="isGeneratingAiRender === room.id"
+                                v-if="isGeneratingAiRender === capture.id"
                                 class="no-print absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center gap-2.5 text-white p-4 text-center z-20"
                             >
                                 <Sparkles class="w-8 h-8 text-orange-400 animate-spin" />
@@ -2111,7 +2117,7 @@ onUnmounted(() => {
                             <!-- Controls AI & Upload (Hidden saat print) -->
                             <div class="no-print absolute top-3 right-3 flex items-center gap-1.5 z-10">
                                 <span
-                                    v-if="room.ai_rendered_url"
+                                    v-if="capture.ai_rendered_url"
                                     class="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-600 text-white shadow"
                                 >
                                     RENDER AI
@@ -2126,30 +2132,30 @@ onUnmounted(() => {
                                 <!-- Tombol Ganti / Update Gambar 3D Snapshot -->
                                 <button
                                     v-if="isOwner"
-                                    @click="triggerUpdateCapture(room.id)"
-                                    :disabled="isUploadingCapture === room.id"
+                                    @click="triggerUpdateCapture(capture.id)"
+                                    :disabled="isUploadingCapture === capture.id"
                                     class="px-2.5 py-1 rounded text-[10px] font-bold bg-slate-900/90 text-white hover:bg-slate-800 transition flex items-center gap-1 shadow backdrop-blur border border-white/20 disabled:opacity-50"
                                     title="Ganti gambar foto/snapshot 3D ruangan ini dengan file baru"
                                 >
-                                    <RefreshCw class="w-3 h-3 text-amber-400" :class="isUploadingCapture === room.id ? 'animate-spin' : ''" />
+                                    <RefreshCw class="w-3 h-3 text-amber-400" :class="isUploadingCapture === capture.id ? 'animate-spin' : ''" />
                                     <span>Update Gambar</span>
                                 </button>
 
                                 <!-- Tombol 1-Click Generate AI (Gemini) -->
                                 <button
                                     v-if="isOwner"
-                                    @click="openAiGenerateModal(room)"
-                                    :disabled="isGeneratingAiRender === room.id"
+                                    @click="openAiGenerateModal(capture)"
+                                    :disabled="isGeneratingAiRender === capture.id"
                                     class="px-2.5 py-1 rounded text-[10px] font-bold bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white transition flex items-center gap-1 shadow backdrop-blur disabled:opacity-50"
                                     title="Generate Render AI fotorealistik menggunakan Gemini"
                                 >
-                                    <Sparkles class="w-3 h-3" :class="isGeneratingAiRender === room.id ? 'animate-spin' : ''" />
-                                    <span>{{ room.ai_rendered_url ? 'Regenerate AI' : '✨ Generate AI' }}</span>
+                                    <Sparkles class="w-3 h-3" :class="isGeneratingAiRender === capture.id ? 'animate-spin' : ''" />
+                                    <span>{{ capture.ai_rendered_url ? 'Regenerate AI' : '✨ Generate AI' }}</span>
                                 </button>
 
                                 <button
                                     v-if="isOwner"
-                                    @click="triggerUploadAi(room.id)"
+                                    @click="triggerUploadAi(capture.id)"
                                     class="px-2 py-1 rounded text-[10px] font-bold bg-slate-800/90 text-white hover:bg-slate-700 transition flex items-center gap-1 shadow backdrop-blur"
                                     title="Upload gambar render AI manual untuk ruangan ini"
                                 >
@@ -2158,8 +2164,8 @@ onUnmounted(() => {
                                 </button>
                                 
                                 <button
-                                    v-if="isOwner && room.ai_rendered_url"
-                                    @click="removeAiRender(room.id)"
+                                    v-if="isOwner && capture.ai_rendered_url"
+                                    @click="removeAiRender(capture.id)"
                                     class="p-1 rounded bg-red-600/80 text-white hover:bg-red-500 transition shadow"
                                     title="Hapus render AI dan gunakan 3D asli"
                                 >
@@ -2173,18 +2179,18 @@ onUnmounted(() => {
                             <!-- Sisi Kiri Bawah: Nama Ruangan Kapital Tebal & Catatan -->
                             <div class="flex-1 pr-4">
                                 <div class="flex items-center gap-2">
-                                    <span v-if="room.code" class="px-2 py-0.5 rounded bg-orange-600 text-white font-mono text-xs font-bold shadow-sm">
-                                        {{ room.code }}
+                                    <span v-if="capture.code" class="px-2 py-0.5 rounded bg-orange-600 text-white font-mono text-xs font-bold shadow-sm">
+                                        {{ capture.code }}
                                     </span>
                                     <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight uppercase">
-                                        {{ room.room_name }}
+                                        {{ capture.room_name }}
                                     </h2>
                                 </div>
                                 <p class="text-xs text-slate-500 font-mono mt-0.5">
-                                    INTERIOR PERSPECTIVE • JAM {{ room.captured_hour }}
+                                    INTERIOR PERSPECTIVE • JAM {{ capture.captured_hour }}
                                 </p>
-                                <p v-if="room.description" class="text-xs text-slate-600 mt-2 line-clamp-3">
-                                    {{ room.description }}
+                                <p v-if="capture.description" class="text-xs text-slate-600 mt-2 line-clamp-3">
+                                    {{ capture.description }}
                                 </p>
                                 <p v-else class="text-[11px] text-slate-400 mt-2 italic">
                                     Material finishing dinding, penutup lantai, serta armature penerangan arsitektural.
@@ -2195,7 +2201,7 @@ onUnmounted(() => {
                             <div class="w-[280px] sm:w-[320px] h-full flex-shrink-0 relative group">
                                 <!-- Mode Gambar 2D Custom Ruangan -->
                                 <div
-                                    v-if="room.key_plan_image_url"
+                                    v-if="capture.key_plan_image_url"
                                     class="key-plan-container relative bg-slate-50 border border-slate-300 rounded shadow-sm overflow-hidden flex flex-col justify-between w-full h-full"
                                 >
                                     <!-- Header Key Plan Badge -->
@@ -2204,14 +2210,14 @@ onUnmounted(() => {
                                             <span class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
                                             KEY PLAN (2D RUANGAN)
                                         </span>
-                                        <span class="text-orange-400 truncate max-w-[110px]">{{ room.room_name }}</span>
+                                        <span class="text-orange-400 truncate max-w-[110px]">{{ capture.room_name }}</span>
                                     </div>
 
                                     <!-- Gambar 2D Ruangan -->
                                     <div class="flex-1 min-h-0 w-full relative flex items-center justify-center p-1.5 bg-white">
                                         <img
-                                            :src="room.key_plan_image_url"
-                                            :alt="`Denah 2D ${room.room_name}`"
+                                            :src="capture.key_plan_image_url"
+                                            :alt="`Denah 2D ${capture.room_name}`"
                                             class="max-w-full max-h-full object-contain"
                                         />
                                     </div>
@@ -2227,9 +2233,9 @@ onUnmounted(() => {
                                 <KeyPlanCanvas
                                     v-else
                                     :elements="planSheet?.elements || []"
-                                    :activeRoomName="room.room_name"
-                                    :activeElementId="room.room_element_id"
-                                    :activeCode="room.code"
+                                    :activeRoomName="capture.room_name"
+                                    :activeElementId="capture.room_element_id"
+                                    :activeCode="capture.code"
                                     width="100%"
                                     height="100%"
                                 />
@@ -2237,18 +2243,18 @@ onUnmounted(() => {
                                 <!-- Floating Action Buttons untuk Denah 2D Ruangan (Hidden saat print) -->
                                 <div v-if="isOwner" class="no-print absolute top-1.5 right-1.5 flex items-center gap-1 z-20">
                                     <button
-                                        @click="triggerUploadRoom2d(room.id)"
-                                        :disabled="isUploadingRoom2d === room.id"
+                                        @click="triggerUploadRoom2d(capture.id)"
+                                        :disabled="isUploadingRoom2d === capture.id"
                                         class="px-2 py-0.5 rounded text-[9.5px] font-bold bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-amber-500/40 transition flex items-center gap-1 shadow backdrop-blur disabled:opacity-50"
-                                        :title="room.key_plan_image_url ? 'Ganti gambar denah 2D khusus ruangan ini' : 'Unggah gambar denah 2D khusus untuk lembar ruangan ini'"
+                                        :title="capture.key_plan_image_url ? 'Ganti gambar denah 2D khusus ruangan ini' : 'Unggah gambar denah 2D khusus untuk lembar ruangan ini'"
                                     >
-                                        <Upload class="w-3 h-3" :class="isUploadingRoom2d === room.id ? 'animate-spin' : ''" />
-                                        <span>{{ room.key_plan_image_url ? 'Ganti 2D' : '+ Denah 2D' }}</span>
+                                        <Upload class="w-3 h-3" :class="isUploadingRoom2d === capture.id ? 'animate-spin' : ''" />
+                                        <span>{{ capture.key_plan_image_url ? 'Ganti 2D' : '+ Denah 2D' }}</span>
                                     </button>
 
                                     <button
-                                        v-if="room.key_plan_image_url"
-                                        @click="removeRoom2dImage(room.id)"
+                                        v-if="capture.key_plan_image_url"
+                                        @click="removeRoom2dImage(capture.id)"
                                         class="p-0.5 rounded bg-red-600/80 text-white hover:bg-red-500 transition shadow"
                                         title="Hapus gambar denah 2D dan kembali ke denah otomatis"
                                     >
@@ -2287,7 +2293,7 @@ onUnmounted(() => {
                             </div>
                             <div class="border-b border-slate-300 pb-2">
                                 <span class="block text-[9px] font-mono uppercase tracking-wider text-slate-400">DESCRIPTION</span>
-                                <p class="text-[10px] text-slate-700 font-semibold uppercase">{{ room.room_name }}</p>
+                                <p class="text-[10px] text-slate-700 font-semibold uppercase">{{ capture.room_name }}</p>
                             </div>
                         </div>
                         <div class="pt-2 border-t border-slate-800">
@@ -2296,6 +2302,7 @@ onUnmounted(() => {
                         </div>
                     </div>
                 </section>
+                </template>
             </template>
         </main>
     </div>

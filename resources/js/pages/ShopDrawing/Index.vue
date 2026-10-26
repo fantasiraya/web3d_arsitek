@@ -1004,13 +1004,15 @@ async function deleteSnapshotImage(sheet: DrawingSheetItem) {
                                     <div class="flex justify-end">
                                         <div
                                             :class="[
-                                                'w-5 h-5 rounded-full flex items-center justify-center transition-colors',
+                                                'min-w-5 h-5 px-1 rounded-full flex items-center justify-center font-black text-xs transition-colors shadow-md',
                                                 selectedCaptureIds.includes(cap.id)
-                                                    ? 'bg-amber-400 text-slate-950'
+                                                    ? 'bg-amber-400 text-slate-950 ring-2 ring-black/40'
                                                     : 'bg-black/50 text-white/50 border border-white/20'
                                             ]"
                                         >
-                                            <CheckCircle2 v-if="selectedCaptureIds.includes(cap.id)" class="w-4 h-4" />
+                                            <span v-if="selectedCaptureIds.includes(cap.id)">
+                                                {{ selectedCaptureIds.indexOf(cap.id) + 1 }}
+                                            </span>
                                         </div>
                                     </div>
                                     <div class="text-[10px] font-medium text-white truncate">
