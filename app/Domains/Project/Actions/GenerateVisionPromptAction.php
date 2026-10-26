@@ -412,8 +412,8 @@ PROMPT;
     protected function callGemini(array $config, string $systemInstruction, string $userPrompt, array $images): ?string
     {
         $apiKey = $config['api_key'];
-        $primaryModel = $config['model'] ?: 'gemini-3.8-flash';
-        $modelsToTry = array_unique([$primaryModel, 'gemini-3.8-flash', 'gemini-3.7-flash']);
+        $primaryModel = $config['model'] ?: 'gemini-3.5-flash';
+        $modelsToTry = array_unique(array_filter([$primaryModel, 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.1-flash-lite']));
 
         $parts = [
             ['text' => $userPrompt],

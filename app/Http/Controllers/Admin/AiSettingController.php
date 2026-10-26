@@ -36,8 +36,8 @@ class AiSettingController extends Controller
                 'masked_key'      => $this->maskSecret($dbSettings->get('gemini_api_key')?->value ?? config('services.vision_ai.providers.gemini.api_key') ?? config('services.gemini.api_key')),
                 'model'           => $dbSettings->get('gemini_model')?->value ?? config('services.vision_ai.providers.gemini.model') ?? config('services.gemini.model', 'gemini-2.5-flash'),
                 'is_model_from_db'=> !empty($dbSettings->get('gemini_model')?->value),
-                'default_model'   => 'gemini-2.5-flash',
-                'recommended_models' => ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                'default_model'   => 'gemini-3.5-flash',
+                'recommended_models' => ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
             ],
             'openai' => [
                 'name'            => 'OpenAI (ChatGPT)',

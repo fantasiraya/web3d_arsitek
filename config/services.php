@@ -43,12 +43,12 @@ return [
 
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.5-flash'),
     ],
 
     'image_render' => [
-        'provider' => env('IMAGE_RENDER_PROVIDER', 'gemini'),
-        'model' => env('IMAGE_RENDER_MODEL', 'imagen-3.0-generate-002'),
+        'provider' => env('IMAGE_RENDER_PROVIDER'),
+        'model' => env('IMAGE_RENDER_MODEL'),
     ],
 
     'vision_ai' => [
@@ -56,7 +56,7 @@ return [
         'providers' => [
             'gemini' => [
                 'api_key' => env('GEMINI_API_KEY'),
-                'model'   => env('GEMINI_MODEL', 'gemini-3.8-flash'),
+                'model'   => env('GEMINI_MODEL', 'gemini-3.5-flash'),
             ],
             'openai' => [
                 'api_key'  => env('OPENAI_API_KEY'),

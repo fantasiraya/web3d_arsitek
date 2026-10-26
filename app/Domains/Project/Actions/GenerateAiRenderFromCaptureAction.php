@@ -37,12 +37,20 @@ class GenerateAiRenderFromCaptureAction
             abort(422, 'Capture tidak cocok dengan proyek.');
         }
 
-        // Resolusi konfigurasi AI
+        // Resolusi konfigurasi AI langsung dari .env / database
         $dbProvider = $this->getSetting('image_render_provider');
-        $provider = strtolower((string) ($dbProvider ?: config('services.image_render.provider') ?: env('IMAGE_RENDER_PROVIDER', 'gemini')));
+        $provider = strtolower(trim((string) ($dbProvider ?: config('services.image_render.provider') ?: env('IMAGE_RENDER_PROVIDER'))));
 
         $dbModel = $this->getSetting('image_render_model');
-        $model = (string) ($dbModel ?: config('services.image_render.model') ?: env('IMAGE_RENDER_MODEL', 'imagen-3.0-generate-002'));
+        $model = trim((string) ($dbModel ?: config('services.image_render.model') ?: env('IMAGE_RENDER_MODEL')));
+
+        if (empty($provider)) {
+            throw new RuntimeException("IMAGE_RENDER_PROVIDER di file .env belum disetel atau kosong. Silakan tentukan provider pada .env (pilihan: pollinations, gemini, atau replicate).");
+        }
+
+        if (empty($model)) {
+            throw new RuntimeException("IMAGE_RENDER_MODEL di file .env belum disetel atau kosong. Silakan tentukan model pada .env (contoh: 'flux' untuk pollinations, atau 'gemini-3.1-flash-image' untuk gemini).");
+        }
 
         $geminiApiKey = (string) ($this->getSetting('gemini_api_key', config('services.vision_ai.providers.gemini.api_key') ?: config('services.gemini.api_key')));
         $replicateToken = (string) ($this->getSetting('replicate_api_token', env('REPLICATE_API_TOKEN')));
@@ -97,18 +105,18 @@ class GenerateAiRenderFromCaptureAction
         $imageData = null;
         $geminiError = null;
 
-        // 1. Jika provider GEMINI dipilih (menggunakan model kustom seperti imagen-3.0-generate-002)
+        // 1. Jika provider GEMINI dipilih di .env
         if ($provider === 'gemini') {
             try {
-                $imageData = $this->callGeminiImagen($geminiApiKey, $userPrompt, $aspectRatio, $model);
+                $imageData = $this->callGeminiImagen($geminiApiKey, $userPrompt, $aspectRatio, $model, $refBinary, $depthMapBinary);
             } catch (\Throwable $e) {
                 $geminiError = $e->getMessage();
-                Log::warning("Gemini Image Render [{$model}] gagal: {$geminiError}. Mengalihkan ke fallback Pollinations.");
+                Log::warning("Gemini Image Render [{$model}] gagal: {$geminiError}.");
+                throw new RuntimeException("Gagal me-render dengan Gemini [{$model}]: {$geminiError}. Catatan: API image generation Gemini memerlukan akun berbayar Google AI Studio (Free Tier kuotanya 0). Untuk render gratis langsung tanpa kartu kredit, set di .env: IMAGE_RENDER_PROVIDER=pollinations dan IMAGE_RENDER_MODEL=flux.");
             }
         }
-
-        // 2. Jika provider REPLICATE dipilih
-        if (empty($imageData) && $provider === 'replicate' && !empty($replicateToken)) {
+        // 2. Jika provider REPLICATE dipilih di .env
+        elseif ($provider === 'replicate') {
             try {
                 $imageData = $this->renderWithReplicate(
                     $replicateToken,
@@ -119,23 +127,21 @@ class GenerateAiRenderFromCaptureAction
                     $depthMapUrl
                 );
             } catch (\Throwable $e) {
-                Log::warning("Replicate render gagal ({$e->getMessage()}), beralih ke Flux Pollinations.");
+                throw new RuntimeException("Gagal me-render dengan Replicate [{$model}]: " . $e->getMessage());
             }
         }
-
-        // 3. Engine FLUX / Pollinations (Mendukung Gambar Acuan RGB & Depth Map ControlNet)
-        if (empty($imageData)) {
-            $pollinationsModel = ($provider === 'pollinations' && !empty($model)) ? $model : 'flux';
+        // 3. Jika provider POLLINATIONS dipilih di .env
+        elseif ($provider === 'pollinations') {
             try {
                 $imageData = $this->renderWithPollinations(
                     $userPrompt,
                     $aspectRatio,
-                    $pollinationsModel,
+                    $model ?: 'flux',
                     $referenceImageUrl,
                     $depthMapUrl
                 );
             } catch (\Throwable $e) {
-                Log::warning("Pollinations [{$pollinationsModel}] render gagal ({$e->getMessage()}), mencoba model turbo/SDXL...");
+                Log::warning("Pollinations [{$model}] render gagal ({$e->getMessage()}), mencoba model cadangan turbo...");
                 try {
                     $imageData = $this->renderWithPollinations(
                         $userPrompt,
@@ -145,12 +151,12 @@ class GenerateAiRenderFromCaptureAction
                         $depthMapUrl
                     );
                 } catch (\Throwable $turboErr) {
-                    if ($geminiError) {
-                        throw new RuntimeException("API Google Gemini tidak dapat merender gambar ({$geminiError}). Pengalihan cadangan ke Pollinations juga terkendala: " . $turboErr->getMessage());
-                    }
-                    throw new RuntimeException("Gagal melakukan render AI: " . $turboErr->getMessage());
+                    throw new RuntimeException("Gagal me-render dengan Pollinations [{$model}]: " . $turboErr->getMessage());
                 }
             }
+        }
+        else {
+            throw new RuntimeException("Provider AI Render '{$provider}' tidak dikenali di .env. Pilihan yang valid: pollinations | gemini | replicate.");
         }
 
         if (empty($imageData)) {
@@ -423,9 +429,9 @@ class GenerateAiRenderFromCaptureAction
     }
 
     /**
-     * Render via Google Gemini Imagen API
+     * Render via Google Gemini Image API
      */
-    protected function callGeminiImagen(?string $apiKey, string $prompt, string $aspectRatio = '16:9', string $requestedModel = 'imagen-3.0-generate-002'): string
+    protected function callGeminiImagen(?string $apiKey, string $prompt, string $aspectRatio = '16:9', string $requestedModel = 'gemini-3.5-flash-lite', ?string $refBinary = null, ?string $depthMapBinary = null): string
     {
         if (empty($apiKey)) {
             throw new RuntimeException('API Key Gemini belum disetel. Pastikan GEMINI_API_KEY terpasang di .env.');
@@ -433,50 +439,130 @@ class GenerateAiRenderFromCaptureAction
 
         // Prioritaskan model yang dikustomisasi di .env
         $cleanRequested = str_replace('models/', '', $requestedModel);
-        $models = array_unique(array_filter([
-            $cleanRequested,
-            'imagen-3.0-generate-002',
-            'imagen-3.0-fast-generate-001',
-            'gemini-2.5-flash-image',
-        ]));
+
+        $modelsToTry = [$cleanRequested];
+
+        // Jika model teks/multimodal yang dipilih (misal gemini-3.5-flash-lite atau gemini-3.5-flash),
+        // sertakan varian model image generation yang aktif di Google Gemini API
+        if (str_contains($cleanRequested, 'flash-lite')) {
+            $modelsToTry[] = 'gemini-3.1-flash-lite-image';
+        } elseif (str_contains($cleanRequested, 'flash')) {
+            $modelsToTry[] = 'gemini-3.1-flash-image';
+        }
+
+        $modelsToTry[] = 'gemini-2.5-flash-image';
+        $modelsToTry[] = 'gemini-3-pro-image';
+
+        $models = array_unique(array_filter($modelsToTry));
+        
+        $primaryException = null;
         $lastException = null;
 
+        // Siapkan parts untuk multimodal (sertakan gambar referensi RGB & Depth Map jika ada)
+        $multimodalParts = [];
+        if (!empty($refBinary)) {
+            $multimodalParts[] = [
+                'inlineData' => [
+                    'mimeType' => 'image/jpeg',
+                    'data'     => base64_encode($refBinary),
+                ],
+            ];
+        }
+        if (!empty($depthMapBinary)) {
+            $multimodalParts[] = [
+                'inlineData' => [
+                    'mimeType' => 'image/png',
+                    'data'     => base64_encode($depthMapBinary),
+                ],
+            ];
+        }
+        $multimodalParts[] = [
+            'text' => $prompt,
+        ];
+
         foreach ($models as $model) {
-            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:predict?key={$apiKey}";
+            $isGeminiMultimodal = str_starts_with($model, 'gemini-');
 
             try {
-                $response = Http::timeout(60)->post($url, [
-                    'instances' => [
-                        [
-                            'prompt' => $prompt,
+                if ($isGeminiMultimodal) {
+                    // Endpoint untuk model Gemini Image Generation (generateContent)
+                    $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
+                    $response = Http::timeout(60)->post($url, [
+                        'contents' => [
+                            [
+                                'parts' => $multimodalParts,
+                            ],
                         ],
-                    ],
-                    'parameters' => [
-                        'sampleCount' => 1,
-                        'aspectRatio' => $aspectRatio,
-                        'outputMimeType' => 'image/jpeg',
-                    ],
-                ]);
+                        'generationConfig' => [
+                            'responseModalities' => ['IMAGE'],
+                        ],
+                    ]);
 
-                if ($response->successful()) {
-                    $json = $response->json();
-                    $base64 = $json['predictions'][0]['bytesBase64Encoded'] ?? null;
-                    if ($base64) {
-                        $binary = base64_decode($base64);
-                        if ($binary !== false) {
-                            return $binary;
+                    if ($response->successful()) {
+                        $json = $response->json();
+                        $candidate = $json['candidates'][0] ?? null;
+                        $parts = $candidate['content']['parts'] ?? [];
+                        foreach ($parts as $part) {
+                            $inlineData = $part['inlineData'] ?? $part['inline_data'] ?? null;
+                            if (!empty($inlineData['data'])) {
+                                $binary = base64_decode($inlineData['data']);
+                                if ($binary !== false) {
+                                    return $binary;
+                                }
+                            }
+                        }
+
+                        // Jika kandidat tidak menghasilkan gambar (misalnya finishReason: NO_IMAGE pada model teks)
+                        $finishReason = $candidate['finishReason'] ?? 'NO_IMAGE';
+                        $errText = "Model {$model} mengembalikan status {$finishReason} tanpa data gambar (model ini adalah vision/text understanding, bukan generator gambar langsung).";
+                        $lastException = new RuntimeException($errText);
+                        if ($model === $cleanRequested) {
+                            $primaryException = $lastException;
+                        }
+                        continue;
+                    }
+                } else {
+                    // Endpoint untuk Google Imagen (predict)
+                    $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:predict?key={$apiKey}";
+                    $response = Http::timeout(60)->post($url, [
+                        'instances' => [
+                            [
+                                'prompt' => $prompt,
+                            ],
+                        ],
+                        'parameters' => [
+                            'sampleCount' => 1,
+                            'aspectRatio' => $aspectRatio,
+                            'outputMimeType' => 'image/jpeg',
+                        ],
+                    ]);
+
+                    if ($response->successful()) {
+                        $json = $response->json();
+                        $base64 = $json['predictions'][0]['bytesBase64Encoded'] ?? null;
+                        if ($base64) {
+                            $binary = base64_decode($base64);
+                            if ($binary !== false) {
+                                return $binary;
+                            }
                         }
                     }
                 }
 
                 $errorMsg = $response->json('error.message') ?? $response->body();
                 $lastException = new RuntimeException("Gagal me-render dengan {$model}: {$errorMsg}");
+                if ($model === $cleanRequested) {
+                    $primaryException = $lastException;
+                }
             } catch (\Throwable $e) {
                 $lastException = $e;
+                if ($model === $cleanRequested) {
+                    $primaryException = $lastException;
+                }
             }
         }
 
-        throw $lastException ?: new RuntimeException('Gagal menghubungi API Gemini Imagen.');
+        throw $primaryException ?: $lastException ?: new RuntimeException('Gagal menghubungi API Gemini Image Generation.');
     }
 
     protected function getSetting(string $key, mixed $default = null): mixed
