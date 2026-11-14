@@ -37,38 +37,38 @@ const tabs = [
     {
         id: 'orbit',
         badge: 'Langkah 01',
-        title: 'Eksplorasi Sudut Pandang Bebas 360°',
-        subtitle: 'Kamera Orbit & Perspektif 360 Derajat',
-        description: 'Klien dapat memutar sudut pandang bangunan 360° secara bebas melingkari fondasi air, memeriksa skala geometri dari perspektif pulau, dan meninjau hubungan ruang secara menyeluruh.',
+        title: 'Eksplorasi 360° & Simulasi Matahari Geografis',
+        subtitle: 'Kamera Orbit & Perhitungan Bayangan Geografis',
+        description: 'Klien dapat memutar sudut pandang bangunan 360° secara bebas, memeriksa arah sinar matahari berdasarkan jam dan posisi lintang-bujur (SunCalc), serta meninjau hubungan ruang secara komprehensif.',
         presetName: 'Fasad Utama',
         is360: true,
         image: '/images/villa_orbit_360.jpg',
-        telemetry: 'Azimuth: 145° • Elevation: 24° • 360° Orbit Panoramic View',
-        statusText: 'Mode Putar 360° Aktif'
+        telemetry: 'Azimuth: 145° • Solar Time: 16:30 WIB • 360° Orbit Panoramic View',
+        statusText: 'Mode Putar 360° & Solar Path Aktif'
     },
     {
         id: 'raycast',
         badge: 'Langkah 02',
-        title: 'Penempatan Pin Spasial Tiga Dimensi',
-        subtitle: 'Dek Cantilever & Deteksi Permukaan Presisi',
-        description: 'Raycaster Three.js membaca permukaan struktur kantilever beton dan kolam infinity. Anda dapat mengklik di mana saja tanpa batas (Unlimited Pin) untuk menancapkan revisi tepat pada titik desain.',
+        title: 'Penempatan Pin Spasial & Snapshot Kode Ruang',
+        subtitle: 'Deteksi Permukaan Presisi & Penomoran EXT-*/R-*',
+        description: 'Raycaster Three.js membaca permukaan struktur dan material. Arsitek & klien menandai revisi tepat pada titik desain, mengambil snapshot multi-sudut berkode ruangan, dan menyinkronkannya ke denah CAD.',
         presetName: 'Dek Cantilever',
         is360: false,
         image: '/images/villa_cantilever_deck.jpg',
-        telemetry: 'X: -4.82m • Y: +12.40m • Z: +8.15m • Hit: Dek_Cantilever_Pool',
-        statusText: 'Mode Tambah Pin Unlimited Aktif'
+        telemetry: 'X: -4.82m • Y: +12.40m • Z: +8.15m • Kode: EXT-01 (Tampak Dek)',
+        statusText: 'Mode Tambah Pin & Snapshot Aktif'
     },
     {
         id: 'resolve',
         badge: 'Langkah 03',
-        title: 'Validasi Revisi & Pencahayaan Interior',
-        subtitle: 'Interior Ambien 2800K & Status Selesai',
-        description: 'Inspeksi pencahayaan interior hangat 2800K melalui kaca setinggi dua lantai saat senja. Arsitek meninjau dan menyelesaikan seluruh masukan spasial dengan status validasi "Resolved".',
+        title: 'Validasi Revisi, Render AI & Booklet Presentasi A3',
+        subtitle: 'Interior Ambien, Render AI Gemini & Booklet PDF',
+        description: 'Inspeksi pencahayaan interior hangat 2800K, validasi status revisi, ubah snapshot menjadi render fotorealistik AI tanpa ubah geometri, dan terbitkan Booklet Presentasi A3 siap cetak.',
         presetName: 'Pencahayaan Interior',
         is360: false,
         image: '/images/villa_interior_lighting.jpg',
-        telemetry: 'Kelvin: 2800K • Status: 100% Selesai • Final Verification',
-        statusText: 'Semua Revisi Telah Disetujui'
+        telemetry: 'Kelvin: 2800K • Kode: R-01 • Booklet A3 Ready • Final Verification',
+        statusText: 'Semua Revisi Disetujui & Booklet Siap'
     }
 ];
 

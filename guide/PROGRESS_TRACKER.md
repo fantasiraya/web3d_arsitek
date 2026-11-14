@@ -128,15 +128,16 @@
 ### 8. Landing Page & Public Pages
 | Menu / Fitur | Scope | Status | Catatan & Tgl Selesai |
 | :--- | :--- | :---: | :--- |
-| Monumental Hero & Pinned Frame | `components/landing/HeroSection.vue` | 🟢 Completed | Typography monumental Apple, pill badge, window titanium villa |
-| Scroll-Driven Product Journey 5-Stages | `components/landing/ScrollyExperienceSection.vue` | 🟢 Completed | Sticky pinned scroll track (450vh), 5 tahapan alur kerja |
+| Monumental Hero & Pinned Frame | `components/landing/HeroSection.vue` | 🟢 Completed | Typography monumental, platform all-in-one badge (3D WebGL, CAD 2D, AI Render, Booklet A3, RAB), quick tools bar, counter statistik performa real-time — diperbarui 2026-11-14 |
+| Scroll-Driven Product Journey 4-Stages | `components/landing/ScrollyExperienceSection.vue` | 🟢 Completed | Sticky pinned scroll track (360vh), 4 tahapan alur kerja arsitektural terintegrasi (Viewer 3D & Matahari, Akses Klien & Kuota, Revisi Spasial & Snapshot Kode Ruang, CAD 2D & Booklet A3 Siap Cetak) — diperbarui 2026-11-14 |
 | Architectural Cinematic Scrollytelling | `components/landing/ArchitecturalCinematicSection.vue` | 🟢 Completed | Pinned 4-layer spatial anatomy inspection |
-| Apple Pro Bento Grid | `components/landing/BentoGridSection.vue` | 🟢 Completed | Bento cards (Zero-Leak Security, Dual-Capacity, Draco, WebSocket) |
-| Interactive 3D Spatial Simulator | `components/landing/InteractiveShowcaseSection.vue` | 🟢 Completed | Dynamic click-to-pin, koordinat & normal dinamis |
-| Tiered Pricing Table | `components/landing/PricingSection.vue` | 🟢 Completed | Apple Store comparison cards (Free, Pro, Enterprise), toggle bulanan/tahunan |
-| FAQ Accordion | `components/landing/FaqSection.vue` | 🟢 Completed | Apple-style accordion FAQ |
-| Full CTA Section | `components/landing/CtaSection.vue` | 🟢 Completed | Closing call-to-action |
-| Full-Width Navbar & Footer | `components/landing/LandingNavbar.vue`, `LandingFooter.vue` | 🟢 Completed | Edge-to-edge, frosted glass backdrop blur, Inertia routes |
+| Apple Pro Bento Grid (6 Cards Full-Suite) | `components/landing/BentoGridSection.vue` | 🟢 Completed | 6 kartu bento berimbang: CAD 2D & DXF (Konva.js), Booklet Presentasi A3, Direct AI Render (Gemini), 3D Viewer & Simulasi Matahari, Estimator RAB & Volume GLB, serta Proteksi Undangan Email & Kuota Anti Scope-Creep — diperbarui 2026-11-14 |
+| Interactive 3D Spatial Simulator | `components/landing/InteractiveShowcaseSection.vue` | 🟢 Completed | Dynamic click-to-pin, simulasi matahari SunCalc, kode snapshot EXT-01/R-01, render AI & verifikasi booklet A3 — diperbarui 2026-11-14 |
+| Tiered Pricing Table | `components/landing/PricingSection.vue` | 🟢 Completed | Apple Store comparison cards (Free, Pro, Enterprise) selaras gating sistem aktual (CAD 2D, DXF, AI Vision, Booklet A3, RAB SNI, volume GLB) — diperbarui 2026-11-14 |
+| FAQ Accordion (4 Kategori) | `components/landing/FaqSection.vue` | 🟢 Completed | Accordion FAQ dengan kategori baru "CAD, AI & Dokumen" (AutoCAD DXF, Booklet A3, AI Render Gemini, RAB SNI) + ID `#faq` — diperbarui 2026-11-14 |
+| Full CTA Section | `components/landing/CtaSection.vue` | 🟢 Completed | Closing call-to-action all-in-one platform arsitektur modern — diperbarui 2026-11-14 |
+| Full-Width Navbar & Footer | `components/landing/LandingNavbar.vue`, `LandingFooter.vue` | 🟢 Completed | Edge-to-edge frosted glass, navigasi fitur terintegrasi, footer links kompatibilitas GLB, AutoCAD DXF, SVG, Excel .xlsx — diperbarui 2026-11-14 |
+| Meta SEO & Social Sharing Tags | `pages/Welcome.vue` | 🟢 Completed | Meta title & description selaras ekosistem 3D, CAD 2D, AI Render, Booklet A3, dan RAB — diperbarui 2026-11-14 |
 | ~~Sample 3D Model WebGL Demo~~ | Frontend | ⚪ Removed | Ditiadakan; scrollytelling murni animasi layer UI hardware-accelerated |
 
 ### 9. Testing & Data Seeding
@@ -301,6 +302,17 @@
   4. **Penyempurnaan Booklet & KeyPlan:** Perbaikan layout KeyPlan agar tidak terpotong pada rasio kanvas ekstrem, perbaikan logika drag lembar denah, validasi keharusan menghubungkan gambar sebelum membuka booklet viewer.
   5. **Tabel RAB Show.vue:** Penyesuaian layout dan styling tabel rincian RAB agar lebih elegan dan informatif.
   6. **TypeScript Strict Type Polish:** Menghilangkan error TypeScript di seluruh halaman dan komponen (`Input.vue`, `useConfirm.ts`, `useGlbQuantities.ts`, `Dashboard.vue`, `Booklet.vue`, `Editor.vue`, `Index.vue`, `Viewer.vue`, `GlbEstimator.vue`, `VisionStudio/Index.vue`), menghapus `three.d.ts` yang usang. Seluruh build Vite (3771 modul) dan test suite Pest (146 tests, 529 assertions) lulus 100% sempurna tanpa error.
+- **2026-11-14 (Update):** Revisi & Sinkronisasi Total Konten Landing Page Sesuai Keadaan Fitur Aktual Sistem:
+  1. **HeroSection.vue:** Pembaruan tipografi monumental, platform badge all-in-one (3D WebGL, CAD 2D, AI Render, Booklet A3, RAB Otomatis), subheadline komprehensif, quick tools indicator terpadu (WebGL 3D & Matahari, CAD 2D & DXF, Render AI Gemini, Booklet A3 & RAB), dan counter statistik performa real-time (0 Detik Instalasi, 85% Kompresi Draco, 1-Klik Booklet A3 & DXF, 3x Kuota Revisi Anti Scope-Creep).
+  2. **BentoGridSection.vue:** Transformasi Bento Grid menjadi 6 kartu berimbang (3 baris Apple Pro layout) yang mencerminkan kapabilitas mutakhir sistem: Lembar Kerja CAD 2D & Ekspor DXF/SVG (Konva.js), Booklet Presentasi A3 Landscape 1-Klik PDF, Direct AI Architectural Render (Gemini API), 3D Viewer Spasial & Simulasi Matahari Geografis (SunCalc), Estimator RAB & Volume GLB 3D, serta Keamanan Undangan Email & Kuota Anti Scope-Creep.
+  3. **ScrollyExperienceSection.vue:** Sinkronisasi 4 tahapan alur kerja scrollytelling arsitektural: Langkah 01 (Viewer 3D & Jalur Matahari), Langkah 02 (Akses Klien & Kuota Revisi), Langkah 03 (Revisi Spasial Presisi & Snapshot Ruang EXT-*/R-*), dan Langkah 04 (CAD 2D, Booklet A3 Siap Cetak & Final Approval).
+  4. **InteractiveShowcaseSection.vue:** Penyempurnaan telemetri dan narasi 3 tab interaktif: Eksplorasi 360° & Simulasi Matahari (SunCalc 16:30 WIB), Penempatan Pin Spasial & Snapshot Kode Ruang (`EXT-01`), serta Validasi Revisi, Render AI Gemini & Booklet A3 Siap Cetak.
+  5. **PricingSection.vue:** Penyelarasan daftar benefit fallback tier sesuai gating sistem aktual: Free Tier (1 proyek, 3x revisi, WebGL viewer & solar simulation), Pro Architect (20 proyek, AI Vision Studio, RAB volume GLB, chat live Reverb, ekspor Excel), dan Enterprise Studio (Unlimited proyek, CAD 2D Konva.js, ekspor DXF/SVG, Booklet A3, Shop Drawing & Cutting List, Direct AI Render, Whitelabel, SSO & SLA).
+  6. **FaqSection.vue:** Penambahan kategori baru "CAD, AI & Dokumen" dengan 4 pertanyaan mendalam seputar ekspor AutoCAD DXF/SVG, otomatisasi Booklet Presentasi A3, mekanisme Direct AI Render Gemini, dan estimasi RAB SNI. Penambahan anchor ID `#faq`.
+  7. **LandingNavbar.vue & LandingFooter.vue:** Pembaruan link navigasi (Showcase 3D, Fitur Terintegrasi, Alur Kerja, Paket Harga, FAQ) dan footer links (kompatibilitas GLB, AutoCAD DXF, SVG, Excel .xlsx).
+  8. **Welcome.vue:** Pembaruan meta description dan OpenGraph tags untuk SEO dan preview sosial yang akurat. Build Vite (3784 modul) sukses 100% tanpa error.
+  9. **Pricing Data & Fallback Hardening:** Mengatasi kartu harga yang sempat bernilai Rp 0 dan kosong benefit akibat data seeding `PlanSeeder` lama yang belum menyertakan kolom pricing. Memperbarui `PlanSeeder.php`, `Plan::getActivePlansForDisplay()`, dan `PricingSection.vue` dengan mekanisme defensive merge fallback yang kuat, menjalankan seeder ke database aktif, dan mem-flush Redis cache.
+
 
 
 

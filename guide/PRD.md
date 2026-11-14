@@ -134,16 +134,15 @@ Membangun platform SaaS berbasis Web 3D interaktif bernama **PitchArch** yang me
 - **Typography-First:** Headline besar dengan gradasi halus, pill badges minimalis.
 - **Scrollytelling Engine:** Pinned sections dengan narasi terarah — digerakkan posisi scroll, murni CSS transforms + GSAP ScrollTrigger, **tanpa WebGL/Three.js di landing page publik**.
 
-### 5.B Section Storyboard (Semua Sudah Diimplementasikan)
-1. **HeroSection.vue** — Monumental Apple hero, pill badge, frame UI mockup melayang.
-2. **ScrollyExperienceSection.vue** — Track scroll-pinned (450vh), 5-stage product journey: Draco Upload, Client Invite, Spatial Pin, Gatekeeper, Chat.
-3. **ArchitecturalCinematicSection.vue** — Pinned 4-layer spatial anatomy inspection.
-4. **BentoGridSection.vue** — Apple Pro Bento Grid (Zero-Leak Security, Dual-Capacity, Draco, WebSocket).
-5. **InteractiveShowcaseSection.vue** — Dynamic click-to-pin raycast simulator.
-6. **PricingSection.vue** — Apple Store comparison cards (Free, Pro, Enterprise).
-7. **FaqSection.vue** — Apple-style accordion FAQ.
-8. **CtaSection.vue** — Closing CTA.
-9. **LandingNavbar.vue + LandingFooter.vue** — Full-width frosted glass navbar + minimalist footer.
+### 5.B Section Storyboard (Sinkronisasi Fitur Terkini)
+1. **HeroSection.vue** — Monumental Apple hero, pill badge ekosistem all-in-one (3D WebGL, CAD 2D, AI Render, Booklet A3, RAB), quick tools bar, dan telemetri statistik (0s install, 85% kompresi, 1-klik booklet A3/DXF, 3x kuota revisi).
+2. **ScrollyExperienceSection.vue** — Track scroll-pinned (360vh), 4-stage architectural journey: (1) Viewer 3D & Jalur Matahari (SunCalc), (2) Akses Klien & Kuota Revisi, (3) Revisi Spasial Presisi & Snapshot Ruang EXT-*/R-*, (4) CAD 2D, Booklet A3 & Final Approval.
+3. **BentoGridSection.vue** — Apple Pro Bento Grid 6 kartu terintegrasi: Lembar Kerja CAD 2D & Ekspor DXF/SVG (Konva.js), Booklet Presentasi A3 1-Klik PDF, Direct AI Architectural Render (Gemini API), 3D Viewer & Simulasi Matahari Geografis, Estimator RAB & Volume GLB 3D, serta Keamanan Akses Undangan Email & Kuota Anti Scope-Creep.
+4. **InteractiveShowcaseSection.vue** — Dynamic interactive simulator: Eksplorasi 360° & Simulasi Matahari, Penempatan Pin Spasial & Snapshot Kode Ruang EXT-01/R-01, serta Validasi Desain, Render AI Gemini & Booklet A3 Siap Cetak.
+5. **PricingSection.vue** — Apple Store comparison cards (Free, Pro Architect, Enterprise Studio) dengan daftar benefit terperinci mencakup CAD 2D, ekspor DXF, AI Vision, Booklet A3, dan Estimator RAB.
+6. **FaqSection.vue** — Accordion FAQ 4 kategori: Akses & Kemudahan, Revisi & Kolaborasi, CAD, AI & Dokumen (AutoCAD DXF, Booklet A3, AI Render, RAB SNI), dan Keamanan.
+7. **CtaSection.vue** — Closing CTA komprehensif all-in-one.
+8. **LandingNavbar.vue + LandingFooter.vue** — Full-width frosted glass navbar & footer dengan navigasi fitur terintegrasi dan link kompatibilitas lengkap (GLB, AutoCAD DXF, SVG, Excel .xlsx).
 
 ### 5.C Performance Guardrails
 - **Zero WebGL di landing publik:** Tidak ada Three.js/engine 3D di landing page. Semua efek memanfaatkan CSS `transform3d`, `opacity`, dan GSAP.
@@ -156,9 +155,9 @@ Membangun platform SaaS berbasis Web 3D interaktif bernama **PitchArch** yang me
 
 | Plan Slug | Project Limit | Fitur Tambahan |
 | :--- | :--- | :--- |
-| `free` | `1` | Akses basic 3D viewer, spatial pin comments, 1 project |
-| `pro` | `20` | 20 project, export, productivity tools, higher file size |
-| `enterprise` | `null` (Unlimited) | Unlimited projects, analytics, audit logs, SSO, API, custom branding |
+| `free` | `1` | Akses basic 3D WebGL viewer, spatial pin comments, simulasi matahari, undangan email terproteksi, 1 project aktif, kuota 3x revisi |
+| `pro` | `20` | 20 project, AI Vision Studio (Image & Video generative prompts), Estimator RAB (Volume GLB & Master SNI), Live Chat Reverb, kustomisasi kuota revisi, kompresi Draco prioritas, ekspor Excel |
+| `enterprise` | `null` (Unlimited) | Unlimited projects, Lembar Kerja CAD 2D (Konva.js), Ekspor DXF/SVG, Booklet Presentasi A3 Landscape (1-Klik PDF), Shop Drawing & Cutting List, Direct AI Architectural Render (Gemini API), Whitelabel, SSO, Audit logs, SLA |
 
 ### Formula Effective Project Limit
 ```

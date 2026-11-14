@@ -25,7 +25,7 @@ import { register } from '@/routes';
             </h2>
 
             <p class="mt-6 text-base sm:text-lg text-neutral-300 max-w-xl mx-auto leading-relaxed">
-                Tinggalkan file berat yang rumit. Berikan pengalaman spasial 3D fotorealistik yang membuat klien Anda jatuh hati pada pandangan pertama.
+                Dari model 3D fotorealistik, lembar kerja CAD 2D, render AI, hingga Booklet Presentasi A3 & RAB otomatis—semua siap dalam satu ekosistem web modern.
             </p>
 
             <!-- Large Pill Action Button -->

@@ -8,10 +8,11 @@ const page = usePage();
 const mobileMenuOpen = ref(false);
 
 const navLinks = [
-    { name: 'Showcase', href: '/showcase', isPage: true },
-    { name: 'Pengalaman 3D', href: '#experience' },
-    { name: 'Arsitektur', href: '#features' },
-    { name: 'Harga', href: '#pricing' },
+    { name: 'Showcase 3D', href: '/showcase', isPage: true },
+    { name: 'Fitur Terintegrasi', href: '#features' },
+    { name: 'Alur Kerja', href: '#experience' },
+    { name: 'Paket Harga', href: '#pricing' },
+    { name: 'FAQ', href: '#faq' },
 ];
 
 const handleNavClick = (link: { name: string; href: string; isPage?: boolean }) => {

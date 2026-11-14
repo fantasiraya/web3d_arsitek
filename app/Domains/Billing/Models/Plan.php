@@ -124,24 +124,100 @@ class Plan extends Model
         return \App\Support\CacheKeys::tags([\App\Support\CacheKeys::TAG_PLANS])->remember(
             \App\Support\CacheKeys::KEY_PLANS_ACTIVE,
             \App\Support\CacheKeys::TTL_MEDIUM,
-            fn () => static::where('status', 'active')
-                ->orderBy('sort_order')
-                ->get()
-                ->map(fn (Plan $plan) => [
-                    'id'            => $plan->id,
-                    'slug'          => $plan->slug,
-                    'display_name'  => $plan->display_name ?? $plan->name,
-                    'tagline'       => $plan->tagline ?? '',
-                    'badge_text'    => $plan->badge_text ?? '',
-                    'cta_text'      => $plan->cta_text ?? 'Mulai Sekarang',
-                    'cta_url'       => $plan->cta_url ?? '/register',
-                    'is_featured'   => (bool) $plan->is_featured,
-                    'price_monthly' => $plan->price_monthly ?? 'Rp 0',
-                    'price_annual'  => $plan->price_annual  ?? 'Rp 0',
-                    'period_label'  => $plan->period_label  ?? 'per bulan',
-                    'benefits'      => $plan->benefits ?? [],
-                ])
-                ->all()
+            function () {
+                $canonicalPlans = [
+                    'free' => [
+                        'display_name'  => 'Free Tier',
+                        'tagline'       => 'Ideal untuk arsitek individual yang baru mencoba platform',
+                        'badge_text'    => 'Coba Gratis',
+                        'cta_text'      => 'Mulai Sekarang',
+                        'cta_url'       => '/register',
+                        'is_featured'   => false,
+                        'price_monthly' => 'Rp 0',
+                        'price_annual'  => 'Rp 0',
+                        'period_label'  => 'selamanya',
+                        'benefits'      => [
+                            'Batas maksimal 1 proyek aktif',
+                            'Batas kuota 3x revisi klien per proyek',
+                            'Undangan klien via email terenkripsi',
+                            '3D WebGL Viewer & Pin Komentar Spasial',
+                            'Simulasi Matahari & Arah Bayangan (SunCalc)',
+                            'Maksimal ukuran file 25 MB',
+                            'Google OAuth One-Tap Login',
+                        ],
+                    ],
+                    'pro' => [
+                        'display_name'  => 'Pro Architect',
+                        'tagline'       => 'Untuk studio arsitektur aktif & konsultan profesional',
+                        'badge_text'    => 'Paling Populer',
+                        'cta_text'      => 'Upgrade ke Pro',
+                        'cta_url'       => '/register?plan=pro',
+                        'is_featured'   => true,
+                        'price_monthly' => 'Rp 149.000',
+                        'price_annual'  => 'Rp 119.000',
+                        'period_label'  => 'per bulan',
+                        'benefits'      => [
+                            'Batas kuota hingga 20 proyek aktif',
+                            'Akses Penuh AI Vision Studio (Image-to-Prompt & Video AI)',
+                            'Estimator RAB (Volume GLB 3D & Master SNI AHSP)',
+                            'Ekspor Dokumen RAB ke Excel (.xlsx)',
+                            'Kustomisasi batas revisi klien (hingga unlimited)',
+                            'Fitur In-App Real-time Chat (Laravel Reverb)',
+                            'Prioritas pemrosesan kompresi Draco 3D (hingga 100 MB)',
+                            'Penyimpanan berkecepatan tinggi',
+                            'Pembayaran otomatis (QRIS, VA, Kartu via Midtrans)',
+                        ],
+                    ],
+                    'enterprise' => [
+                        'display_name'  => 'Enterprise Studio',
+                        'tagline'       => 'Untuk biro konsultan arsitektur berskala besar',
+                        'badge_text'    => 'Custom Team',
+                        'cta_text'      => 'Konsultasi Tim',
+                        'cta_url'       => '/register?plan=enterprise',
+                        'is_featured'   => false,
+                        'price_monthly' => 'Hubungi Kami',
+                        'price_annual'  => 'Hubungi Kami',
+                        'period_label'  => 'kebutuhan tim',
+                        'benefits'      => [
+                            'Kuota proyek tanpa batas (Unlimited)',
+                            'Lembar Kerja CAD 2D Interaktif (Konva.js)',
+                            'Ekspor AutoCAD DXF (Layer terpisah) & SVG',
+                            'Booklet Presentasi A3 Landscape (1-Klik PDF)',
+                            'Shop Drawing & Cutting List Produksi',
+                            'Direct AI Architectural Render (Gemini API)',
+                            'Akses Prioritas AI Vision Studio & Galeri Unlimited',
+                            'Custom Domain & Whitelabel Branding',
+                            'Single Sign-On (SSO) & Audit Logs',
+                            'Dukungan dedicated SLA & prioritas teknis',
+                        ],
+                    ],
+                ];
+
+                return static::where('status', 'active')
+                    ->orderBy('sort_order')
+                    ->get()
+                    ->map(function (Plan $plan) use ($canonicalPlans) {
+                        $defaults = $canonicalPlans[$plan->slug] ?? [];
+                        $hasPrice = $plan->slug === 'free' || ($plan->price_monthly && !in_array($plan->price_monthly, ['Rp 0', '0', '']));
+                        $hasBenefits = is_array($plan->benefits) && count($plan->benefits) > 0;
+
+                        return [
+                            'id'            => $plan->id,
+                            'slug'          => $plan->slug,
+                            'display_name'  => ($plan->display_name && $plan->display_name !== $plan->slug) ? $plan->display_name : ($defaults['display_name'] ?? $plan->name),
+                            'tagline'       => $plan->tagline ?: ($defaults['tagline'] ?? ''),
+                            'badge_text'    => $plan->badge_text ?: ($defaults['badge_text'] ?? ''),
+                            'cta_text'      => $plan->cta_text ?: ($defaults['cta_text'] ?? 'Mulai Sekarang'),
+                            'cta_url'       => $plan->cta_url ?: ($defaults['cta_url'] ?? '/register'),
+                            'is_featured'   => (bool) ($plan->is_featured ?? ($defaults['is_featured'] ?? false)),
+                            'price_monthly' => $hasPrice ? $plan->price_monthly : ($defaults['price_monthly'] ?? 'Rp 0'),
+                            'price_annual'  => $hasPrice ? $plan->price_annual : ($defaults['price_annual'] ?? 'Rp 0'),
+                            'period_label'  => $plan->period_label ?: ($defaults['period_label'] ?? 'per bulan'),
+                            'benefits'      => $hasBenefits ? $plan->benefits : ($defaults['benefits'] ?? []),
+                        ];
+                    })
+                    ->all();
+            }
         );
     }
 }

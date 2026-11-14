@@ -25,10 +25,10 @@ const props = defineProps<{ plans?: PlanItem[] }>();
 </script>
 
 <template>
-    <Head title="PitchArch — Apple-Style Architectural Showcase & Presentation Platform">
-        <meta name="description" content="Platform SaaS Web 3D untuk arsitek mempresentasikan desain ke klien secara fotorealistik dengan anotasi pin spasial presisi, batas revisi transparan, dan akses aman berbasis email." />
-        <meta property="og:title" content="PitchArch — Apple-Style Architectural Showcase" />
-        <meta property="og:description" content="Presentasikan model 3D arsitektur fotorealistik di browser, tanpa software berat, terproteksi kuota revisi dan keamanan akses email." />
+    <Head title="PitchArch — Platform Presentasi & Desain Arsitektur Web 3D, CAD 2D & RAB">
+        <meta name="description" content="Platform presentasi dan desain arsitektur all-in-one di browser: WebGL 3D fotorealistik, lembar kerja CAD 2D berstandar DXF, render AI akurat, cetak Booklet A3, dan estimasi RAB otomatis dengan kuota revisi transparan." />
+        <meta property="og:title" content="PitchArch — Platform Presentasi & Desain Arsitektur Web 3D, CAD 2D & RAB" />
+        <meta property="og:description" content="Presentasikan model 3D arsitektur fotorealistik di browser, gambar denah CAD 2D, render AI Gemini, cetak Booklet Presentasi A3, dan hitung RAB otomatis tanpa software berat." />
         <meta property="og:image" content="/images/aether_villa_hero.jpg" />
     </Head>
 

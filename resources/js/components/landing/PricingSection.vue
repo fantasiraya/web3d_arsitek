@@ -22,31 +22,87 @@ const fallbackPlans = [
         badge_text: 'Coba Gratis', cta_text: 'Mulai Sekarang', cta_url: '/register',
         tagline: 'Ideal untuk arsitek individual yang baru mencoba platform',
         price_monthly: 'Rp 0', price_annual: 'Rp 0', period_label: 'selamanya',
-        benefits: ['Batas maksimal 1 proyek aktif','Batas kuota 3x revisi klien per proyek','Undangan klien via email (terproteksi)','3D WebGL Viewer & Spatial Pin Comment','Maksimal ukuran file 25 MB','Google OAuth One-Tap Login'],
+        benefits: [
+            'Batas maksimal 1 proyek aktif',
+            'Batas kuota 3x revisi klien per proyek',
+            'Undangan klien via email terenkripsi',
+            '3D WebGL Viewer & Pin Komentar Spasial',
+            'Simulasi Matahari & Arah Bayangan (SunCalc)',
+            'Maksimal ukuran file 25 MB',
+            'Google OAuth One-Tap Login'
+        ],
     },
     {
         id: 'pro', slug: 'pro', display_name: 'Pro Architect', is_featured: true,
         badge_text: 'Paling Populer', cta_text: 'Upgrade ke Pro', cta_url: '/register?plan=pro',
         tagline: 'Untuk studio arsitektur aktif & konsultan profesional',
         price_monthly: 'Rp 149.000', price_annual: 'Rp 119.000', period_label: 'per bulan',
-        benefits: ['Batas kuota hingga 20 proyek aktif','Akses Penuh AI Vision Studio (Image-to-Prompt & Video AI)','RAB & Lembar Kerja Analisa Harga','Kustomisasi batas revisi klien (hingga unlimited)','Fitur In-App Real-time Chat Arsitek ↔ Klien','Prioritas pemrosesan kompresi Draco 3D','Ukuran file hingga 100 MB per proyek','Penyimpanan berkecepatan tinggi','Pembayaran otomatis (QRIS, VA, Kartu)'],
+        benefits: [
+            'Batas kuota hingga 20 proyek aktif',
+            'Akses Penuh AI Vision Studio (Image-to-Prompt & Video AI)',
+            'Estimator RAB (Volume GLB 3D & Master SNI AHSP)',
+            'Ekspor Dokumen RAB ke Excel (.xlsx)',
+            'Kustomisasi batas revisi klien (hingga unlimited)',
+            'Fitur In-App Real-time Chat (Laravel Reverb)',
+            'Prioritas pemrosesan kompresi Draco 3D (hingga 100 MB)',
+            'Penyimpanan berkecepatan tinggi',
+            'Pembayaran otomatis (QRIS, VA, Kartu via Midtrans)'
+        ],
     },
     {
         id: 'enterprise', slug: 'enterprise', display_name: 'Enterprise Studio', is_featured: false,
         badge_text: 'Custom Team', cta_text: 'Konsultasi Tim', cta_url: '/register?plan=enterprise',
         tagline: 'Untuk biro konsultan arsitektur berskala besar',
         price_monthly: 'Hubungi Kami', price_annual: 'Hubungi Kami', period_label: 'kebutuhan tim',
-        benefits: ['Kuota proyek tanpa batas (Unlimited)','Akses Prioritas AI Vision Studio & Galeri Unlimited','Custom Domain & Whitelabel Branding','Single Sign-On (SSO) & Audit Logs','Manajemen izin peran tingkat lanjut','Dukungan dedicated SLA & prioritas teknis'],
+        benefits: [
+            'Kuota proyek tanpa batas (Unlimited)',
+            'Lembar Kerja CAD 2D Interaktif (Konva.js)',
+            'Ekspor AutoCAD DXF (Layer terpisah) & SVG',
+            'Booklet Presentasi A3 Landscape (1-Klik PDF)',
+            'Shop Drawing & Cutting List Produksi',
+            'Direct AI Architectural Render (Gemini API)',
+            'Akses Prioritas AI Vision Studio & Galeri Unlimited',
+            'Custom Domain & Whitelabel Branding',
+            'Single Sign-On (SSO) & Audit Logs',
+            'Dukungan dedicated SLA & prioritas teknis'
+        ],
     },
 ];
 
-const plans = computed(() =>
-    (props.plans && props.plans.length > 0) ? props.plans : fallbackPlans
-);
+const plans = computed(() => {
+    if (!props.plans || props.plans.length === 0) {
+        return fallbackPlans;
+    }
+    return fallbackPlans.map(fb => {
+        const dbPlan = props.plans?.find(p => p.slug === fb.slug);
+        if (!dbPlan) return fb;
+
+        // Cek kelengkapan data dari DB: jika kosong atau 0 untuk non-free, gunakan fallback
+        const hasValidBenefits = Array.isArray(dbPlan.benefits) && dbPlan.benefits.length > 0;
+        const hasValidPrice = dbPlan.slug === 'free'
+            ? true
+            : (dbPlan.price_monthly && dbPlan.price_monthly !== 'Rp 0' && dbPlan.price_monthly !== '0' && dbPlan.price_monthly !== '');
+
+        return {
+            id: dbPlan.id || fb.id,
+            slug: dbPlan.slug || fb.slug,
+            display_name: (dbPlan.display_name && dbPlan.display_name !== dbPlan.slug) ? dbPlan.display_name : fb.display_name,
+            tagline: dbPlan.tagline || fb.tagline,
+            badge_text: dbPlan.badge_text || fb.badge_text,
+            cta_text: dbPlan.cta_text || fb.cta_text,
+            cta_url: dbPlan.cta_url || fb.cta_url,
+            is_featured: dbPlan.is_featured ?? fb.is_featured,
+            price_monthly: hasValidPrice ? dbPlan.price_monthly : fb.price_monthly,
+            price_annual: hasValidPrice ? dbPlan.price_annual : fb.price_annual,
+            period_label: dbPlan.period_label || fb.period_label,
+            benefits: hasValidBenefits ? dbPlan.benefits : fb.benefits,
+        };
+    });
+});
 </script>
 
 <template>
-    <section id="pricing" class="relative py-2 bg-[#050608] text-white">
+    <section id="pricing" class="relative py-20 sm:py-28 bg-[#050608] text-white">
         <!-- Ambient lighting -->
         <div class="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[500px] w-full max-w-4xl bg-indigo-600/10 blur-[180px]"></div>
 
@@ -109,11 +165,11 @@ const plans = computed(() =>
                         <!-- Plan Header -->
                         <div class="flex items-center justify-between">
                             <h3 class="text-xl font-bold tracking-tight text-white">{{ plan.display_name }}</h3>
-                            <span v-if="!plan.is_featured" class="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-medium text-neutral-400">
+                            <span v-if="!plan.is_featured && plan.badge_text" class="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-medium text-neutral-400">
                                 {{ plan.badge_text }}
                             </span>
                         </div>
-                        <p class="mt-2 text-xs leading-relaxed text-neutral-400">{{ plan.tagline }}</p>
+                        <p v-if="plan.tagline" class="mt-2 text-xs leading-relaxed text-neutral-400">{{ plan.tagline }}</p>
 
                         <!-- Price Tag -->
                         <div class="mt-6 flex items-baseline gap-1.5">

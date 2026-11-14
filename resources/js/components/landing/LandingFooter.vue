@@ -13,23 +13,27 @@ const trustBadges = [
 
 const links = {
     fitur: [
-        { label: 'Revisi Langsung di Model 3D', href: '#experience' },
-        { label: 'Kuota Revisi per Tahap', href: '#experience' },
-        { label: 'Live Chat dengan Klien', href: '#experience' },
-        { label: 'Kompresi Draco Otomatis', href: '#experience' },
-        { label: 'Akses via Email Undangan', href: '#features' },
+        { label: 'Viewer 3D Spasial & Matahari', href: '#experience' },
+        { label: 'Lembar Kerja CAD 2D & DXF',   href: '#features' },
+        { label: 'Booklet Presentasi A3 (PDF)', href: '#features' },
+        { label: 'Render AI Fotorealistik',     href: '#features' },
+        { label: 'Estimator RAB & Volume 3D',   href: '#features' },
+        { label: 'Kuota Revisi Anti Scope-Creep', href: '#experience' },
+        { label: 'Akses Klien Terproteksi',     href: '#features' },
     ],
     kompatibilitas: [
-        { label: 'Revit & ArchiCAD', href: '#' },
-        { label: 'SketchUp & Rhino 3D', href: '#' },
-        { label: 'Blender & 3ds Max', href: '#' },
-        { label: 'Format GLB / glTF', href: '#' },
-        { label: 'iPad, Tablet & Smartphone', href: '#' },
+        { label: 'Revit & ArchiCAD (.GLB)',     href: '#' },
+        { label: 'SketchUp & Rhino 3D',         href: '#' },
+        { label: 'AutoCAD DXF R12/2000',        href: '#' },
+        { label: 'Format SVG & PNG Vektor',     href: '#' },
+        { label: 'Ekspor RAB Excel (.xlsx)',    href: '#' },
+        { label: 'iPad, Tablet & Smartphone',   href: '#' },
     ],
     akun: [
         { label: 'Masuk ke Studio Anda',    href: login.url(),    inertia: true  },
         { label: 'Mulai Presentasi Gratis', href: register.url(), inertia: true  },
         { label: 'Paket Harga',             href: '#pricing',     inertia: false },
+        { label: 'Pertanyaan Umum (FAQ)',   href: '#faq',         inertia: false },
         { label: 'Kebijakan Privasi',       href: '#',            inertia: false },
         { label: 'Syarat Penggunaan',       href: '#',            inertia: false },
     ],
@@ -100,7 +104,7 @@ const socials = [
 
                     <!-- Tagline -->
                     <p class="mt-5 max-w-xs text-xs leading-relaxed text-neutral-400">
-                        Platform presentasi desain arsitektur berbasis web. Tunjukkan model bangunan langsung di browser, terima masukan klien tepat di titik yang dimaksud, dan lindungi karya Anda lewat akses berbasis undangan.
+                        Platform all-in-one presentasi dan desain arsitektur berbasis web. Presentasikan model 3D di browser, gambar denah CAD 2D berstandar DXF, cetak Booklet Presentasi A3, render fotorealistik AI, dan hitung estimasi RAB otomatis.
                     </p>
 
                     <!-- CTA Compact -->

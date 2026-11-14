@@ -1,6 +1,19 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { HelpCircle, ChevronDown, MessageCircle, Smartphone, ShieldCheck, RefreshCw, Clock, Users } from '@lucide/vue';
+import { 
+    HelpCircle, 
+    ChevronDown, 
+    MessageCircle, 
+    Smartphone, 
+    ShieldCheck, 
+    RefreshCw, 
+    Clock, 
+    Users,
+    DraftingCompass,
+    BookOpen,
+    Sparkles,
+    Calculator
+} from '@lucide/vue';
 
 const openIndex = ref<number | null>(0);
 
@@ -8,44 +21,68 @@ const toggleFaq = (idx: number) => {
     openIndex.value = openIndex.value === idx ? null : idx;
 };
 
-type FaqCategory = 'Akses & Kemudahan' | 'Revisi & Kolaborasi' | 'Keamanan';
+type FaqCategory = 'Akses & Kemudahan' | 'Revisi & Kolaborasi' | 'CAD, AI & Dokumen' | 'Keamanan';
 
 const faqs: { q: string; a: string; icon: any; category: FaqCategory }[] = [
     {
         icon: Smartphone,
         category: 'Akses & Kemudahan',
         q: 'Apakah saya perlu menginstal aplikasi atau software khusus?',
-        a: 'Tidak perlu sama sekali. Cukup buka link undangan di browser favorit Anda — Chrome, Safari, Edge, atau Firefox — baik di laptop, iPad, maupun smartphone. Tidak ada instalasi, tidak ada plugin, langsung bisa melihat model 3D bangunan Anda secara penuh.'
+        a: 'Tidak perlu sama sekali. Cukup buka link undangan di browser favorit Anda — Chrome, Safari, Edge, atau Firefox — baik di laptop, iPad, maupun smartphone. Tidak ada instalasi plugin atau software CAD berat, langsung bisa melihat model 3D bangunan secara fotorealistik pada 60 FPS.'
     },
     {
         icon: Users,
         category: 'Akses & Kemudahan',
-        q: 'Bagaimana cara saya mengakses proyek yang dikirimkan arsitek?',
-        a: 'Arsitek Anda akan mengirimkan tautan undangan ke email Anda. Klik tautan tersebut, masuk dengan Google atau akun terdaftar, dan Anda langsung berada di dalam tampilan 3D proyek. Prosesnya tidak lebih dari 30 detik.'
+        q: 'Bagaimana cara klien mengakses proyek yang dikirimkan arsitek?',
+        a: 'Arsitek mengirimkan tautan undangan ke alamat email klien. Klien cukup mengklik tautan tersebut dan masuk menggunakan akun Google atau email terdaftar. Sistem secara otomatis mencocokkan identitas dan memberikan akses instan tanpa langkah rumit.'
     },
     {
         icon: RefreshCw,
         category: 'Revisi & Kolaborasi',
-        q: 'Bagaimana cara saya memberikan masukan atau meminta revisi?',
-        a: 'Klik langsung pada bagian model yang ingin Anda komentari — dinding, jendela, material, atau area tertentu. Sebuah pin akan muncul di titik tersebut dan Anda bisa langsung menuliskan catatan. Arsitek mendapatkan notifikasi seketika, lengkap dengan koordinat spasial persis bagian yang Anda maksud. Tidak perlu bolak-balik email atau tangkapan layar yang membingungkan.'
+        q: 'Bagaimana cara memberikan masukan atau meminta revisi?',
+        a: 'Klik langsung pada bagian model 3D yang ingin dikomentari — dinding, lantai, bukaan fasad, atau material tertentu. Sebuah pin koordinat 3D presisi (X, Y, Z) akan muncul lengkap dengan garis penunjuk SVG dinamis dan form catatan. Arsitek mendapatkan notifikasi seketika dan riwayat diskusi terekam rapi.'
     },
     {
         icon: Clock,
         category: 'Revisi & Kolaborasi',
-        q: 'Berapa banyak revisi yang bisa saya ajukan?',
-        a: 'Kuota revisi ditentukan oleh arsitek sesuai kesepakatan kontrak Anda. Sistem kami akan menampilkan sisa kuota secara transparan, sehingga Anda selalu tahu berapa banyak pin revisi yang masih tersedia sebelum perlu addendum.'
+        q: 'Bagaimana sistem kuota revisi melindungi arsitek dari scope-creep?',
+        a: 'Arsitek menetapkan batas kuota revisi per proyek (misalnya 3x per tahap desain). Penggunaan kuota terpantau secara transparan oleh kedua belah pihak. Setelah kuota habis, form revisi terkunci otomatis dan klien diarahkan untuk menyetujui desain akhir atau membuat kesepakatan addendum.'
     },
     {
         icon: MessageCircle,
         category: 'Revisi & Kolaborasi',
-        q: 'Apakah saya bisa langsung berdiskusi dengan arsitek di dalam platform?',
-        a: 'Ya. Ada fitur live chat bawaan yang terhubung langsung ke proyek. Semua percakapan, pin revisi, dan catatan tersimpan di satu tempat — sehingga riwayat diskusi Anda dengan arsitek tidak pernah tercecer.'
+        q: 'Apakah tersedia fitur diskusi langsung di dalam platform?',
+        a: 'Ya. Tersedia fitur in-app live chat realtime berbasis Laravel Reverb per proyek. Semua percakapan, tangkapan layar, status revisi, dan catatan terintegrasi di satu tempat sehingga riwayat keputusan desain tidak pernah hilang di chat WhatsApp.'
+    },
+    {
+        icon: DraftingCompass,
+        category: 'CAD, AI & Dokumen',
+        q: 'Apakah PitchArch menyediakan lembar kerja CAD 2D dan bisa diekspor ke AutoCAD?',
+        a: 'Ya. PitchArch dilengkapi editor CAD 2D interaktif berbasis browser (Konva.js). Anda dapat menggambar denah dengan dinding tebal, kolom, pintu swing arsitek, jendela, tangga, perabot, dan dimensi otomatis pada lembar kerja ISO (A4–A0). Gambar denah dapat diekspor langsung ke format AutoCAD DXF (dengan pemisahan layer WALLS, DOORS, DIMS yang rapi) serta SVG vektor.'
+    },
+    {
+        icon: BookOpen,
+        category: 'CAD, AI & Dokumen',
+        q: 'Bagaimana Booklet Presentasi A3 dihasilkan dan apa saja isinya?',
+        a: 'Booklet Presentasi A3 dapat diterbitkan secara instan sekali klik. Sistem otomatis merangkai Cover eksekutif proyek, Master Floor Plan Denah 2D, serta halaman interior & eksterior per ruangan yang dilengkapi visual render, catatan arsitek, Key Plan mini locator denah, dan Title Block (Kop Gambar). Siap diunduh dan dicetak langsung ke PDF landscape tanpa bleed.'
+    },
+    {
+        icon: Sparkles,
+        category: 'CAD, AI & Dokumen',
+        q: 'Bagaimana cara kerja Direct AI Render pada model 3D?',
+        a: 'Melalui integrasi Google Gemini API, arsitek dapat mengubah snapshot 3D mentah WebGL menjadi render fotorealistik arsitektur berkualitas tinggi dalam hitungan detik dengan 100% menjaga geometri dan proporsi asli model. Tersedia pilihan mood pencahayaan seperti Golden Hour, Blue Hour, hingga Interior Night.'
+    },
+    {
+        icon: Calculator,
+        category: 'CAD, AI & Dokumen',
+        q: 'Apakah PitchArch dapat menghitung estimasi RAB otomatis?',
+        a: 'Ya. PitchArch menyediakan GLB Estimator untuk mengekstrak volume dan luas mesh 3D secara otomatis, serta Worksheet-to-RAB Generator yang memetakan elemen denah CAD per ruangan ke database harga satuan arsitek. Dilengkapi kalkulasi overhead 10%, PPN 11%, dan ekspor 1-klik ke format Excel (.xlsx).'
     },
     {
         icon: ShieldCheck,
         category: 'Keamanan',
-        q: 'Apakah orang lain bisa melihat desain rumah saya?',
-        a: 'Tidak. Setiap proyek hanya bisa diakses oleh email yang secara eksplisit Anda undang. Tidak ada tautan publik yang bisa disebarkan sembarangan. Arsitek Anda pun bisa mencabut akses kapan saja jika diperlukan, menjaga privasi desain Anda sepenuhnya.'
+        q: 'Apakah orang lain bisa melihat atau membocorkan desain proyek saya?',
+        a: 'Tidak. Setiap proyek diisolasi secara ketat dan hanya bisa diakses oleh email yang Anda undang secara eksplisit. Tidak ada URL publik terbuka. Arsitek juga dapat mencabut akses klien sewaktu-waktu dengan 1-klik untuk perlindungan hak cipta maksimal.'
     },
 ];
 
@@ -72,12 +109,13 @@ const filteredFaqs = computed(() =>
 const categoryColor: Record<FaqCategory, string> = {
     'Akses & Kemudahan': 'text-sky-400 border-sky-500/30 bg-sky-500/10',
     'Revisi & Kolaborasi': 'text-purple-400 border-purple-500/30 bg-purple-500/10',
+    'CAD, AI & Dokumen': 'text-amber-400 border-amber-500/30 bg-amber-500/10',
     'Keamanan': 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
 };
 </script>
 
 <template>
-    <section class="relative py-24 sm:py-32 bg-[#07080b] border-t border-white/10 overflow-hidden">
+    <section id="faq" class="relative py-24 sm:py-32 bg-[#07080b] border-t border-white/10 overflow-hidden">
         <!-- Ambient Glow -->
         <div class="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-full max-w-5xl rounded-full bg-gradient-to-r from-indigo-600/8 via-purple-600/6 to-blue-600/8 blur-[180px]"></div>
 

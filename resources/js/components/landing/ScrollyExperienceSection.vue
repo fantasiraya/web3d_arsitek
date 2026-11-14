@@ -11,7 +11,11 @@ import {
     Sparkles,
     Sliders,
     Layers,
-    ArrowRight
+    ArrowRight,
+    DraftingCompass,
+    BookOpen,
+    Calculator,
+    Sun
 } from '@lucide/vue';
 
 const containerRef = ref<HTMLElement | null>(null);
@@ -22,65 +26,65 @@ const steps = [
     {
         id: 'compression',
         badge: 'Langkah 01',
-        title: 'Lebih Ringan',
-        subtitle: 'Upload Model dari CAD/BIM, Optimasi Sekali Klik',
-        description: 'Ekspor model dari Revit, ArchiCAD, SketchUp, atau Rhino lalu unggah. Pipeline server otomatis mengompresi geometri 3D hingga 85% lebih ringan tanpa merusak detail material PBR, sehingga model bangunan langsung terbuka cepat di browser klien.',
+        title: 'Viewer 3D & Jalur Matahari',
+        subtitle: 'Upload Model 3D, Kompresi Draco & Simulasi Matahari',
+        description: 'Ekspor model dari Revit, ArchiCAD, SketchUp, atau Rhino lalu unggah. Server mengompresi geometri 3D hingga 85% lebih ringan tanpa merusak detail material PBR. Buka di browser pada 60 FPS dan simulasikan bayangan matahari real-time berdasarkan koordinat geografis lintang & bujur.',
         icon: UploadCloud,
         accent: 'from-blue-500 to-indigo-500',
         borderColor: 'border-blue-500/30',
         glowColor: 'rgba(59, 130, 246, 0.15)',
         stats: [
             { label: 'Reduksi Ukuran', val: '84.6%' },
-            { label: 'Waktu Muat Model', val: '~1.2 dtk' },
-            { label: 'Target Performa', val: '60 FPS' }
+            { label: 'Target Performa', val: '60 FPS' },
+            { label: 'Simulasi Matahari', val: 'SunCalc' }
         ]
     },
     {
         id: 'security',
         badge: 'Langkah 02',
-        title: 'Akses Klien via Email',
-        subtitle: 'Tanpa Link Bocor & Identitas Terverifikasi',
-        description: 'Lindungi hak cipta dan kerahasiaan desain Anda dari link publik yang tersebar tanpa izin. Model hanya bisa dibuka oleh email klien, investor, atau konsultan yang Anda undang, dengan autentikasi Google OAuth atau email terverifikasi.',
+        title: 'Akses Klien & Kuota Revisi',
+        subtitle: 'Undangan Email Terenkripsi & Kuota Anti Scope-Creep',
+        description: 'Lindungi kerahasiaan desain Anda dari tautan publik yang tersebar tanpa izin. Model hanya dapat dibuka oleh email klien yang diundang lewat Google OAuth atau Passkey, lengkap dengan kuota revisi transparan untuk mencegah permintaan revisi tanpa akhir.',
         icon: ShieldCheck,
         accent: 'from-emerald-500 to-teal-500',
         borderColor: 'border-emerald-500/30',
         glowColor: 'rgba(16, 185, 129, 0.15)',
         stats: [
             { label: 'Model Akses', val: 'Undangan Email' },
-            { label: 'Proteksi URL', val: 'Tokenized' },
-            { label: 'Identitas', val: 'OAuth Verified' }
+            { label: 'Batas Revisi', val: '3x Terkunci' },
+            { label: 'Komunikasi', val: 'Live Chat Reverb' }
         ]
     },
     {
         id: 'spatial',
         badge: 'Langkah 03',
-        title: 'Titik Desain (X, Y, Z)',
-        subtitle: 'Anotasi Presisi di Fasad, Ruang, dan Struktur',
-        description: 'Klien cukup mengklik bagian mana pun pada model bangunan, misalnya fasad, dek, atau plafon. Raycaster Three.js menghitung koordinat spasial seketika dan menghubungkan komentar revisi dengan garis penunjuk SVG, sehingga tidak ada lagi masukan ambigu seperti "yang di sebelah sana".',
+        title: 'Revisi Spasial & Snapshot Ruang',
+        subtitle: 'Anotasi Titik Presisi (X,Y,Z) & Kode EXT-*/R-*',
+        description: 'Klien menandai langsung permukaan struktur, lantai, atau fasad. Raycaster Three.js menghitung koordinat spasial seketika dengan garis penunjuk SVG dinamis. Arsitek mengambil snapshot multi-sudut berkode ruangan otomatis untuk referensi gambar kerja.',
         icon: MapPin,
         accent: 'from-indigo-500 to-purple-500',
         borderColor: 'border-indigo-500/30',
         glowColor: 'rgba(99, 102, 241, 0.18)',
         stats: [
             { label: 'Presisi Posisi', val: 'Vector 3D' },
-            { label: 'Garis Penunjuk', val: 'SVG Real-time' },
-            { label: 'Layar Sentuh', val: 'Mendukung iPad' }
+            { label: 'Kode Ruangan', val: 'EXT-* & R-*' },
+            { label: 'Garis Penunjuk', val: 'SVG Real-time' }
         ]
     },
     {
-        id: 'gatekeeper',
+        id: 'ecosystem',
         badge: 'Langkah 04',
-        title: 'Batas Revisi',
-        subtitle: 'Kunci Kuota Revisi & Kesepakatan Akhir',
-        description: 'Lindungi tim Anda dari revisi tanpa akhir. Kuota revisi 3x per tahap desain terpantau transparan; setelah kuota habis, form revisi terkunci otomatis dan klien dapat menyetujui desain akhir via chat terintegrasi atau mengajukan addendum.',
-        icon: Sliders,
+        title: 'CAD 2D, Booklet A3 & RAB',
+        subtitle: 'Lembar Kerja Vektor DXF, Booklet Cetak A3 & Estimasi RAB',
+        description: 'Bukan hanya viewer 3D. Rancang denah 2D interaktif berstandar DXF/SVG, terbitkan Booklet Presentasi A3 sekali klik lengkap dengan Key Plan denah mini, dan hitung estimasi RAB terperinci per ruangan otomatis dari model 3D.',
+        icon: DraftingCompass,
         accent: 'from-amber-500 to-orange-500',
         borderColor: 'border-amber-500/30',
         glowColor: 'rgba(245, 158, 11, 0.15)',
         stats: [
-            { label: 'Batas Revisi', val: '3x Terkunci' },
-            { label: 'Status Proteksi', val: 'Form Terkunci' },
-            { label: 'Output Akhir', val: 'Persetujuan Final' }
+            { label: 'Ekspor Gambar', val: 'DXF & SVG' },
+            { label: 'Cetak Presentasi', val: 'Booklet A3' },
+            { label: 'Anggaran Biaya', val: 'Excel & SNI' }
         ]
     }
 ];
@@ -419,45 +423,61 @@ onUnmounted(() => {
                             </p>
                         </template>
 
-                        <!-- Step 3: Revision Gatekeeper Simulation -->
+                        <!-- Step 3: CAD 2D, Booklet A3 & Final Approval Simulation -->
                         <template v-else>
                             <div class="flex items-center justify-between border-b border-white/10 pb-4">
                                 <div class="flex items-center gap-3">
                                     <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/20 border border-amber-500/30">
-                                        <Sliders class="h-5 w-5 text-amber-400" />
+                                        <DraftingCompass class="h-5 w-5 text-amber-400" />
                                     </div>
                                     <div>
-                                        <div class="text-sm font-semibold text-white">Revision Gatekeeper Protocol</div>
-                                        <div class="text-xs text-neutral-400">Proteksi Kelelahan Revisi Arsitek</div>
+                                        <div class="text-sm font-semibold text-white">Lembar Kerja CAD 2D & Booklet A3</div>
+                                        <div class="text-xs text-neutral-400">Sinkronisasi Denah Vektor & Booklet PDF</div>
                                     </div>
                                 </div>
                                 <span class="rounded-full bg-amber-500/20 border border-amber-500/30 px-3 py-1 text-xs font-semibold text-amber-400 font-mono">
-                                    Batas Kuota: 3 / 3
+                                    DXF & A3 Ready
                                 </span>
                             </div>
 
-                            <div class="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 space-y-3 my-auto">
-                                <div class="flex justify-between items-center text-xs font-mono">
-                                    <span class="text-neutral-300">Penggunaan Kuota Revisi</span>
-                                    <span class="font-bold text-amber-400">3 dari 3 Telah Digunakan</span>
+                            <div class="space-y-3 my-auto">
+                                <div class="flex items-center justify-between rounded-2xl border border-white/10 bg-black/40 p-3.5">
+                                    <div class="flex items-center gap-3">
+                                        <div class="h-8 w-8 rounded-full bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-xs font-bold text-indigo-300 font-mono">
+                                            CAD
+                                        </div>
+                                        <div>
+                                            <div class="text-xs font-semibold text-white">Denah Master Lt. 1 (A1 Standard)</div>
+                                            <div class="text-[10px] text-neutral-400">Layer: WALLS, DOORS, DIMS • Auto Kop Gambar</div>
+                                        </div>
+                                    </div>
+                                    <span class="rounded bg-indigo-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-indigo-300 font-mono">
+                                        📷 4 Visual Terhubung
+                                    </span>
                                 </div>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <div class="h-2 rounded-full bg-amber-500"></div>
-                                    <div class="h-2 rounded-full bg-amber-500"></div>
-                                    <div class="h-2 rounded-full bg-amber-500"></div>
-                                </div>
-                                <div class="rounded-xl bg-black/60 p-3 text-xs text-amber-200/90 border border-amber-500/20 flex items-start gap-2.5">
-                                    <Lock class="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                                    <span>Form pin revisi dinonaktifkan otomatis. Klien diarahkan untuk menyetujui desain atau mengajukan addendum.</span>
+
+                                <div class="flex items-center justify-between rounded-2xl border border-white/10 bg-black/40 p-3.5">
+                                    <div class="flex items-center gap-3">
+                                        <div class="h-8 w-8 rounded-full bg-amber-600/30 border border-amber-500/40 flex items-center justify-center text-xs font-bold text-amber-300 font-mono">
+                                            A3
+                                        </div>
+                                        <div>
+                                            <div class="text-xs font-semibold text-white">Booklet Presentasi Arsitektur</div>
+                                            <div class="text-[10px] text-neutral-400">Cover + Denah Master + Visual Ruang + Key Plan</div>
+                                        </div>
+                                    </div>
+                                    <span class="rounded bg-emerald-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-400 font-mono">
+                                        1-Klik PDF
+                                    </span>
                                 </div>
                             </div>
 
                             <div class="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-3 text-xs text-emerald-300 font-mono">
                                 <span class="flex items-center gap-2">
                                     <CheckCircle2 class="h-4 w-4 text-emerald-400" />
-                                    <span>Status Desain: Disetujui & Siap Eksekusi</span>
+                                    <span>Status: Kuota Revisi Selesai & Dokumen Terbit</span>
                                 </span>
-                                <span class="text-white font-semibold">Finalized</span>
+                                <span class="text-white font-semibold">Siap Konstruksi</span>
                             </div>
                         </template>
                     </div>

@@ -8,10 +8,10 @@ const activePinHover = ref(true);
 
 // --- Counter statistik: countdown saat aktif, countup saat tidak aktif ---
 const stats = [
-    { start: 10,  target: 0,   suffix: ' Detik', label: 'Instalasi Software untuk Klien',       color: 'text-white' },
-    { start: 100, target: 85,  suffix: '%',      label: 'Ukuran Model 3D Lebih Ringan', color: 'text-indigo-400' },
-    { start: 120, target: 100, suffix: '%',      label: 'Desain Aman via Undangan Email',       color: 'text-emerald-400' },
-    { start: 10,  target: 3,   suffix: 'x',      label: 'Batas Revisi per Tahap Desain',        color: 'text-white' },
+    { start: 10,  target: 0,   suffix: ' Detik', label: 'Instalasi untuk Klien (100% Browser)', color: 'text-white' },
+    { start: 100, target: 85,  suffix: '%',      label: 'Model 3D Lebih Ringan (Draco WebGL)', color: 'text-indigo-400' },
+    { start: 10,  target: 1,   suffix: '-Klik',  label: 'Booklet Presentasi A3 & Ekspor DXF', color: 'text-emerald-400' },
+    { start: 10,  target: 3,   suffix: 'x',      label: 'Batas Kuota Revisi Anti Scope-Creep', color: 'text-white' },
 ];
 
 const statsRef = ref<HTMLElement | null>(null);
@@ -74,17 +74,23 @@ onUnmounted(() => {
         <div class="relative mx-auto max-w-6xl px-6">
             <!-- Header Text Block -->
             <div class="mx-auto max-w-3xl text-center">
+                <!-- Platform Badge -->
+                <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold tracking-wide text-neutral-300 backdrop-blur-xl">
+                    <Sparkles class="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Ekosistem Lengkap: 3D WebGL • CAD 2D • AI Render • Booklet A3 • RAB</span>
+                </div>
+
                 <!-- Monumental Headline -->
                 <h1 class="mt-6 text-4xl font-extrabold tracking-tight text-white sm:text-6xl md:text-7xl lg:text-7xl font-sans leading-[1.08]">
-                    Desain Anda, <br />
+                    Presentasi 3D Spasial, <br />
                     <span class="bg-gradient-to-r from-white via-neutral-300 to-neutral-400 bg-clip-text text-transparent">
-                        Dipahami Klien.
+                        CAD 2D, Booklet & RAB Otomatis.
                     </span>
                 </h1>
 
                 <!-- Subheadline -->
                 <p class="mt-6 text-base sm:text-lg leading-relaxed text-neutral-300 max-w-2xl mx-auto">
-                    Tak perlu lagi meminta klien menginstal software CAD atau BIM yang berat. Presentasikan model 3D bangunan secara fotorealistik langsung di browser, kumpulkan masukan klien tepat di titik fasad, ruang, atau struktur yang dimaksud, dan kunci revisi desain dengan kuota yang transparan.
+                    Platform all-in-one arsitektur modern. Presentasikan model 3D fotorealistik di browser dengan simulasi matahari, buat lembar kerja denah CAD 2D berstandar DXF, cetak Booklet Presentasi A3 sekali klik, dan hasilkan estimasi RAB terintegrasi—tanpa software berat untuk klien.
                 </p>
 
                 <!-- Action CTA Buttons -->
@@ -107,14 +113,14 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Security & Access Note -->
-                <div class="mt-5 flex items-center justify-center gap-6 text-xs text-neutral-300">
+                <div class="mt-5 flex flex-wrap items-center justify-center gap-6 text-xs text-neutral-300">
                     <div class="flex items-center gap-1.5">
                         <ShieldCheck class="h-3.5 w-3.5 text-emerald-400" />
                         <span>Karya Terlindungi: Akses Klien via Undangan Email</span>
                     </div>
                     <div class="flex items-center gap-1.5">
                         <Zap class="h-3.5 w-3.5 text-indigo-400" />
-                        <span>Revisi Desain & Proyek Lebih Tertata</span>
+                        <span>Kuota Revisi Transparan & Live Chat Reverb</span>
                     </div>
                 </div>
             </div>
@@ -209,17 +215,22 @@ onUnmounted(() => {
                                 <div class="hidden sm:flex items-center gap-2 rounded-full border border-white/15 bg-black/70 px-3 py-1.5 text-xs text-neutral-300 backdrop-blur-xl">
                                     <span class="flex items-center gap-1 text-[11px]">
                                         <Eye class="h-3.5 w-3.5 text-indigo-400" />
-                                        Tampak Fasad (Dusk)
+                                        WebGL 3D & Matahari
                                     </span>
                                     <span class="text-neutral-600">|</span>
                                     <span class="flex items-center gap-1 text-[11px]">
                                         <Layers class="h-3.5 w-3.5 text-emerald-400" />
-                                        Model 84% Lebih Ringan
+                                        CAD 2D & DXF
+                                    </span>
+                                    <span class="text-neutral-600">|</span>
+                                    <span class="flex items-center gap-1 text-[11px]">
+                                        <Sparkles class="h-3.5 w-3.5 text-amber-400" />
+                                        Render AI Gemini
                                     </span>
                                     <span class="text-neutral-600">|</span>
                                     <span class="flex items-center gap-1 text-[11px]">
                                         <MessageSquare class="h-3.5 w-3.5 text-blue-400" />
-                                        Diskusi Klien Terhubung
+                                        Booklet A3 & RAB
                                     </span>
                                 </div>
                             </div>
